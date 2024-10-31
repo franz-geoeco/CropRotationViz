@@ -4,7 +4,7 @@ An interactive web application for visualizing and analyzing crop rotation patte
 
 ![Example Dashboard](/api/placeholder/800/400)
 
-## 🎯 Features
+## Features
 
 - **Interactive Rotation Visualization**
   - Dynamic Sankey diagrams showing crop sequences
@@ -26,7 +26,7 @@ An interactive web application for visualizing and analyzing crop rotation patte
   - Data export in multiple formats
   - Summary statistics downloads
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
 
@@ -75,7 +75,7 @@ cp config.example.R config.R
 shiny::runApp()
 ```
 
-## 📊 Data Structure
+## Data Structure
 
 The application expects input data in the following format:
 
@@ -89,7 +89,7 @@ data_structure <- data.frame(
 )
 ```
 
-## 🔧 Usage Examples
+## Usage Examples
 
 ### Basic Rotation Analysis
 ```r
@@ -109,7 +109,7 @@ risk_analysis <- calculate_disease_risk(rotation_data)
 plot_risk_map(risk_analysis)
 ```
 
-## 🎨 Interface Overview
+## Interface Overview
 
 The application is organized into several main sections:
 
@@ -133,7 +133,7 @@ The application is organized into several main sections:
    - Data export options
    - Summary statistics
 
-## 🤝 Contributing
+## Contributing
 
 Contributions are welcome! Please read our [Contributing Guidelines](CONTRIBUTING.md) for details on our code of conduct and the process for submitting pull requests.
 
@@ -145,11 +145,11 @@ Contributions are welcome! Please read our [Contributing Guidelines](CONTRIBUTIN
 4. Push to the branch (`git push origin feature/AmazingFeature`)
 5. Open a Pull Request
 
-## 📝 License
+## License
 
 This project is licensed under the MIT License - see the [LICENSE.md](LICENSE.md) file for details.
 
-## 👥 Target Users
+## Target Users
 
 - Agricultural Policy Makers
 - Researchers & Scientists
@@ -158,7 +158,7 @@ This project is licensed under the MIT License - see the [LICENSE.md](LICENSE.md
 - Agricultural Education Institutions
 - Environmental Organizations
 
-## 📚 Citation
+## Citation
 
 If you use this tool in your research, please cite:
 
@@ -168,21 +168,21 @@ If you use this tool in your research, please cite:
   title = {CropRotationViz: Interactive Analysis of Agricultural Rotation Patterns},
   year = {2024},
   publisher = {GitHub},
-  url = {https://github.com/yourusername/CropRotationViz}
+  url = {https://github.com/franz-geoeco/CropRotationViz}
 }
 ```
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
 - Ministry for Climate Protection, Agriculture, Rural Areas and Environment of MWP for providing IACS data
 - R Shiny community for excellent documentation and support
 - Contributors and beta testers
 
-## 📧 Contact
+## Contact
 
-- **Project Lead**: [Your Name](mailto:your.email@example.com)
+- **Project Lead**: [Franz Schulze](franz.schulze@geo.uni-halle.de)
 - **Project Website**: [https://croprotationviz.example.com](https://croprotationviz.example.com)
 
-## 🔄 Updates & Versions
+## Updates & Versions
 
 See [CHANGELOG.md](CHANGELOG.md) for a list of changes and version updates.
