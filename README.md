@@ -1,19 +1,18 @@
 # CropRotationViz 🌾 :corn:
 
-<div align="center">
-  <img src="files/example.png" alt="Descriptive Alt Text" width="100%">
-</div>
 
 An interactive web application for visualizing and analyzing crop rotation patterns across agricultural landscapes. Built with R Shiny, this tool helps agricultural stakeholders understand rotation patterns, assess risks, and make data-driven decisions for sustainable farming practices.
 
-![Example Dashboard](/api/placeholder/800/400)
+<div align="center">
+  <img src="files/example.png" alt="Descriptive Alt Text" width="100%">
+</div>
 
 ## Features
 
 - **Interactive Rotation Visualization**
   - Dynamic Sankey diagrams showing crop sequences
   - Spatial distribution maps of rotation patterns
-  - Temporal analysis of rotation changes (2017-2023)
+  - Temporal analysis of rotation changes
 
 - **Risk Assessment Tools**
   - Disease pressure analysis based on rotation patterns
@@ -25,10 +24,6 @@ An interactive web application for visualizing and analyzing crop rotation patte
   - Temporal diversity trends
   - Regional comparison tools
 
-- **Data Export & Reporting**
-  - Custom report generation
-  - Data export in multiple formats
-  - Summary statistics downloads
 
 ## Getting Started
 
