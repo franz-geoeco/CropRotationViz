@@ -1,4 +1,5 @@
-# CropRotationViz 🌾
+# CropRotationViz 🌾 :corn:
+
 
 An interactive web application for visualizing and analyzing crop rotation patterns across agricultural landscapes. Built with R Shiny, this tool helps agricultural stakeholders understand rotation patterns, assess risks, and make data-driven decisions for sustainable farming practices.
 
