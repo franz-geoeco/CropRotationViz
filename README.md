@@ -36,15 +36,22 @@ An interactive web application for visualizing and analyzing crop rotation patte
 ```r
 install.packages(c(
   "shiny",
-  "shinydashboard",
+  "shinythemes",
+  "tidyverse",
   "leaflet",
-  "dplyr",
-  "ggplot2",
+  "ggalluvial",
+  "lattice",
+  "colorspace",
+  "shinyWidgets",
+  "randomcoloR",
+  "plotly",
+  "shinyBS",
+  "bslib",
   "DT",
-  "networkD3",
   "sf",
-  "tidyr",
-  "plotly"
+  "leaflet.minicharts",
+  "shinycssloaders",
+  "shinyalert"
 ))
 ```
 
@@ -52,7 +59,7 @@ install.packages(c(
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/CropRotationViz.git
+git clone https://github.com/franz-geoeco/CropRotationViz.git
 cd CropRotationViz
 ```
 
