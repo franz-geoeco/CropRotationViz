@@ -186,7 +186,7 @@ If you use this tool in your research, please cite:
 
 ## Contact
 
-- **Project Lead**: [Franz Schulze](franz.schulze@geo.uni-halle.de)
+- **Project Lead**: Franz Schulze franz.schulze@geo.uni-halle.de
 - **Project Website**: [https://croprotationviz.example.com](https://croprotationviz.example.com)
 
 ## Updates & Versions
