@@ -151,6 +151,29 @@ Contributions are welcome! Please read our [Contributing Guidelines](CONTRIBUTIN
 4. Push to the branch (`git push origin feature/AmazingFeature`)
 5. Open a Pull Request
 
+
+# Dependencies
+
+This project relies on the following R packages:
+
+- [shiny](https://github.com/rstudio/shiny) - Web application framework for R
+- [shinythemes](https://github.com/rstudio/shinythemes) - Themes for Shiny
+- [tidyverse](https://github.com/tidyverse/tidyverse) - Collection of R packages for data science
+- [leaflet](https://github.com/rstudio/leaflet) - Create interactive web maps
+- [ggalluvial](https://github.com/corybrunson/ggalluvial) - Alluvial diagrams in ggplot2
+- [lattice](https://github.com/cran/lattice) - Data visualization system
+- [colorspace](https://github.com/cran/colorspace) - Color space manipulations
+- [shinyWidgets](https://github.com/dreamRs/shinyWidgets) - Custom widgets for Shiny
+- [randomcoloR](https://github.com/ronammar/randomcoloR) - Random color generation
+- [plotly](https://github.com/plotly/plotly.R) - Interactive web-based graphs
+- [shinyBS](https://github.com/ebailey78/shinyBS) - Bootstrap components for Shiny
+- [bslib](https://github.com/rstudio/bslib) - Custom Bootstrap themes for Shiny
+- [DT](https://github.com/rstudio/DT) - R Interface to the DataTables library
+- [sf](https://github.com/r-spatial/sf) - Simple Features for R
+- [leaflet.minicharts](https://github.com/rte-antares-rpackage/leaflet.minicharts) - Add small charts on leaflet maps
+- [shinycssloaders](https://github.com/daattali/shinycssloaders) - Add loading animations to Shiny outputs
+- [shinyalert](https://github.com/daattali/shinyalert) - Easily create pretty popup messages in Shiny
+
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE.md](LICENSE.md) file for details.
