@@ -152,7 +152,7 @@ Contributions are welcome! Please read our [Contributing Guidelines](CONTRIBUTIN
 5. Open a Pull Request
 
 
-# Dependencies
+## Dependencies
 
 This project relies on the following R packages:
 
