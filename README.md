@@ -1,11 +1,31 @@
 # CropRotationViz 🌾 :corn:
 
-
 An interactive web application for visualizing and analyzing crop rotation patterns across agricultural landscapes. Built with R Shiny, this tool helps agricultural stakeholders understand rotation patterns, assess risks, and make data-driven decisions for sustainable farming practices.
 
 <div align="center">
   <img src="files/example.png" alt="Descriptive Alt Text" width="100%">
 </div>
+
+## Table of Contents
+- [Features](#features)
+- [Getting Started](#getting-started)
+  - [Prerequisites](#prerequisites)
+  - [Installation](#installation)
+  - [Running the Application](#running-the-application)
+- [Data Structure](#data-structure)
+- [Usage Examples](#usage-examples)
+  - [Basic Rotation Analysis](#basic-rotation-analysis)
+  - [Risk Assessment](#risk-assessment)
+- [Interface Overview](#interface-overview)
+- [Contributing](#contributing)
+  - [Development Setup](#development-setup)
+- [Dependencies](#dependencies)
+- [License](#license)
+- [Target Users](#target-users)
+- [Citation](#citation)
+- [Acknowledgments](#acknowledgments)
+- [Contact](#contact)
+- [Updates & Versions](#updates--versions)
 
 ## Features
 
@@ -24,36 +44,13 @@ An interactive web application for visualizing and analyzing crop rotation patte
   - Temporal diversity trends
   - Regional comparison tools
 
-
 ## Getting Started
 
 ### Prerequisites
 
 - R (>= 4.1.0)
 - RStudio (recommended for development)
-- Required R packages:
-
-```r
-install.packages(c(
-  "shiny",
-  "shinythemes",
-  "tidyverse",
-  "leaflet",
-  "ggalluvial",
-  "lattice",
-  "colorspace",
-  "shinyWidgets",
-  "randomcoloR",
-  "plotly",
-  "shinyBS",
-  "bslib",
-  "DT",
-  "sf",
-  "leaflet.minicharts",
-  "shinycssloaders",
-  "shinyalert"
-))
-```
+- Required R packages listed in the Dependencies section
 
 ### Installation
 
@@ -150,7 +147,6 @@ Contributions are welcome! Please read our [Contributing Guidelines](CONTRIBUTIN
 3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
 4. Push to the branch (`git push origin feature/AmazingFeature`)
 5. Open a Pull Request
-
 
 ## Dependencies
 
