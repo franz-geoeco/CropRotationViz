@@ -8,7 +8,9 @@ run_sequencer_app(
   output_dir = NA,
   common_column = NA,
   start_year = NA,
-  preview = TRUE
+  intersection_type = NA,
+  preview = TRUE,
+  vector_file = T
 )
 }
 \arguments{
@@ -23,7 +25,11 @@ for each file.}
 If NA (default), years can be selected individually for each file. Otherwise, years
 will be auto-incremented from this starting value.}
 
-\item{preview}{logical.  If True (default) you get a snapshot as png from your processed data as sankey chart in PNG format.}
+\item{intersection_type}{= "complete",}
+
+\item{preview}{logical. If True (default) you get a snapshot as png from your processed data as sankey chart in PNG format.}
+
+\item{vector_file}{logical. If True (default) you will get a vector file as an additional output with all intersected and aggregated field data.}
 }
 \value{
 A Shiny application object that can be run with \code{runApp()} or deployed
@@ -100,7 +106,9 @@ run_sequencer_app(
 run_sequencer_app(
   output_dir = "path/to/output",
   common_column = "crop_code",
-  start_year = 2020
+  start_year = 2020,
+  preview = T,
+  vector_file = T
 )
 }
 }

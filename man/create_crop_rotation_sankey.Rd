@@ -12,7 +12,8 @@ create_crop_rotation_sankey(
   output_path = NULL,
   width = 14,
   height = 10,
-  resolution = 200
+  resolution = 200,
+  color = NA
 )
 }
 \arguments{

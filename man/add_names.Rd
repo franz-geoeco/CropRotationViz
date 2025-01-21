@@ -4,7 +4,7 @@
 \alias{add_names}
 \title{Add Names to Fields}
 \usage{
-add_names(fields_list, codierung_all)
+add_names(fields_list, codierung_all, column)
 }
 \arguments{
 \item{fields_list}{List of field data}

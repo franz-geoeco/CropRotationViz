@@ -4,7 +4,7 @@
 \alias{intersect_fields_simple}
 \title{Simple Field Intersection}
 \usage{
-intersect_fields_simple(fields_list)
+intersect_fields_simple(fields_list, max_area = 20000 * 1e+06)
 }
 \arguments{
 \item{fields_list}{List of sf objects to intersect}

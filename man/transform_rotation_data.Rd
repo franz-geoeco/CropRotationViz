@@ -6,11 +6,14 @@
 \usage{
 transform_rotation_data(
   All_rot_big,
+  distribution_df,
   input_area_range,
   choices,
   selected_crops,
   type,
-  specific_crop = NULL
+  specific_crop = NULL,
+  district = NULL,
+  EZG = NULL
 )
 }
 \arguments{

@@ -252,7 +252,12 @@ sequencer_ui <- function(app_data, output_dir = NA, start_year = NA, vector_file
                  )
                )
             )
-      }
+      },
+      column(3,
+             radioButtons("fastImages",
+                          "Do wou want a fast visualization version?",
+                          c("Yes", "No"), inline = T)
+      )
     ),
     fluidRow(
       column(4,
@@ -847,20 +852,25 @@ sequencer_server <- function(input, output, session, app_data, output_dir = NA, 
         # diversity map
         incProgress(0.05, detail = "preparing diversity map")
         
-        if(length(list_intersect_with_borders) == 3){
-          if(dim(list_intersect_with_borders[[3]])[1] > 9 & length(years) > 3){
-            diversity_maps <- diversity_mapping(CropRotViz_intersection, agg_cols, Districts, EZGs)
-          }else{
-            diversity_maps <- NA
-          }
-        }else{
-          if(dim(list_intersect_with_borders[[2]])[1] > 9 & length(years) > 3){
-            diversity_maps <- diversity_mapping(CropRotViz_intersection, agg_cols, Districts)
-          }else{
-            diversity_maps <- NA
-          }
+        # Function to check if there's enough data for diversity mapping
+        has_sufficient_data <- function(data_list, min_rows = 9, min_years = 3) {
+          return(dim(data_list)[1] > min_rows && length(years) > min_years)
         }
         
+        # Handle diversity mapping based on available borders
+        diversity_data <- if (length(list_intersect_with_borders) == 3) {
+          if (has_sufficient_data(list_intersect_with_borders[[3]])) {
+            diversity_mapping(CropRotViz_intersection, agg_cols, Districts, EZGs)
+          } else {
+            NA
+          }
+        } else {
+          if (has_sufficient_data(list_intersect_with_borders[[2]])) {
+            diversity_mapping(CropRotViz_intersection, agg_cols, Districts)
+          } else {
+            NA
+          }
+        }
         
         # preparing district_CropRotViz_intersection list
         district_CropRotViz_intersection <- list()
@@ -926,8 +936,49 @@ sequencer_server <- function(input, output, session, app_data, output_dir = NA, 
         distribution_df <- st_drop_geometry(CropRotViz_intersection)[,agg_cols]
         
         # save environment
-        save(EZG_CropRotViz_intersection, district_CropRotViz_intersection, cropping_area, years, Crop_choices, Districts, EZGs, distribution_df, diversity_maps, file = paste0(current_dir, "/CropRotViz_intersection.RData"))
+        save(EZG_CropRotViz_intersection, district_CropRotViz_intersection, cropping_area, years, Crop_choices, Districts, EZGs, distribution_df, diversity_data, file = paste0(current_dir, "/CropRotViz_intersection.RData"))
         
+        #---------------------------------------------------
+        incProgress(0.05, detail = "preparing images for fast preview version")
+        
+        # create snapshot if preview == T
+        if(preview){
+          data <- do.call(rbind, district_CropRotViz_intersection)
+          data$id <- 1:nrow(data)
+          create_crop_rotation_sankey(data, 
+                                      output_path = paste0(current_dir, "/CropRotViz_intersection.png"), 
+                                      min_area = 0, 
+                                      color = app_data$Input_App_data$crop_color_mapping)
+        }
+        
+        if(input$fastImages == "Yes"){
+          # create dir
+          dir.create(paste0(current_dir, "/images"))
+
+          # plot the districts 
+          for(name in names(district_CropRotViz_intersection)){
+            snipped <- district_CropRotViz_intersection[[name]]
+            sanitized_name <- gsub("/", "_", name)
+            plot <- create_crop_rotation_sankey(snipped,
+                                                output_path = paste0(current_dir, "/images/", sanitized_name, ".png"),
+                                                min_area = 0, 
+                                                exclude_crops = c(),
+                                                color = app_data$Input_App_data$crop_color_mapping)
+          }
+          
+          # plot the EZGs
+          for(name in names(EZG_CropRotViz_intersection)){
+            snipped <- EZG_CropRotViz_intersection[[name]]
+            sanitized_name <- gsub("/", "_", name)
+            plot <- create_crop_rotation_sankey(snipped,
+                                                output_path = paste0(current_dir, "/images/", sanitized_name, ".png"), 
+                                                min_area = 0,
+                                                exclude_crops = c(),
+                                                color = app_data$Input_App_data$crop_color_mapping)
+          }
+        }
+
+        #--------------------------------------------------------------------------------------------
         mem_checkpoints$after_save <- gc(reset = TRUE)
         
         # write meta file
@@ -991,10 +1042,6 @@ sequencer_server <- function(input, output, session, app_data, output_dir = NA, 
         
         print(paste(end_time, start_time))
         
-        # create snapshot if preview == T
-        if(preview){
-          create_crop_rotation_sankey(district_CropRotViz_intersection, output_path = paste0(current_dir, "/CropRotViz_intersection.png"), min_area = 0)
-        }
         
         # Show completion notification with performance metrics
         showNotification(

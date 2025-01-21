@@ -176,3 +176,75 @@ run_vizualisation_app <- function(input_dir = NA) {
     }
   )
 }
+
+#' Launch Interactive District/River Catchment Visualization App
+#' 
+#' @description Initializes and launches the interactive mapping application for 
+#' comparing district or river catchment visualizations. This function handles data loading,
+#' resource path configuration, and app deployment.
+#'
+#' @details The function performs the following setup steps:
+#'   \itemize{
+#'     \item Loads package data from CropRotationViz
+#'     \item Creates an isolated environment for app data
+#'     \item Configures resource paths for static assets
+#'     \item Launches the Shiny application in the default browser
+#'   }
+#' 
+#' @param input_dir Optional directory path for data loading. If NA (default),
+#'   the app will present a file upload interface.
+#'
+#' @section Dependencies:
+#' Requires the following package components:
+#'   \itemize{
+#'     \item CropRotationViz package with Input_App_data
+#'     \item fast_ui function for UI generation
+#'     \item fast_viz_server function for server logic
+#'   }
+#'
+#' @return Launches a Shiny application instance
+#' 
+#' @import shiny
+#' @importFrom utils data
+#'
+#' @examples
+#' \dontrun{
+#' # Launch app with default file upload interface
+#' run_fast_vizualisation_app()
+#' 
+#' # Launch app with specific data directory
+#' run_fast_vizualisation_app(input_dir = "path/to/data")
+#' }
+#' 
+#' @note The application will automatically open in the system's default web browser
+#'   when launched.
+#'
+#' @export
+run_fast_vizualisation_app <- function(input_dir = NA) {
+  
+  # Load the package data
+  utils::data("Input_App_data", package = "CropRotationViz", envir = environment())
+  
+  # Make data available to the app
+  app_data <- new.env(parent = emptyenv())
+  app_data$Input_App_data <- Input_App_data
+  
+  # Add resource path for www directory
+  addResourcePath(
+    prefix = "www",
+    directoryPath = system.file(
+      "www", package = "CropRotationViz"
+    )
+  )
+  
+  # Launch the application in browser
+  options(shiny.launch.browser = TRUE)
+  
+  # Launch the application
+  shiny::shinyApp(
+    ui = fast_ui(app_data), 
+    server = function(input, output, session) {
+      fast_viz_server(input, output, session, app_data, input_dir)
+    }
+  )
+}

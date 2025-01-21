@@ -4,7 +4,7 @@
 \alias{sequencer_ui}
 \title{Crop Sequence Builder Interface}
 \usage{
-sequencer_ui(app_data, output_dir = NA, start_year = NA)
+sequencer_ui(app_data, output_dir = NA, start_year = NA, vector_file = TRUE)
 }
 \arguments{
 \item{app_data}{List containing application configuration and reference data:
@@ -21,6 +21,8 @@ sequencer_ui(app_data, output_dir = NA, start_year = NA)
 \item{output_dir}{Character string specifying the default output directory path. Default: NA}
 
 \item{start_year}{Numeric value indicating the initial year for sequence analysis. Default: NA}
+
+\item{vector_file}{logical. If True (default) you will get a vector file as an additional output with all intersected and aggregated field data.}
 }
 \value{
 A Shiny UI definition (fluidPage) containing the complete sequence builder interface

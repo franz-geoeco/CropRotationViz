@@ -162,6 +162,8 @@ intersecting_check_spatial <- function(input_list, intersection) {
     for(y in 1:y_tiles) {
       setTxtProgressBar(pb, counter)
       
+      incProgress(0.001, detail = paste("checking intersection", counter, "from", total_tiles))
+      
       # Calculate tile bounds
       tile_xmin <- bbox["xmin"] + (x-1) * 10000
       tile_xmax <- bbox["xmin"] + x * 10000
@@ -354,6 +356,8 @@ intersect_fields <- function(fields_list, max_area = 20000 * 1e6) {
     for (i in 2:length(fields_list)) {
       intersected <- st_intersection(intersected, st_make_valid(fields_list[[i]]))
       
+      incProgress(0.0005, detail = paste("intersecting", i, "from", length(fields_list)))
+      
       intersected <- intersected %>%
         filter(st_geometry_type(geometry) %in% c("POLYGON", "MULTIPOLYGON")) %>%
         st_make_valid() %>%
@@ -480,6 +484,9 @@ intersect_fields_simple <- function(fields_list, max_area = 20000 * 1e6) {
     
     # Process normally if area is small enough
     for (i in 2:length(fields_list)) {
+      
+      incProgress(0.005, detail = paste("intersecting", i, "from", length(fields_list)))
+      
       intersected <- st_intersection(intersected, st_make_valid(fields_list[[i]]))
       
       intersected <- intersected %>%
@@ -580,17 +587,27 @@ intersect_with_borders <- function(input, level, EZG) {
   # Get country code and borders
   cc <- subset(geodata::country_codes(), NAME == as.character(indices$ADMIN))
   borders <- geodata::gadm(country = cc$ISO2, level = level, path = tempdir(), resolution = 2)
+  
   borders <- borders[paste0("NAME_", level)]
   borders <- sf::st_as_sf(borders)
   borders <- st_transform(borders, crs = sf::st_crs(input))  
   borders_inter <- borders[apply(st_intersects(borders, input, sparse = FALSE), 1, any), ]
   
+  
   # intersection with administrative borders
   intersected <- sf::st_intersection(input, borders_inter)
   names(intersected)[length(names(intersected))-1] <- "District"
   
+  # delete to small intersection areas
+  intersected <- intersected %>%
+    group_by(District) %>%
+    filter(sum(sf::st_area(.)/10000) >= 1) %>%
+    mutate(area_ha = sf::st_area(.)/10000) %>%
+    ungroup()
+  
+  # if it`s in Germany intersect with river catchments
   if(cc$ISO2 == "DE"){
-    intersected <- sf::st_intersection(intersected, sf::st_transform(EZG, crs = sf::st_crs(input))  )
+    intersected <- sf::st_intersection(intersected, sf::st_transform(EZG, crs = sf::st_crs(input)))
     EZG_inter <- subset(EZG, EZG %in% unique(st_drop_geometry(intersected)$EZG))
     EZG_inter <- st_transform(EZG_inter, crs = sf::st_crs(input))
     EZG_inter <- sf::st_crop(EZG_inter, borders_inter)
@@ -651,13 +668,13 @@ aggregator <- function(intersected, years, crop_codes, display_names){
 #' @importFrom ggplot2 ggplot aes scale_fill_manual geom_text guides ylab theme_linedraw theme element_text element_rect guide_legend
 #' @import ggalluvial
 #' @importFrom ggalluvial geom_stratum geom_flow
-#' @importFrom dplyr %>% mutate filter select row_number
+#' @importFrom dplyr %>% mutate filter select if_any row_number rename
 #' @importFrom tidyr gather
 #' @importFrom stringr str_remove
 #' @importFrom plyr count
 #' @importFrom grDevices png dev.off
 #' @importFrom sf st_area
-#' 
+#' @importFrom tidyr pivot_longer
 #' @examples
 #' \dontrun{
 #' library(sf)
@@ -678,37 +695,45 @@ create_crop_rotation_sankey <- function(data,
                                         output_path = NULL,
                                         width = 14,
                                         height = 10,
-                                        resolution = 200) {
-  # Define color palette
-  color_palette <- c("#2e8b57","darkgrey","#2f4f4f", "#556b2f",  "#6b8e23","#a0522d","#7f0000", "#708090","#483d8b","#008000","#bc8f8f","#b8860b","#bdb76b","#4682b4","#d2691e", "#9acd32","#20b2aa","#4b0082" , "#32cd32", "#8fbc8f", "#8b008b","#9932cc",  "#ff0000",  "#ffa500",  "#ffd700","#ffff00","#0000cd", "grey", "pink", "red", "purple", 
-                     "#00ff00","#00fa9a","#dc143c","#00ffff","#00bfff","#f4a460","#0000ff", "#a020f0","#adff2f","#ff6347", "#da70d6","#ff00ff","#1e90ff",  "#db7093", "#fa8072",  "#dda0dd", "#87ceeb","#ff1493", "#7b68ee","#98fb98",  "#7fffd4","#ff69b4","#ffe4c4","#ffc0cb" ,"black", "white","brown","darkgreen", "darkred", "lightgrey")
-  
+                                        resolution = 200,
+                                        color = NA) {
   require(ggalluvial)
-  
-  data <- do.call(rbind, data)
-  data$id <- 1:nrow(data)
   
   # filter
   rotation_data <- data %>%
     filter(freq > min_area)
   
-  rotation_data <- rotation_data %>%
-    pivot_longer(
-      cols = -c(freq, id, rotation),
-      names_to = "value",
-      values_to = "key"
-    ) %>%
-    mutate(
-      year = as.numeric(str_remove(value, "Aggregated_")),
-      key = factor(key),
-      key = fct_reorder(key, -freq)
-    ) %>%
-    rename(Area = freq) %>%
-    select(Area, id, value, key, year)
-  
-  # Create color mapping
-  keys <- unique(rotation_data$key)
-  color_mapping <- setNames(color_palette[1:length(keys)], keys)
+  if (any(grepl("Aggregated_", names(rotation_data)))) {
+    # Final transformations
+    rotation_data <- rotation_data %>%
+      pivot_longer(
+        cols      = -c(freq, id, rotation),
+        names_to  = "value",
+        values_to = "key"
+      ) %>%
+      mutate(
+        year = as.numeric(str_remove(value, "Aggregated_")),
+        key  = factor(key),
+        key  = fct_reorder(key, -key)
+      ) %>%
+      rename(Area = freq) %>%
+      select(Area, id, value, key, year)
+  }else{
+    # Final transformations
+    rotation_data <- rotation_data %>%
+      pivot_longer(
+        cols      = -c(freq, id, rotation),
+        names_to  = "value",
+        values_to = "key"
+      ) %>%
+      mutate(
+        year = as.numeric(str_remove(value, "Crop_")),
+        key  = factor(key),
+        key  = fct_reorder(key, -key)
+      ) %>%
+      rename(Area = freq) %>%
+      select(Area, id, value, key, year)
+  }
   
   # Create plot
   sankey_plot <- ggplot(rotation_data, 
@@ -718,7 +743,7 @@ create_crop_rotation_sankey <- function(data,
                             fill = key,
                             alluvium = id, 
                             label = key)) +
-    scale_fill_manual(values = color_mapping) +
+    scale_fill_manual(values = color) +
     geom_stratum(alpha = .90, show.legend = TRUE, color = NA) +
     geom_flow(show.legend = FALSE) +
     geom_text(stat = "stratum", size = 4, check_overlap = TRUE) +
@@ -737,6 +762,16 @@ create_crop_rotation_sankey <- function(data,
       legend.title = element_blank(),
       legend.text = element_text(size = 10)
     )
+  
+  unique_key_count <- length(unique(rotation_data$key))
+  
+  # Apply guides based on the unique count
+  if (length(unique_key_count) > 20) {
+    sankey_plot + guides(fill = guide_legend(nrow = 8))
+  } else {
+    sankey_plot + guides(fill = guide_legend(nrow = 4))
+  }
+  
   
   # Save plot if output path is provided
   if (!is.null(output_path)) {
@@ -1302,67 +1337,29 @@ diversity_mapping <- function(input, agg_cols, districts, EZGs = NA){
   names(districts) <- c("District", "geometry")
   
   BISCALE <- merge(districts, BISCALE)
-
+  
   
   # create classes
   BISCALE <- bi_class(BISCALE, x = mean_unique_weight, y = mean_transi_weight, style = "quantile", dim = 3)
-  labels1 <- bi_class_breaks(BISCALE, x = mean_unique, y = meant_transi, style = "quantile", 
-                             dim = 3, dig_lab = c(2,2), split = FALSE)
+  labels1 <- bi_class_breaks(BISCALE, x = mean_unique_weight, y = mean_transi_weight, 
+                             style = "quantile", 
+                             dim = 3, dig_lab = c(2,2), 
+                             split = FALSE)
   
   BISCALE <- st_transform(BISCALE, crs = "EPSG:4326")
+  palette <- c("#e8e8e8", "#e4acac", "#c85a5a", "#b0d5df", "#ad9ea5", "#985356", 
+               "#64acbe", "#627f8c", "#574249")
   
   # Create a color palette based on the bi_class
   color_pal <- colorFactor(
-    palette = c("#e8e8e8", "#e4acac", "#c85a5a", "#b0d5df", "#ad9ea5", "#985356", 
-                "#64acbe", "#627f8c", "#574249"),
+    palette = palette,
     domain = BISCALE$bi_class
   )
+  District_div_data <- list(BISCALE, color_pal, labels1)
   
-  # Create the leaflet map
-  District_Map <- leaflet(BISCALE) %>%
-      addProviderTiles("CartoDB.Positron") %>%  # Add a light basemap
-      addPolygons(
-        fillColor = ~color_pal(bi_class),
-        fillOpacity = 0.7,
-        weight = 0.1,
-        color = "white",
-        popup = ~paste(
-          "<strong>District:</strong>", District, "<br>",
-          "<strong>Unique Crops:</strong>", round(mean_unique, 2), "<br>",
-          "<strong>Transitions:</strong>", round(meant_transi, 2)
-        )
-      ) %>%
-      addControl(
-        html = paste(
-          "<div style='background-color: white; padding: 15px; border-radius: 5px; position: relative; min-width: 150px;'>",
-          # Left side labels (Transitions)
-          "<div style='position: absolute; left: -78px; top: 5%; transform: rotate(-90deg) translateY(-50%); transform-origin: right; font-size: 12px; white-space: nowrap;'> More Transitions →</div>",
-          sprintf("<div style='position: absolute; left: 30px; top: 100px; font-size: 11px;'>%s</div>", labels1$bi_y[1]),
-          sprintf("<div style='position: absolute; left: 30px; top: 62px; font-size: 11px;'>%s</div>", labels1$bi_y[2]),
-          sprintf("<div style='position: absolute; left: 30px; top: 25px; font-size: 11px;'>%s</div>", labels1$bi_y[3]),
-          
-          # Color grid
-          "<div style='margin-left: 60px; margin-right: -30px;'>",
-          "<div style='display: grid; grid-template-columns: repeat(3, 35px); gap: 0;'>",
-          paste(sprintf(
-            "<div style='width: 35px; height: 35px; background-color: %s; border: 0.5px solid rgba(0,0,0,0.1);'></div>",
-            bivariate_colors
-          ), collapse = ""),
-          "</div>",
-          
-          # Bottom labels (Unique crops)
-          "<div style='margin-left: -1px; display: flex; justify-content: space-between; margin-top: 2px; font-size: 11px;width: 108px;'>",
-          sprintf("<span>%s</span>", labels1$bi_x[1]),
-          sprintf("<span>%s</span>", labels1$bi_x[2]),
-          sprintf("<span>%s</span>", labels1$bi_x[3]),
-          "</div>",
-          "<div style='margin-left: -30px; margin-top: 5px; text-align: center; font-size: 12px;'>More unique crops →</div>",
-          "</div>"
-        ),
-        position = "topright"
-      )
-  
-  if(!is.na(EZGs)){
+  if(all(is.na(EZGs))) {  # Check if EZGs is entirely NA
+    EZG_div_data <- NA
+  }else{
     EZG_names <- c("EZG", "area", "unique_count", "transitions")
     BISCALE <- invekos_df[,EZG_names]
     
@@ -1374,74 +1371,111 @@ diversity_mapping <- function(input, agg_cols, districts, EZGs = NA){
                 mean_transi_weight = weighted.mean(transitions, area)
       )
     
-    BISCALE <- merge(EZGs, BISCALE_EZG)
-    
+    BISCALE <- merge(EZGs, BISCALE)
     
     # create classes
     BISCALE <- bi_class(BISCALE, x = mean_unique_weight, y = mean_transi_weight, style = "quantile", dim = 3)
-    labels1 <- bi_class_breaks(BISCALE, x = mean_unique, y = meant_transi, style = "quantile", 
+    labels1 <- bi_class_breaks(BISCALE, x = mean_unique_weight, y = mean_transi_weight, style = "quantile", 
                                dim = 3, dig_lab = c(2,2), split = FALSE)
     
     BISCALE <- st_transform(BISCALE, crs = "EPSG:4326")
-    palette <- c("#e8e8e8", "#e4acac", "#c85a5a", "#b0d5df", "#ad9ea5", "#985356", 
-                 "#64acbe", "#627f8c", "#574249")
+    
     # Create a color palette based on the bi_class
     color_pal <- colorFactor(
       palette = palette,
       domain = BISCALE$bi_class
     )
     
-    # Create the leaflet map
-    EZG_Map <- leaflet(BISCALE) %>%
-      addProviderTiles("CartoDB.Positron") %>%  # Add a light basemap
-      addPolygons(
-        fillColor = ~color_pal(bi_class),
-        fillOpacity = 0.7,
-        weight = 0.1,
-        color = "white",
-        popup = ~paste(
-          "<strong>River Basin:</strong>", EZG, "<br>",
-          "<strong>Unique Crops:</strong>", round(mean_unique, 2), "<br>",
-          "<strong>Transitions:</strong>", round(meant_transi, 2)
-        )
-      ) %>%
-      addControl(
-        html = paste(
-          "<div style='background-color: white; padding: 15px; border-radius: 5px; position: relative; min-width: 150px;'>",
-          # Left side labels (Transitions)
-          "<div style='position: absolute; left: -78px; top: 5%; transform: rotate(-90deg) translateY(-50%); transform-origin: right; font-size: 12px; white-space: nowrap;'> More Transitions →</div>",
-          sprintf("<div style='position: absolute; left: 30px; top: 100px; font-size: 11px;'>%s</div>", labels1$bi_y[1]),
-          sprintf("<div style='position: absolute; left: 30px; top: 62px; font-size: 11px;'>%s</div>", labels1$bi_y[2]),
-          sprintf("<div style='position: absolute; left: 30px; top: 25px; font-size: 11px;'>%s</div>", labels1$bi_y[3]),
-          
-          # Color grid
-          "<div style='margin-left: 60px; margin-right: -30px;'>",
-          "<div style='display: grid; grid-template-columns: repeat(3, 35px); gap: 0;'>",
-          paste(sprintf(
-            "<div style='width: 35px; height: 35px; background-color: %s; border: 0.5px solid rgba(0,0,0,0.1);'></div>",
-            palette[c(7,8,9,4,5,6,1,2,3)]
-          ), collapse = ""),
-          "</div>",
-          
-          # Bottom labels (Unique crops)
-          "<div style='margin-left: -1px; display: flex; justify-content: space-between; margin-top: 2px; font-size: 11px;width: 108px;'>",
-          sprintf("<span>%s</span>", labels1$bi_x[1]),
-          sprintf("<span>%s</span>", labels1$bi_x[2]),
-          sprintf("<span>%s</span>", labels1$bi_x[3]),
-          "</div>",
-          "<div style='margin-left: -30px; margin-top: 5px; text-align: center; font-size: 12px;'>More unique crops →</div>",
-          "</div>"
-        ),
-        position = "topright"
-      )
-  }else{
-    EZG_Map <- NA
+    EZG_div_data <- list(BISCALE = BISCALE, color_pal = color_pal, labels1 = labels1)
   }
   
   # list the maps
-  Maps <- list(District_Map, EZG_Map)
+  Data <- list(District_div_data, EZG_div_data)
   
-  return(Maps)
+  return(Data)
+}
+
+
+#' Create a Bivariate Choropleth Map for Agricultural Diversity
+#'
+#' @description
+#' This function generates an interactive leaflet map visualizing agricultural diversity patterns
+#' using a bivariate color scheme. It displays the relationship between unique crops and
+#' crop transitions across different geographical units (Districts or River Basins).
+#'
+#' @param data A list containing the following elements:
+#'   \itemize{
+#'     \item BISCALE: Spatial data frame with diversity metrics
+#'     \item color_pal: Color palette function for bivariate mapping
+#'     \item labels1: List with bi_x and bi_y labels for the legend
+#'   }
+#' @param type Character string indicating the geographic unit type ("District" or "River Basin")
+#'
+#' @return A leaflet map object with:
+#'   \itemize{
+#'     \item Choropleth layer showing bivariate relationships
+#'     \item Custom legend displaying the bivariate color scheme
+#'     \item Popups with detailed information for each geographic unit
+#'   }
+#'
+#' @examples
+#' \dontrun{
+#' diversity_mapper(processed_data, type = "District")
+#' diversity_mapper(processed_data, type = "River Basin")
+#' }
+#'
+#' @import leaflet
+#' @export
+diversity_mapper <- function(data, type){
+  color_pal <- data[[2]]
+  label <- ifelse(type == "District", "District", "River Basin")
+  palette <- c("#e8e8e8", "#e4acac", "#c85a5a", "#b0d5df", "#ad9ea5", "#985356", 
+               "#64acbe", "#627f8c", "#574249")
+  
+  # Create the leaflet map
+  Diversity_Map <- leaflet(data[[1]]) %>%
+    addProviderTiles("CartoDB.Positron") %>%  # Add a light basemap
+    addPolygons(
+      fillColor = ~color_pal(bi_class),
+      fillOpacity = 0.9,
+      weight = 0.1,
+      color = "black",
+      popup = ~paste(
+        "<strong>District:</strong>", label, "<br>",
+        "<strong>Unique Crops:</strong>", round(mean_unique_weight, 2), "<br>",
+        "<strong>Transitions:</strong>", round(mean_transi_weight, 2)
+      )
+    ) %>%
+    addControl(
+      html = paste(
+        "<div style='background-color: white; padding: 15px; border-radius: 5px; position: relative; min-width: 150px;'>",
+        # Left side labels (Transitions)
+        "<div style='position: absolute; left: -78px; top: 5%; transform: rotate(-90deg) translateY(-50%); transform-origin: right; font-size: 12px; white-space: nowrap;'> More Transitions →</div>",
+        sprintf("<div style='position: absolute; left: 30px; top: 100px; font-size: 11px;'>%s</div>", data[[3]]$bi_y[1]),
+        sprintf("<div style='position: absolute; left: 30px; top: 62px; font-size: 11px;'>%s</div>", data[[3]]$bi_y[2]),
+        sprintf("<div style='position: absolute; left: 30px; top: 25px; font-size: 11px;'>%s</div>", data[[3]]$bi_y[3]),
+        
+        # Color grid
+        "<div style='margin-left: 60px; margin-right: -30px;'>",
+        "<div style='display: grid; grid-template-columns: repeat(3, 35px); gap: 0;'>",
+        paste(sprintf(
+          "<div style='width: 35px; height: 35px; background-color: %s; border: 0.5px solid rgba(0,0,0,0.1);'></div>",
+          palette[c(7,8,9,4,5,6,1,2,3)]
+        ), collapse = ""),
+        "</div>",
+        
+        # Bottom labels (Unique crops)
+        "<div style='margin-left: -1px; display: flex; justify-content: space-between; margin-top: 2px; font-size: 11px;width: 108px;'>",
+        sprintf("<span>%s</span>", data[[3]]$bi_x[1]),
+        sprintf("<span>%s</span>", data[[3]]$bi_x[2]),
+        sprintf("<span>%s</span>", data[[3]]$bi_x[3]),
+        "</div>",
+        "<div style='margin-left: -30px; margin-top: 5px; text-align: center; font-size: 12px;'>More unique crops →</div>",
+        "</div>"
+      ),
+      position = "topright"
+    )
+  return(Diversity_Map)
 }
 
 # Function to generate a random hex color

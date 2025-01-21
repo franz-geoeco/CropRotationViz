@@ -88,7 +88,6 @@ viz_ui <- function(input_dir = NA){
       }
     ")),
     
-    # Application title
     # Define the tabs
     tabsetPanel(id = "tabs",
                 tabPanel("Plot Sequence",
@@ -654,22 +653,6 @@ viz_server <- function(input, output, session, app_data, input_dir) {
   # Reactive value to track if data is loaded
   data_loaded <- reactiveVal(FALSE)
   
-  # observeEvent(input$district_or_ezg, {
-  #   # When `EZG_sel` is displayed (i.e., selected in some way), hide the `District_sel` input
-  #   if (input$district_or_ezg == "River Basin") {
-  #     shinyjs::hide("District_sel")
-  #     shinyjs::hide("sankey_district")
-  #     shinyjs::hide("leaflet_district")
-  #     shinyjs::hide("perc_district_plot")
-  #     shinyjs::hide("district_ridges")
-  #   } else {
-  #     shinyjs::show("District_sel")
-  #     shinyjs::show("sankey_district")
-  #     shinyjs::show("leaflet_district")
-  #     shinyjs::show("district_ridges")
-  #     shinyjs::show("perc_district_plot")}
-  # })
-  
   # Render dynamic UI based on whether data is loaded
   output$dynamic_ui <- renderUI({
     if (!data_loaded() & is.na(input_dir)) {
@@ -862,7 +845,6 @@ viz_server <- function(input, output, session, app_data, input_dir) {
     #--------------------------------------------------------------------------------------------
     
     
-    # Original viz_server logic
     # ALERTS
     observeEvent(input$tabs, {
       if(input$tabs == "Plot Sequence"){

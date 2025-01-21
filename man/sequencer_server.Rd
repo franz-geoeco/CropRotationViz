@@ -11,7 +11,8 @@ sequencer_server(
   app_data,
   output_dir = NA,
   common_column = NA,
-  preview = TRUE
+  preview = TRUE,
+  vector_file = TRUE
 )
 }
 \arguments{
@@ -36,6 +37,10 @@ sequencer_server(
 \item{output_dir}{Character string specifying default output directory path. Default: NA}
 
 \item{common_column}{Character string specifying a default column for crop identification across files. Default: NA}
+
+\item{preview}{logical. If True (default) you get a snapshot as png from your processed data as sankey chart in PNG format.}
+
+\item{vector_file}{logical. If True (default) you will get a vector file as an additional output with all intersected and aggregated field data.}
 }
 \value{
 Reactive expression containing a list of processed files with their metadata:

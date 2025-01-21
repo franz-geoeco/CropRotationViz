@@ -4,7 +4,7 @@
 \alias{intersect_fields}
 \title{Intersect Multiple Field Layers}
 \usage{
-intersect_fields(fields_list)
+intersect_fields(fields_list, max_area = 20000 * 1e+06)
 }
 \arguments{
 \item{fields_list}{List of sf objects to intersect}
