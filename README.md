@@ -1,156 +1,188 @@
-# CropRotationViz 🌾 :corn:
 
-An interactive web application for visualizing and analyzing crop rotation patterns across agricultural landscapes. Built with R Shiny, this tool helps agricultural stakeholders understand rotation patterns, assess risks, and make data-driven decisions for sustainable farming practices.
-
-<div align="center">
-  <img src="files/example.png" alt="Descriptive Alt Text" width="100%">
+<div align="right">
+  <img src="inst/www/GeoECO_MLU_LANG_2.png" alt="Descriptive Alt Text" width="100%">
 </div>
 
+# CropRotationViz  🌾 :corn:
+
+<!-- badges: start -->
+[![R-CMD-check](https://github.com/franz-geoeco/CropRotationViz/workflows/R-CMD-check/badge.svg)](https://github.com/franz-geoeco/CropRotationViz/actions)
+[![codecov](https://codecov.io/gh/franz-geoeco/repo/branch/main/graph/badge.svg)](https://codecov.io/gh/franz-geoeco/repo)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+<!-- badges: end -->
+
+## Overview
+
+CropRotationViz is an R package providing interactive Shiny applications for processing, analyzing and visualizing crop rotation sequences from agricultural field data. It offers tools for processing field geometries, analyzing crop rotations across multiple years, and creating interactive visualizations.
+
+<div align="center">
+  <img src="images/example.png" alt="Descriptive Alt Text" width="100%">
+</div>
+
+
 ## Table of Contents
+- [Overview](#overview)
 - [Features](#features)
-- [Getting Started](#getting-started)
-  - [Prerequisites](#prerequisites)
-  - [Installation](#installation)
-  - [Running the Application](#running-the-application)
-- [Data Structure](#data-structure)
-- [Usage Examples](#usage-examples)
-  - [Basic Rotation Analysis](#basic-rotation-analysis)
-  - [Risk Assessment](#risk-assessment)
-- [Interface Overview](#interface-overview)
-- [Contributing](#contributing)
-  - [Development Setup](#development-setup)
+  - [Field Data Processing Tool](#field-data-processing-tool)
+  - [Visualization Tools](#visualization-tools)
+  - [Data Analysis](#data-analysis)
+- [Installation](#installation)
+- [Usage](#usage)
+  - [Basic Usage](#basic-usage)
+  - [Step-by-Step Guide](#step-by-step-guide)
+    - [Processing](#processing)
+    - [Visualization](#visualization)
+- [Data Requirements](#data-requirements)
+  - [Input Data Structure](#input-data-structure)
+- [Example Data](#example-data)
 - [Dependencies](#dependencies)
+- [Background](#background)
+  - [How it Works](#how-it-works)
+  - [Example](#example)
+- [Contributing](#contributing)
 - [License](#license)
-- [Target Users](#target-users)
 - [Citation](#citation)
-- [Acknowledgments](#acknowledgments)
 - [Contact](#contact)
-- [Updates & Versions](#updates--versions)
+- [Acknowledgments](#acknowledgments)
 
 ## Features
 
-- **Interactive Rotation Visualization**
-  - Dynamic Sankey diagrams showing crop sequences
-  - Spatial distribution maps of rotation patterns
-  - Temporal analysis of rotation changes
+- **Field Data Processing Tool**
+  - Support for multiple spatial file formats (SHP, GeoJSON, FlatGeobuf, GeoPackage, SQLite)
+  - Automated field intersection analysis
+  - Spatial data validation and cleaning
+  - Batch processing of multiple years of data
 
-- **Risk Assessment Tools**
-  - Disease pressure analysis based on rotation patterns
-  - Weed risk evaluation
-  - Hotspot identification for management optimization
+- **Visualization Tools**
+  - Interactive map interface with field boundaries
+  - Crop rotation sequence visualization
+  - Custom color schemes for different crop types
+  - Sankey diagrams for rotation flows
 
-- **Diversity Analysis**
-  - Structural and functional diversity metrics
-  - Temporal diversity trends
-  - Regional comparison tools
+- **Data Analysis**
+  - Crop sequence pattern analysis
+  - Area calculations and statistics
+  - Temporal change analysis
+  - Support for different coding systems (NC codes and crop names)
 
-## Getting Started
+## Installation
 
-### Prerequisites
-
-- R (>= 4.1.0)
-- RStudio (recommended for development)
-- Required R packages listed in the Dependencies section
-
-### Installation
-
-1. Clone the repository:
-```bash
-git clone https://github.com/franz-geoeco/CropRotationViz.git
-cd CropRotationViz
-```
-
-2. Install dependencies:
-```r
-source("install_dependencies.R")
-```
-
-3. Configure your environment:
-```r
-# Copy example configuration file
-cp config.example.R config.R
-# Edit config.R with your settings
-```
-
-### Running the Application
+You can install the development version of CropRotationViz from GitHub:
 
 ```r
-shiny::runApp()
+# Install devtools if you haven't already
+install.packages("remotes")
+
+# Install CropRotationViz
+remotes::install_github("franz-geoeco/CropRotationViz")
 ```
 
-## Data Structure
+## Usage
 
-The application expects input data in the following format:
+### Basic Usage
 
 ```r
-data_structure <- data.frame(
-  field_id = character(),      # Unique identifier for each field
-  year = numeric(),            # Year of observation (2017-2023)
-  crop = character(),          # Crop type
-  area_ha = numeric(),         # Field size in hectares
-  geometry = sf::st_geometry() # Spatial data
-)
+# Load the package
+library(CropRotationViz)
+
+# Launch the Shiny processing application
+run_sequencer_app()
+
+# Launch the Shiny visualization application
+run_visualization_app()
 ```
 
-## Usage Examples
+### Step-by-Step Guide
+#### Generate Dummy Data
+If you do not have field data at hand or just want to test the functionality of the application, you can run the following line, to produce dummy annual field shapefiles, which you can load into the processing application.
 
-### Basic Rotation Analysis
+`CropRotationViz::dummy_filed_generator(output_dir = "path/to/your/dir")`
+
+#### Processing
+1. **Launch the Processing Application**
+   - Run `CropRotationViz::run_sequencer_app()`
+   - or add already an output_dir like `CropRotationViz::run_sequencer_app(output_dir = "path/to/dir")`
+   - if all polygon files share a common column explaining the crops use `common_column = "your_column"`
+   - if you don't want to input the years mannually add a start year `start_year = 2000`
+   - if you don't need a preview of your intersection as Sankey chart (.png) set `preview = F`
+   - if you don't need a vector file of your intersected fields set `vector_file = F`
+   - The application will open your default web browser
+
+2. **Load Data**
+   - Click "Choose File" for each year of data
+   - Select the appropriate spatial file (SHP, GeoJSON, FlatGeobuf, GeoPackage, or SQLite)
+   - Choose the column containing crop codes or names
+   - Assign the correct year to each file
+
+3. **Process Data**
+   - Select processing options:
+     - NC codes or crop names and years (if you didn't provide it)
+     - Complete or fast intersection
+     - Aggregation preferences
+   - Choose output directory (if you didn't provide it in the start function) and format
+   - Click "Process Files" to start analysis
+
+#### Visualization
+1. **Launch the Visualization Application**
+   - Run `CropRotationViz::run_visualization_app()`
+   - or add alrady the input_dir with the output from the processing application like `CropRotationViz::run_visualization_app(input_dir = "path/to/dir")`
+   - the application will open your default web browser
+
+2. **Load Data**
+   - Click "Browser" or drag and drop the .RData File from the processing output
+     
+3. **View Results**
+   - Examine the interactive charts
+   - Review processed data statistics
+
+#### Fast Visualization
+1. **Launch the Visualization Application**
+   - Run `CropRotationViz::run_fast_vizualisation_app()`
+   - or add alrady the input_dir with the output from the processing application like `CropRotationViz::run_fast_vizualisation_app(input_dir = "path/to/dir")`
+   - the application will open your default web browser
+
+2. **Load Data**
+   - Click "Browser" or drag and drop the .RData File from the processing output
+     
+3. **View Results**
+   - Examine the interactive map
+   - Review processed data statistics
+     
+## Data Requirements
+
+- Spatial files containing field boundaries
+- Crop type information (NC codes or crop names)
+- Minimum of 2 years of data
+- Supported formats: SHP, GeoJSON, FlatGeobuf, GeoPackage, SQLite
+
+### Input Data Structure
+Your input data should contain at minimum the following attributes for each field:
+
+| YEAR | CROP_CODE | CROP_NAME  | geometry |
+|------|-----------|-----------|----------|
+| 2020 | 110 | Wheat | POLYGON |
+| 2020 | 200 | Corn | POLYGON |
+| 2020 | 500 | Soybean | POLYGON |
+| 2020 | 110 | Wheat | POLYGON |
+
+Where:
+- YEAR: The crop year
+- CROP_CODE: Numerical code for the crop type (e.g., NC codes)
+- CROP_NAME: Text name of the crop
+- geometry: Spatial geometry of the field (POLYGON or MULTIPOLYGON)
+
+## Example Data
+
+The package includes example data that can be accessed:
+
 ```r
 # Load example data
-data <- read_rotation_data("path/to/data")
-
-# Generate rotation visualization
-plot_rotation_sankey(data)
+data("Input_App_data", package = "CropRotationViz")
 ```
-
-### Risk Assessment
-```r
-# Calculate disease risk based on rotation patterns
-risk_analysis <- calculate_disease_risk(rotation_data)
-
-# Visualize risk hotspots
-plot_risk_map(risk_analysis)
-```
-
-## Interface Overview
-
-The application is organized into several main sections:
-
-1. **Dashboard**
-   - Overview statistics
-   - Key performance indicators
-   - Quick navigation
-
-2. **Rotation Analysis**
-   - Temporal patterns
-   - Spatial distribution
-   - Sequence analysis
-
-3. **Risk Assessment**
-   - Disease pressure maps
-   - Weed risk evaluation
-   - Management recommendations
-
-4. **Reports**
-   - Custom report generation
-   - Data export options
-   - Summary statistics
-
-## Contributing
-
-Contributions are welcome! Please read our [Contributing Guidelines](CONTRIBUTING.md) for details on our code of conduct and the process for submitting pull requests.
-
-### Development Setup
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
 
 ## Dependencies
 
-This project relies on the following R packages:
+CropRotationViz requires several R packages for spatial data processing and visualization. Key dependencies include:
 
 - [shiny](https://github.com/rstudio/shiny) - Web application framework for R
 - [shinythemes](https://github.com/rstudio/shinythemes) - Themes for Shiny
@@ -160,7 +192,6 @@ This project relies on the following R packages:
 - [lattice](https://github.com/cran/lattice) - Data visualization system
 - [colorspace](https://github.com/cran/colorspace) - Color space manipulations
 - [shinyWidgets](https://github.com/dreamRs/shinyWidgets) - Custom widgets for Shiny
-- [randomcoloR](https://github.com/ronammar/randomcoloR) - Random color generation
 - [plotly](https://github.com/plotly/plotly.R) - Interactive web-based graphs
 - [shinyBS](https://github.com/ebailey78/shinyBS) - Bootstrap components for Shiny
 - [bslib](https://github.com/rstudio/bslib) - Custom Bootstrap themes for Shiny
@@ -169,45 +200,71 @@ This project relies on the following R packages:
 - [leaflet.minicharts](https://github.com/rte-antares-rpackage/leaflet.minicharts) - Add small charts on leaflet maps
 - [shinycssloaders](https://github.com/daattali/shinycssloaders) - Add loading animations to Shiny outputs
 - [shinyalert](https://github.com/daattali/shinyalert) - Easily create pretty popup messages in Shiny
+- and others (see DESCRIPTION file)
+
+All dependencies will be automatically installed when installing CropRotationViz.
+
+## Background
+The core functionality of the processing module centers around field intersection across multiple years of data. The system supports two intersection modes to accommodate different use cases:
+
+Complete Intersection (Default): Includes all fields that appear in at least one year, with NA values populated for years where a field is absent
+Fast Intersection: Only includes fields that are consistently present across all years
+
+### How It Works
+- **Complete Intersection Mode**
+  - Identifies all unique fields across all available years Maintains fields even if they only appear in a subset of years Automatically fills missing data with NA values Preserves data completeness at the cost of additional processing time
+
+- **Fast Intersection Mode**
+  - Only retains fields that appear consistently across all years Reduces processing overhead Results in a smaller, more consistent dataset Activated by setting `intersection_type = "Fast"`
+
+### Example
+Consider a dataset spanning two years with varying fields:
+
+<div align="center">
+  <img src="images/Flow_chart.png" alt="Descriptive Alt Text" width="100%">
+</div>
+<div align="center">
+  <img src="images/intersection.png" alt="Descriptive Alt Text" width="100%">
+</div>
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request. For major changes, please open an issue first to discuss what you would like to change.
+
+To contribute:
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE.md](LICENSE.md) file for details.
-
-## Target Users
-
-- Agricultural Policy Makers
-- Researchers & Scientists
-- Farm Advisors & Consultants
-- Farmers & Farm Managers
-- Agricultural Education Institutions
-- Environmental Organizations
+This project is licensed under the MIT License - see the LICENSE file for details.
 
 ## Citation
 
-If you use this tool in your research, please cite:
+If you use CropRotationViz in your research, please cite it:
 
 ```bibtex
-@software{croprotationviz2024,
-  author = {Schulze, Franz and Pöhlitz, Julia and Conrad, Christopher},
-  title = {CropRotationViz: Interactive Analysis of Agricultural Rotation Patterns},
+@software{CropRotationViz2024,
+  author = {Schulze, Franz},
+  title = {CropRotationViz: Interactive Tool for Crop Rotation Sequence Analysis},
   year = {2024},
   publisher = {GitHub},
+  journal = {GitHub repository},
   url = {https://github.com/franz-geoeco/CropRotationViz}
 }
 ```
 
-## Acknowledgments
-
-- Ministry for Climate Protection, Agriculture, Rural Areas and Environment of MWP for providing IACS data
-- R Shiny community for excellent documentation and support
-- Contributors and beta testers
-
 ## Contact
 
-- **Project Lead**: Franz Schulze franz.schulze@geo.uni-halle.de
-- **Project Website**: [https://croprotationviz.example.com](https://croprotationviz.example.com)
+Franz Schulze - franz.schulze@geo.uni-halle.de
 
-## Updates & Versions
+Project Link: [https://github.com/franz-geoeco/CropRotationViz](https://github.com/franz-geoeco/CropRotationViz)
 
-See [CHANGELOG.md](CHANGELOG.md) for a list of changes and version updates.
+## Acknowledgments
+
+- Martin Luther University Halle-Wittenberg
+- Contributors and users who have provided valuable feedback

@@ -1,0 +1,18 @@
+# R specific
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+
+# Package specific
+*.Rproj
+.Rbuildignore
+
+# OS specific
+.DS_Store
+Thumbs.db
+
+# Build files
+inst/doc
+/doc
+/Meta

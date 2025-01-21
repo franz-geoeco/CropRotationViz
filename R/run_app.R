@@ -1,0 +1,178 @@
+# R/run_app.R
+#' @title Run the Crop Rotation Visualization Application
+#'
+#' @description
+#' Launches the Shiny application for analyzing and visualizing agricultural crop rotation sequences.
+#' This application provides an interactive interface for loading spatial data, processing crop rotations,
+#' and generating visualizations and analysis outputs.
+#'
+#' @param output_dir Character string specifying the default output directory path. If NA (default),
+#'   the user will be prompted to select an output directory through the application interface.
+#' @param common_column Character string specifying a default column name to be used for crop
+#'   identification across all input files. If NA (default), column selection will be prompted
+#'   for each file.
+#' @param start_year Numeric value indicating the initial year for the sequence analysis.
+#'   If NA (default), years can be selected individually for each file. Otherwise, years
+#'   will be auto-incremented from this starting value.
+#' @param intersection_type = "complete",
+#' @param preview logical. If True (default) you get a snapshot as png from your processed data as sankey chart in PNG format.
+#' @param vector_file logical. If True (default) you will get a vector file as an additional output with all intersected and aggregated field data.
+#' 
+#' @details
+#' The application provides a comprehensive interface for crop rotation analysis:
+#'   \itemize{
+#'     \item{Data Input}{
+#'       \itemize{
+#'         \item Support for multiple spatial file formats (.shp, .geojson, .fgb, .gpkg, .sqlite)
+#'         \item Capability to load up to 10 years of spatial data
+#'         \item Flexible column mapping for crop identification
+#'       }
+#'     }
+#'     \item{Processing Options}{
+#'       \itemize{
+#'         \item Choice between national coding (NC) or name-based crop identification
+#'         \item Optional crop class aggregation
+#'         \item Multiple intersection processing methods
+#'       }
+#'     }
+#'     \item{Output Generation}{
+#'       \itemize{
+#'         \item Multiple export format options
+#'         \item Comprehensive metadata documentation
+#'         \item Sankey diagram visualizations
+#'         \item Statistical summaries
+#'       }
+#'     }
+#'   }
+#'
+#' @section Data Requirements:
+#' The application expects:
+#'   \itemize{
+#'     \item Spatial data files containing crop information
+#'     \item Consistent coordinate reference systems across files
+#'     \item Valid crop codes or names in specified columns
+#'   }
+#'
+#' @section Output Files:
+#' The application generates several output files:
+#'   \itemize{
+#'     \item Spatial data file (in chosen format) containing intersection results
+#'     \item RData file with processed data and statistics
+#'     \item Processing information text file with metadata
+#'     \item Sankey diagram visualization of crop sequences
+#'   }
+#'
+#' @return A Shiny application object that can be run with \code{runApp()} or deployed
+#'   to a Shiny server.
+#'
+#' @export
+#' @import shiny
+#' @importFrom shiny fluidPage
+#'
+#' @examples
+#' \dontrun{
+#' # Basic usage with default settings
+#' run_sequencer_app()
+#'
+#' # Specify output directory
+#' run_sequencer_app(output_dir = "path/to/output")
+#'
+#' # Specify output directory and common column name
+#' run_sequencer_app(
+#'   output_dir = "path/to/output",
+#'   common_column = "crop_code"
+#' )
+#'
+#' # Full configuration with start year
+#' run_sequencer_app(
+#'   output_dir = "path/to/output",
+#'   common_column = "crop_code",
+#'   start_year = 2020,
+#'   preview = T,
+#'   vector_file = T
+#' )
+#' }
+run_sequencer_app <- function(output_dir = NA, common_column = NA, start_year = NA, intersection_type = NA, preview = TRUE, vector_file = T) {
+  # Load the package data
+  utils::data("Input_App_data", package = "CropRotationViz", envir = environment())
+  
+  # Make data available to the app
+  app_data <- new.env(parent = emptyenv())
+  app_data$Input_App_data <- Input_App_data
+  
+  # Add resource path for www directory
+  addResourcePath(
+    prefix = "www",
+    directoryPath = system.file(
+      "www", package = "CropRotationViz"
+    )
+  )
+  
+  # Launch the application in browser
+  options(shiny.launch.browser = TRUE)
+  
+  # Launch the application
+  shiny::shinyApp(
+    ui = sequencer_ui(app_data, output_dir, start_year, vector_file), 
+    server = function(input, output, session) {
+      sequencer_server(input, output, session, app_data, output_dir, common_column, preview, vector_file)
+    }
+  )
+}
+
+
+
+#' Run the Crop Rotation Visualization Application
+#'
+#' @description
+#' Launches the Shiny application for visualizing crop rotation plans and their impact.
+#' The application provides an interactive interface for exploring rotation patterns,
+#' analyzing sustainability metrics, and understanding environmental effects of different
+#' cropping sequences.
+#'
+#' @param input_dir Optional filepath to custom input data directory. If NA (default), 
+#' you have to choose it manually in the app.
+#'
+#' @return A Shiny application object
+#' 
+#' @details
+#' The function initializes the visualization environment by:
+#' 1. Loading built-in or custom input data
+#' 2. Setting up the resource paths for static assets
+#' 3. Launching the Shiny server with configured UI and server logic
+#'
+#' @export
+#' @import shiny
+#' @importFrom shiny fluidPage
+#' @examples
+#' \dontrun{
+#' run_vizualisation_app()
+#' run_vizualisation_app("path/to/custom/data")
+#' }
+run_vizualisation_app <- function(input_dir = NA) {
+  # Load the package data
+  utils::data("Input_App_data", package = "CropRotationViz", envir = environment())
+  
+  # Make data available to the app
+  app_data <- new.env(parent = emptyenv())
+  app_data$Input_App_data <- Input_App_data
+  
+  # Add resource path for www directory
+  addResourcePath(
+    prefix = "www",
+    directoryPath = system.file(
+      "www", package = "CropRotationViz"
+    )
+  )
+  
+  # Launch the application in browser
+  options(shiny.launch.browser = TRUE)
+  
+  # Launch the application
+  shiny::shinyApp(
+    ui = ui(app_data), 
+    server = function(input, output, session) {
+      viz_server(input, output, session, app_data, input_dir)
+    }
+  )
+}
