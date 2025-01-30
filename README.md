@@ -86,10 +86,13 @@ remotes::install_github("franz-geoeco/CropRotationViz")
 library(CropRotationViz)
 
 # Launch the Shiny processing application
-run_sequencer_app()
+run_processing_app()
 
 # Launch the Shiny visualization application
 run_visualization_app()
+
+# Launch the Shiny fast visualization application
+run_fast_visualization_app()
 ```
 
 ### Step-by-Step Guide
@@ -100,8 +103,8 @@ If you do not have field data at hand or just want to test the functionality of 
 
 #### Processing
 1. **Launch the Processing Application**
-   - Run `CropRotationViz::run_sequencer_app()`
-   - or add already an output_dir like `CropRotationViz::run_sequencer_app(output_dir = "path/to/dir")`
+   - Run `CropRotationViz::run_processing_app()`
+   - or add already an output_dir like `CropRotationViz::run_processing_app(output_dir = "path/to/dir")`
    - if all polygon files share a common column explaining the crops use `common_column = "your_column"`
    - if you don't want to input the years mannually add a start year `start_year = 2000`
    - if you don't need a preview of your intersection as Sankey chart (.png) set `preview = F`
