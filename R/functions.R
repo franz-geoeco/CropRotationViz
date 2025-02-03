@@ -7,7 +7,7 @@
 #' @export
 add_names <- function(fields_list, codierung_all, column){
   
-  if(column == "NC"){
+  if(column == "Code"){
     fields_list <- lapply(fields_list, function(f) {
       file <- f$sf_object
       file <- file[,c(f$selected_column, attr(file, "sf_column"))]
@@ -505,33 +505,6 @@ intersect_fields_simple <- function(fields_list, max_area = 20000 * 1e6) {
   return(intersected)
 }
 
-#' Classify Crops
-#' 
-#' @description Classifies crops based on numeric codes and names using a lookup table
-#' 
-#' @param nc_codes Numeric vector of crop codes
-#' @param names Character vector of crop names
-#' @return Character vector of classified crop names
-classify_crops <- function(nc_codes, names, crop_codes, display_names) {
-  # Create a complete lookup table
-  lookup_df <- data.frame(
-    code = unlist(crop_codes),
-    category = rep(names(crop_codes), sapply(crop_codes, length))
-  )
-  
-  # Create a lookup vector where index is the code and value is the category
-  all_codes <- sort(unique(lookup_df$code))
-  code_to_category <- lookup_df$category[match(all_codes, lookup_df$code)]
-  names(code_to_category) <- all_codes
-  
-  # Get categories for the input codes
-  categories <- code_to_category[as.character(nc_codes)]
-  
-  # Replace NA categories with original names
-  result <- ifelse(is.na(categories), names, display_names[categories])
-  return(result)
-}
-
 #' Intersect Geometries with Administrative Borders
 #' 
 #' @description 
@@ -600,9 +573,10 @@ intersect_with_borders <- function(input, level, EZG) {
   
   # delete to small intersection areas
   intersected <- intersected %>%
+    st_make_valid() %>%
+    mutate(area = as.numeric(st_area(geometry))) %>%
     group_by(District) %>%
-    filter(sum(sf::st_area(.)/10000) >= 1) %>%
-    mutate(area_ha = sf::st_area(.)/10000) %>%
+    filter(sum(area) >= 20000) %>%
     ungroup()
   
   # if it`s in Germany intersect with river catchments
@@ -631,18 +605,19 @@ intersect_with_borders <- function(input, level, EZG) {
 #' @param display_names names corresponding to the codes
 #' @return sf object with added aggregated columns
 #' @export
-aggregator <- function(intersected, years, crop_codes, display_names){
+aggregator <- function(intersected, years, crop_codes){
   for(year in years) {
     nc_col <- paste0("NC_", year)
     name_col <- paste0("Name_", year)
     agg_col <- paste0("Aggregated_", year)
-    
-    intersected[[agg_col]] <- classify_crops(
-      intersected[[nc_col]], 
-      intersected[[name_col]],
-      crop_codes,
-      display_names
-    )
+  
+    intersected[[agg_col]] <- sapply(intersected[[nc_col]], function(x) {
+      if(x == "Not named") return("Not named")
+      for(class_name in names(crop_codes)) {
+        if(x %in% crop_codes[[class_name]]) return(class_name)
+      }
+      return(NA)
+    })
   }
   return(intersected)
 }
@@ -727,7 +702,7 @@ create_crop_rotation_sankey <- function(data,
         values_to = "key"
       ) %>%
       mutate(
-        year = as.numeric(str_remove(value, "Crop_")),
+        year = as.numeric(str_remove(value, "Name_")),
         key  = factor(key),
         key  = fct_reorder(key, -key)
       ) %>%
@@ -856,7 +831,7 @@ transform_rotation_data <- function(All_rot_big, distribution_df, input_area_ran
       pre_data <- distribution_df %>%
         filter(if_any(-all_of(cols_to_exclude), ~grepl(specific_crop, ., fixed = TRUE)))
     } else if (type == "district") {
-      pre_data <- subset(distribution_df, District = district)
+      pre_data <- subset(distribution_df, District == district)
       cols_to_exclude <- intersect(c("area", "District", "EZG"), names(distribution_df))
       pre_data <- pre_data %>%
         filter(!if_any(-all_of(cols_to_exclude), ~ . %in% setdiff(choices, selected_crops)))
@@ -864,7 +839,7 @@ transform_rotation_data <- function(All_rot_big, distribution_df, input_area_ran
       if (!"EZG" %in% names(distribution_df)) {
         stop("EZG column not found in the dataset")
       }
-      pre_data <- subset(distribution_df, EZG = EZG)
+      pre_data <- subset(distribution_df, EZG == EZG)
       cols_to_exclude <- intersect(c("area", "District", "EZG"), names(distribution_df))
       pre_data <- pre_data %>%
         filter(!if_any(-all_of(cols_to_exclude), ~ . %in% setdiff(choices, selected_crops)))

@@ -75,16 +75,16 @@
 #' run_sequencer_app()
 #'
 #' # Specify output directory
-#' run_sequencer_app(output_dir = "path/to/output")
+#' run_processing_app(output_dir = "path/to/output")
 #'
 #' # Specify output directory and common column name
-#' run_sequencer_app(
+#' run_processing_app(
 #'   output_dir = "path/to/output",
 #'   common_column = "crop_code"
 #' )
 #'
 #' # Full configuration with start year
-#' run_sequencer_app(
+#' run_processing_app(
 #'   output_dir = "path/to/output",
 #'   common_column = "crop_code",
 #'   start_year = 2020,
@@ -92,7 +92,7 @@
 #'   vector_file = T
 #' )
 #' }
-run_sequencer_app <- function(output_dir = NA, common_column = NA, start_year = NA, intersection_type = NA, preview = TRUE, vector_file = T) {
+run_processing_app <- function(output_dir = NA, common_column = NA, start_year = NA, intersection_type = NA, preview = TRUE, vector_file = T) {
   # Load the package data
   utils::data("Input_App_data", package = "CropRotationViz", envir = environment())
   
@@ -113,9 +113,9 @@ run_sequencer_app <- function(output_dir = NA, common_column = NA, start_year = 
   
   # Launch the application
   shiny::shinyApp(
-    ui = sequencer_ui(app_data, output_dir, start_year, vector_file), 
+    ui = processing_ui(app_data, output_dir, start_year, vector_file), 
     server = function(input, output, session) {
-      sequencer_server(input, output, session, app_data, output_dir, common_column, preview, vector_file)
+      processing_server(input, output, session, app_data, output_dir, common_column, preview, vector_file)
     }
   )
 }
@@ -146,10 +146,10 @@ run_sequencer_app <- function(output_dir = NA, common_column = NA, start_year = 
 #' @importFrom shiny fluidPage
 #' @examples
 #' \dontrun{
-#' run_vizualisation_app()
-#' run_vizualisation_app("path/to/custom/data")
+#' run_visualization_app()
+#' run_visualization_app("path/to/custom/data")
 #' }
-run_vizualisation_app <- function(input_dir = NA) {
+run_visualization_app <- function(input_dir = NA) {
   # Load the package data
   utils::data("Input_App_data", package = "CropRotationViz", envir = environment())
   
@@ -210,17 +210,17 @@ run_vizualisation_app <- function(input_dir = NA) {
 #' @examples
 #' \dontrun{
 #' # Launch app with default file upload interface
-#' run_fast_vizualisation_app()
+#' run_fast_visualization_app()
 #' 
 #' # Launch app with specific data directory
-#' run_fast_vizualisation_app(input_dir = "path/to/data")
+#' run_fast_visualization_app(input_dir = "path/to/data")
 #' }
 #' 
 #' @note The application will automatically open in the system's default web browser
 #'   when launched.
 #'
 #' @export
-run_fast_vizualisation_app <- function(input_dir = NA) {
+run_fast_visualization_app <- function(input_dir = NA) {
   
   # Load the package data
   utils::data("Input_App_data", package = "CropRotationViz", envir = environment())

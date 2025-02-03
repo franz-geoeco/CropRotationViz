@@ -1,4 +1,6 @@
-#' Crop Sequence Builder UI Component
+#===============================================================================
+# CROP SEQUENCE BUILDER UI COMPONENT
+#===============================================================================
 #' 
 #' @title Crop Sequence Builder Interface
 #' @description Creates an interactive Shiny UI for analyzing and managing agricultural crop rotation sequences
@@ -30,8 +32,8 @@
 #'     }
 #'     \item{Processing Options}{
 #'       \itemize{
-#'         \item Choice between NC (National Coding) or Name-based crop identification
-#'         \item Optional crop class aggregation for NC-based analysis
+#'         \item Choice between Code  Coding or Name-based crop identification
+#'         \item Optional crop class aggregation for Code-based analysis
 #'         \item Selection between fast and complete field intersection methods
 #'       }
 #'     }
@@ -64,10 +66,10 @@
 #' @examples
 #' \dontrun{
 #' # Initialize with default settings
-#' ui <- sequencer_ui(app_data)
+#' ui <- processing_ui(app_data)
 #' 
 #' # Initialize with specific output directory and start year
-#' ui <- sequencer_ui(
+#' ui <- processing_ui(
 #'   app_data,
 #'   output_dir = "path/to/output",
 #'   start_year = 2020
@@ -75,9 +77,12 @@
 #' }
 #' 
 #' @keywords internal
-sequencer_ui <- function(app_data, output_dir = NA, start_year = NA, vector_file = TRUE) {
+processing_ui <- function(app_data, output_dir = NA, start_year = NA, vector_file = TRUE) {
   fluidPage(
     theme = shinytheme("cyborg"),
+    #-------------------------------------------------------------------------------
+    # Header Section
+    #-------------------------------------------------------------------------------
     br(),
     fluidRow(
       column(style = "margin-top: -0px; margin-bottom: 0px;", width = 5, h2("Crop Sequence Builder")), 
@@ -86,61 +91,66 @@ sequencer_ui <- function(app_data, output_dir = NA, start_year = NA, vector_file
     ),
     tags$hr(style = "border-top: 1px solid white; margin-top: 20px; margin-bottom: 20px;"),
     
-    fluidRow(column(4,
-                    # Counter display
-                    tags$span(
-                      textOutput("file_counter"), 
-                      style = "font-size: 20px; color: #ffffff; font-weight: bold"
-                    ),br()),
-             column(2,
-                    radioButtons("id_or_name", label = "Select Crop Column", choices = c("NC", "Name"), inline = T)
+    #-------------------------------------------------------------------------------
+    # Step 1: File Selection and Configuration
+    #-------------------------------------------------------------------------------
+    fluidRow(
+      column(4,
+             # Counter display
+             tags$span(
+               textOutput("file_counter"), 
+               style = "font-size: 20px; color: #ffffff; font-weight: bold"
+             ), br()),
+      column(2,
+             radioButtons("id_or_name", label = "Select Crop Column Type", choices = c("Code", "Name"), inline = TRUE)
+      ),
+      column(1,
+             bsPopover(
+               id = "id-info",
+               title = "Crop Column",
+               content = HTML(paste0(
+                 "Here you can select the column which describes your crop. Use Code if you want to use the national coding or/and you want to use the aggregation, which summarizes some smaller classes to bigger groups."
+               )),
+               placement = "left",
+               trigger = "hover",
+               options = list(container = "body")
              ),
-             column(1,
-                    bsPopover(
-                      id = "id-info",
-                      title = "Crop Column",
-                      content = HTML(paste0(
-                        "Here you can select the coloumn, which describes your crop. Use NC if you have want to use a the national coding or/and you want to use the aggreagation, which summarizes some smaller classes to bigger groups."
-                      )),
-                      placement = "left",
-                      trigger = "hover",
-                      options = list(container = "body")
-                    ),
-                    bsButton("id-info", label = "", icon = icon("info", lib = "font-awesome"), style = "default", size = "extra-small")
+             bsButton("id-info", label = "", icon = icon("info", lib = "font-awesome"), style = "default", size = "extra-small")
+      ),
+      conditionalPanel(
+        condition = "input.id_or_name == 'Code'",
+        column(2,             
+               radioButtons("aggregation", 
+                            label = "Aggregation of crop classes", 
+                            choices = c("Yes", "No"), 
+                            inline = TRUE)
+        )
+      ),
+      column(2,
+             radioButtons("radio_process", "Type of field intersection",
+                          c("Complete" = "complete",
+                            "Fast" = "fast"), inline = TRUE)
+      ),
+      column(1,
+             bsPopover(
+               id = "radio-info",
+               title = "Type of intersection",
+               content = HTML(paste0(
+                 "Here you can select the type of the intersection framework. The fast intersect just intersects your fields over the years and leaves out fields not present in a year. The comprehensive method is much slower but contains each area you put in with comprehensive union functions."
+               )),
+               placement = "left",
+               trigger = "hover",
+               options = list(container = "body")
              ),
-             conditionalPanel(
-               condition = "input.id_or_name == 'NC'",
-               column(2,             
-                      radioButtons("aggregation", 
-                                   label = "Aggregation of crop classes", 
-                                   choices = c("Yes", "No"), 
-                                   inline = TRUE)
-               )
-               
-             ),
-             column(2,
-                    radioButtons("radio_process", "Type of field intersection",
-                                 c("Complete" = "complete",
-                                   "Fast" = "fast"), inline = T)
-             ),
-             column(1,
-                    bsPopover(
-                      id = "radio-info",
-                      title = "Type of intersection",
-                      content = HTML(paste0(
-                        "Here you can select the type of the intersection framework. he fast intersect just over the years your fields and leaves out fields not present in a year. The coprhensive method is much slower but contains each area you put in with comprehesive union functions."
-                      )),
-                      placement = "left",
-                      trigger = "hover",
-                      options = list(container = "body")
-                    ),
-                    bsButton("radio-info", label = "", icon = icon("info", lib = "font-awesome"), style = "default", size = "extra-small")
-             )
+             bsButton("radio-info", label = "", icon = icon("info", lib = "font-awesome"), style = "default", size = "extra-small")
+      )
     ),
     
     tags$hr(style = "border-top: 1px solid white; margin-top: 20px; margin-bottom: 20px;"),
     
-    # Container for dynamic file selectors and their components
+    #-------------------------------------------------------------------------------
+    # Step 2: Dynamic File Selectors
+    #-------------------------------------------------------------------------------
     lapply(1:10, function(i) {
       tagList(
         # File selector
@@ -155,8 +165,8 @@ sequencer_ui <- function(app_data, output_dir = NA, start_year = NA, vector_file
             title = sprintf("Please select polygon file year: %d (.shp, .geojson, .fgb, .gpkg or .sqlite):", i),
             multiple = FALSE,
             buttonType = "default",
-            class = "btn-primary", # Add Bootstrap button class for color
-            style = "background-color: rgb(116, 150, 30); border-color: rgb(116, 150, 30); color: white;" # Or use direct CSS styling
+            class = "btn-primary",
+            style = "background-color: rgb(116, 150, 30); border-color: rgb(116, 150, 30); color: white;"
           )
         ),
         
@@ -169,7 +179,7 @@ sequencer_ui <- function(app_data, output_dir = NA, start_year = NA, vector_file
                    condition = sprintf("output.file%d_loaded", i),
                    selectInput(
                      sprintf("column_selector%d", i),
-                     sprintf("Column describing the NC or Name #%d:", i),
+                     sprintf("Column describing the Code or Name #%d:", i),
                      choices = NULL
                    )
                  )
@@ -186,7 +196,7 @@ sequencer_ui <- function(app_data, output_dir = NA, start_year = NA, vector_file
                      )
                    )
             )
-          }else{
+          } else {
             column(2,
                    conditionalPanel(
                      condition = sprintf("output.file%d_loaded", i),
@@ -214,9 +224,12 @@ sequencer_ui <- function(app_data, output_dir = NA, start_year = NA, vector_file
         )
       )
     }),
+    
+    #-------------------------------------------------------------------------------
+    # Step 3: File Summary and Map Preview
+    #-------------------------------------------------------------------------------
     fluidRow(
       column(4,
-             # Display current list of loaded files
              verbatimTextOutput("loaded_files_summary")
       ),
       column(2),
@@ -224,52 +237,228 @@ sequencer_ui <- function(app_data, output_dir = NA, start_year = NA, vector_file
              leafletOutput("map")
       )
     ),
+    
     tags$hr(style = "border-top: 1px solid white; margin-top: 20px; margin-bottom: 20px;"),
-    fluidRow(
-      if(is.na(output_dir)) {
-        column(width = 4,
-               conditionalPanel(
-                 condition = "output.show_process_button",
-                 shinyDirButton(
-                   "dir", 
-                   "Choose Output Directory", 
-                   "Choose an output directory", 
-                   style = "background-color: rgb(116, 150, 30); border-color: rgb(116, 150, 30); color: white;"
-                 ),
-                 verbatimTextOutput("selected_dir")
-               )
-        )
-      },
-      if(vector_file){
-        column(width = 4,
-               conditionalPanel(
-                 condition = "output.show_process_button", 
-                 radioButtons(
-                   "filetype",
-                   "Type of output Format",
-                   c("Shapefile", "GeoPackage", "FlatGeobuf"),
-                   inline = TRUE
-                 )
-               )
-            )
-      },
-      column(3,
-             radioButtons("fastImages",
-                          "Do wou want a fast visualization version?",
-                          c("Yes", "No"), inline = T)
-      )
-    ),
+    
+    #-------------------------------------------------------------------------------
+    # Step 4: Processing Options
+    #-------------------------------------------------------------------------------
     fluidRow(
       column(4,
              conditionalPanel(
-               condition = "output.show_process_button",
-               actionButton("btn_process", "Process Files", 
+               condition = "output.show_process_button && !input.btn_continue",
+               actionButton("btn_continue", "Continue to Processing", 
                             class = "btn-primary btn-lg",
-                            style = "margin-top: 20px;")
+                            style = "margin-top: 20px; background-color: rgb(116, 150, 30); border-color: rgb(116, 150, 30); color: white;")
              )
       )
-    ), br(), br(),br(),br(),
+    ),
+    # Processing Options (shown after continue)
+    conditionalPanel(
+      condition = "input.btn_continue",
+      fluidRow(
+        if(is.na(output_dir)) {
+          column(width = 4,
+                 conditionalPanel(
+                   condition = "output.show_process_button",
+                   shinyDirButton(
+                     "dir", 
+                     "Choose Output Directory", 
+                     "Choose an output directory", 
+                     style = "background-color: rgb(116, 150, 30); border-color: rgb(116, 150, 30); color: white;"
+                   ),
+                   verbatimTextOutput("selected_dir")
+                 )
+          )
+        },
+        if(vector_file) {
+          column(width = 4,
+                 conditionalPanel(
+                   condition = "output.show_process_button", 
+                   radioButtons(
+                     "filetype",
+                     "Type of output Format",
+                     c("Shapefile", "GeoPackage", "FlatGeobuf"),
+                     inline = TRUE
+                   )
+                 )
+          )
+        },
+        column(3,
+               conditionalPanel(
+                 condition = "output.show_process_button",
+                 radioButtons("fastImages",
+                              "Do you want a fast visualization version?",
+                              c("Yes", "No"), inline = TRUE)
+               )
+        )
+      ),
+      
+      # Final Process Button
+      fluidRow(
+        column(4,
+               conditionalPanel(
+                 condition = "output.show_process_button",
+                 actionButton("btn_process", "Process Files", 
+                              class = "btn-primary btn-lg",
+                              style = "margin-top: 20px; background-color: rgb(116, 150, 30); border-color: rgb(116, 150, 30);")
+               )
+        )
+      )
+    ),
+    tags$head(
+      tags$style(HTML("
+            .crop-box {
+                border: 1px solid #ccc;
+                padding: 3px;
+                margin: 2px;
+                min-height: 45px;
+                width: 150px;
+                float: left;
+            }
+            .add-class-btn {
+                margin: 5px 0;
+                clear: both;
+                font-size: 11px;
+                padding: 2px 8px;
+            }
+            .rank-list-container {
+                min-height: 45px;
+                border: 1px dashed #ccc;
+                padding: 1px;
+                margin-bottom: 2px;
+                font-size: 11px;
+            }
+            .name-input input {
+                height: 20px;
+                font-size: 11px;
+                padding: 1px 1px;
+                color: white !important;
+                font-weight: bold;
+            }
+            .remove-btn {
+                padding: 0px 1px;
+                font-size: 10px;
+                margin-top: 3px;
+                float: right;
+            }
+            .aggregation-container {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+                grid-auto-rows: min-content;
+                grid-gap: 0;
+                width: 100%;
+                justify-content: start;
+            }
+            .rank-list-item {
+                padding: 1px 3px !important;
+                margin: 1px 0 !important;
+                font-size: 10px !important;
+                background-color: #f8f9fa;
+                border: 1px solid #dee2e6;
+                border-radius: 2px;
+            }
+            .collapse-header {
+                cursor: pointer;
+                user-select: none;
+                padding: 7px;
+                margin-bottom: 5px;
+            }
+            .collapse-header:hover {
+                opacity: 0.8;
+            }
+            .section-content {
+                padding: 10px;
+            }
+        "))
+    ),
+    # Step 5: Crop Code Aggregation Editor (appears after continue)
+    conditionalPanel(
+      condition = "input.btn_continue && input.aggregation == 'Yes' && input.id_or_name == 'Code'",
+      fluidRow(
+        column(12,
+               wellPanel(
+                 # Editor Header
+                 div(id = "editor-header",
+                     class = "collapse-header",
+                     onclick = "$('#editor-content').collapse('toggle')",
+                     h4(
+                       span(id = "editor-icon", "▶", style = "margin-right: 10px;"),
+                       "Crop Code Aggregation Editor",
+                       style = "margin: 0;"
+                     )
+                 ),
+                 # Editor Content
+                 div(id = "editor-content", class = "collapse",
+                     div(class = "section-content",
+                         fluidRow(
+                           column(3,
+                                  wellPanel(
+                                    h4("Available Crops / User Specific Single Crop Classes"),
+                                    uiOutput("available_crops_ui")
+                                  )
+                           ),
+                           column(9,
+                                  wellPanel(
+                                    h4("Aggregation Classes"),
+                                    actionButton("add_class", "Add New Aggregation Class", 
+                                                 class = "add-class-btn"),
+                                    div(class = "aggregation-container",
+                                        uiOutput("aggregation_classes")
+                                    )
+                                  )
+                           )
+                         )
+                     )
+                 )
+               )
+        )
+      ),
+      
+      # Visualization Panel
+      fluidRow(
+        column(12,
+               wellPanel(
+                 # Plotly Header
+                 div(id = "plotly-header",
+                     class = "collapse-header",
+                     onclick = "$('#plotly-content').collapse('toggle')",
+                     h4(
+                       span(id = "plotly-icon", "▶", style = "margin-right: 10px;"),
+                       "Aggregation Visualization",
+                       style = "margin: 0;"
+                     )
+                 ),
+                 # Plotly Content
+                 div(id = "plotly-content", class = "collapse",
+                     div(class = "section-content",
+                         plotlyOutput("sankeyPlot", height = "600px")
+                     )
+                 )
+               )
+        )
+      ),
+      
+      # Add JavaScript for collapse icons
+      tags$script("
+    $('#editor-content').on('shown.bs.collapse', function () {
+      $('#editor-icon').html('▼');
+    });
+    $('#editor-content').on('hidden.bs.collapse', function () {
+      $('#editor-icon').html('▶');
+    });
+    $('#plotly-content').on('shown.bs.collapse', function () {
+      $('#plotly-icon').html('▼');
+    });
+    $('#plotly-content').on('hidden.bs.collapse', function () {
+      $('#plotly-icon').html('▶');
+    });
+  ")
+    ),
     
+    br(), br(), br(), br(),
+    
+    # Footer
     tags$footer(
       style = "position: fixed; 
            bottom: 0; 
@@ -279,12 +468,12 @@ sequencer_ui <- function(app_data, output_dir = NA, start_year = NA, vector_file
            text-align: center;
            border-top: 1px solid #e7e7e7;
            left: 0;
-           z-index: 1000;",  # Added z-index to ensure visibility
+           z-index: 1000;",
       
       div(
         style = "display: inline-block;",
         p(
-          tags$span("Author: "),  # Using tags$span for text
+          tags$span("Author: "),
           tags$a(
             href = "https://github.com/franzschulze/CropRotationViz", 
             "Franz Schulze",
@@ -295,7 +484,7 @@ sequencer_ui <- function(app_data, output_dir = NA, start_year = NA, vector_file
                margin-right: 20px;"
         ),
         p(
-          tags$span("Institution: "),  # Using tags$span for text
+          tags$span("Institution: "),
           tags$a(
             href = "https://geooeko.geo.uni-halle.de/",
             "Department of Geoecology - Institute of Geosciences and Geography - University of Halle-Wittenberg",
@@ -308,7 +497,6 @@ sequencer_ui <- function(app_data, output_dir = NA, start_year = NA, vector_file
     )
   )
 }
-
 
 #' @title Crop Sequence Builder Server Logic
 #' @description Implements the server-side logic for analyzing and managing agricultural crop rotation sequences.
@@ -405,17 +593,18 @@ sequencer_ui <- function(app_data, output_dir = NA, start_year = NA, vector_file
 #' @import ggalluvial
 #' @importFrom shinyFiles shinyFileChoose parseFilePaths parseDirPath
 #' @importFrom ggalluvial geom_stratum geom_flow
+#' @importFrom sortable bucket_list add_rank_list
 #' 
 #' @examples
 #' \dontrun{
 #' # Basic server initialization
 #' server <- function(input, output, session) {
-#'   sequencer_server(input, output, session, app_data)
+#'   processing_server(input, output, session, app_data)
 #' }
 #' 
 #' # Server with custom output directory and column mapping
 #' server <- function(input, output, session) {
-#'   sequencer_server(
+#'   processing_server(
 #'     input, 
 #'     output, 
 #'     session, 
@@ -427,22 +616,21 @@ sequencer_ui <- function(app_data, output_dir = NA, start_year = NA, vector_file
 #' }
 #' 
 #' @keywords internal
-sequencer_server <- function(input, output, session, app_data, output_dir = NA, common_column = NA, preview = TRUE, vector_file = TRUE) {
+processing_server <- function(input, output, session, app_data, output_dir = NA, common_column = NA, preview = TRUE, vector_file = TRUE) {
   # Start timing
   start_time <- Sys.time()
   initial_mem <- gc(reset = TRUE)
   
   # global options
-  options(warn = -1)
+  # options(warn = -1)
   sf_use_s2(F)
   
   # Show welcome alert when the app starts
   observe({
-    # Only show once when session starts
     shinyalert(
       title = "Welcome!",
       text = paste("This application allows you to combine multiple annual cropping polygon layers into a comprehensive crop sequence.",
-                   "Select in the following your annual files and process it. Whean the processing ends you can close the app and start the visualization application."),
+                   "Select in the following your annual files and process it. When the processing ends you can close the app and start the visualization application."),
       type = "info",
       closeOnEsc = TRUE,
       closeOnClickOutside = TRUE,
@@ -457,41 +645,43 @@ sequencer_server <- function(input, output, session, app_data, output_dir = NA, 
     )
   })
   
-  # Access the data
+  # Access the data from app_data
   codierung_all <- app_data$Input_App_data$codierung_all
   crop_codes    <- app_data$Input_App_data$crop_codes
   display_names <- app_data$Input_App_data$display_names
   EZG           <- app_data$Input_App_data$EZG
-  volumes       <- getVolumes()
+  color_palette <- app_data$Input_App_data$crop_color_mapping
   
-  #########
-  # Set the root directory where user can select from
+  # Helper function to get names from codes - defined once at the top
+  get_names <- function(codes, codierung_all) {
+    names <- codierung_all$Klarschrift[match(codes, codierung_all$NC)]
+    return(names[!is.na(names)])
+  }
+  
+  # Set up volumes for file selection
   if(is.na(output_dir)){
     volumes <- c(Home = fs::path_home(), "R Installation" = R.home(), getVolumes()())
-  }else{
+  } else {
     volumes <- c(Home = output_dir, "R Installation" = R.home(), getVolumes()())
   }
   
   # Initialize directory selection
-  shinyDirChoose(
-    input,
-    "dir",
-    roots = volumes,
-    session = session
-  )
-  
-  # Create reactive value to store the selected directory path
+  shinyDirChoose(input, "dir", roots = volumes, session = session)
   selected_dir <- reactiveVal()
+  
+  class_names <- reactiveVal(list())
+  
   
   # Display selected directory
   output$selected_dir <- renderPrint({
     if (length(input$dir) > 1) {
       parseDirPath(volumes, input$dir)
-    }else{
-      cat( "No directory selected (input dir)")
+    } else {
+      cat("No directory selected (input dir)")
     }
   })
   
+  # Update selected directory when input changes
   observeEvent(input$dir, {
     if (!is.null(input$dir)) {
       path <- parseDirPath(volumes, input$dir)
@@ -502,6 +692,8 @@ sequencer_server <- function(input, output, session, app_data, output_dir = NA, 
   get_selected_dir <- reactive({
     selected_dir()
   })
+  
+  
   
   #----------------------------------------------------------------------------------------------------------
   # Create reactive values for all possible files (1-10)
@@ -517,7 +709,6 @@ sequencer_server <- function(input, output, session, app_data, output_dir = NA, 
   
   # Add reactive value for tracking the first layer's bounding box
   first_layer_bbox <- reactiveVal()
-  
   processed_files <- reactiveVal(list())
   current_file_count <- reactiveVal(1)
   
@@ -560,7 +751,6 @@ sequencer_server <- function(input, output, session, app_data, output_dir = NA, 
       showNotification(sprintf("File %d removed successfully", i), type = "message")
     })
   })
-  #----------------------------------------------------------------------------------------------------------
   
   # Function to process shapefile selection
   processShapefileSelection <- function(input_id, file_reactive, column_selector_id, common_column = NA) {
@@ -571,7 +761,7 @@ sequencer_server <- function(input, output, session, app_data, output_dir = NA, 
                     filetypes = c("shp", "fgb", "gpkg", "sqlite", "geojson"))
     
     if(!is.null(input[[input_id]])) {
-      file_selected <- shinyFiles::parseFilePaths(volumes, input[[input_id]])
+      file_selected <- parseFilePaths(volumes, input[[input_id]])
       
       if(nrow(file_selected) > 0) {
         file_ext <- tolower(tools::file_ext(file_selected$datapath))
@@ -594,7 +784,6 @@ sequencer_server <- function(input, output, session, app_data, output_dir = NA, 
                                                   attr(sf_obj, "sf_column")),
                                 selected = common_column)
             }
-
             
             # Update bounding box if this is the first file
             if (input_id == "Btn_GetFile1") {
@@ -762,14 +951,453 @@ sequencer_server <- function(input, output, session, app_data, output_dir = NA, 
       }
     }
   })
-  #----------------------------------------------------------------------------------------------------------
   
+  
+  #----------------------------------------------------------------------------------------------------------
+  # Function to filter initial classes based on codes present in files
+  filter_initial_classes <- function(initial_classes, processed_files, codierung_all) {
+    # Helper function to get codes from names
+    get_codes <- function(names, codierung_all) {
+      codes <- codierung_all$NC[match(names, codierung_all$Klarschrift)]
+      return(codes[!is.na(codes)])
+    }
+    
+    # Get all unique codes from the processed files
+    unique_file_codes <- unique(unlist(lapply(processed_files, function(file) {
+      if (!is.null(file)) {
+        col_data <- file$sf_object[[file$selected_column]]
+        if (is.character(col_data)) {
+          col_data <- as.numeric(col_data)
+        }
+        return(unique(col_data))
+      }
+      return(NULL)
+    })))
+    
+    unique_file_codes <- unique_file_codes[!is.na(unique_file_codes)]
+    
+    # Filter each class
+    filtered_classes <- lapply(initial_classes, function(class_names) {
+      class_codes <- get_codes(class_names, codierung_all)
+      existing_codes <- class_codes[class_codes %in% unique_file_codes]
+      existing_names <- codierung_all$Klarschrift[match(existing_codes, codierung_all$NC)]
+      return(existing_names[!is.na(existing_names)])
+    })
+    
+    # Remove empty classes
+    filtered_classes <- filtered_classes[sapply(filtered_classes, length) > 0]
+    return(filtered_classes)
+  }
+  
+  # Initialize reactive values
+  class_state <- reactiveVal(NULL)
+  available_crops <- reactiveVal(character(0))
+  class_counter <- reactiveVal(0)
+  
+  # Initialize all_unique_crops reactive value to store all crops from files
+  all_unique_crops <- reactiveVal(NULL)
+  
+  # Function to get all unique crops from processed files
+  get_all_crops <- function(processed_files, codierung_all) {
+    # Get all unique codes from files
+    all_codes <- unique(unlist(lapply(processed_files, function(file) {
+      if (!is.null(file)) {
+        col_data <- file$sf_object[[file$selected_column]]
+        if (is.character(col_data)) {
+          col_data <- as.numeric(col_data)
+        }
+        return(unique(col_data))
+      }
+      return(NULL)
+    })))
+    
+    all_codes <- all_codes[!is.na(all_codes)]
+    
+    # Convert codes to names
+    crop_names <- codierung_all$Klarschrift[match(all_codes, codierung_all$NC)]
+    return(crop_names[!is.na(crop_names)])
+  }
+  
+  # Create observer to handle initialization of class_state
+  observe({
+    req(input$btn_continue)
+    req(length(processed_files()) > 1)
+    
+    # Initialize class_state if NULL
+    if (is.null(class_state())) {
+      # Get all unique crops first
+      unique_crops <- get_all_crops(processed_files(), codierung_all)
+      all_unique_crops(unique_crops)
+      
+      # Define base classes
+      base_classes <- list(
+        "potatoes" = get_names(c(601, 602, 604, 605, 606), codierung_all),
+        "kitchen herbs" = get_names(c(650:687), codierung_all),
+        "cucurbits" = get_names(c(626:631), codierung_all),
+        "winter oil-plant" = get_names(c(311, 315, 390), codierung_all),
+        "fodder beet" = get_names(c(413, 414), codierung_all),
+        "gardens/plots" = get_names(c(914, 920), codierung_all),
+        "vegetables (cruciferous)" = get_names(c(613, 615:618, 611), codierung_all),
+        "grassland" = get_names(c(424, 451:460, 443, 444, 492, 493, 702, 844, 855, 912, 928, 991, 992, 960), codierung_all),
+        "protein plants" = get_names(c(210:292, 330, 635), codierung_all),
+        "clover/lutzerne" = get_names(c(421:423, 425:427, 431:433, 921, 922), codierung_all),
+        "solanaceae" = get_names(c(622:624), codierung_all),
+        "storage areas" = get_names(c(990, 994, 996), codierung_all),
+        "permanent/tree" = get_names(c(564, 834, 840:843, 982, 983), codierung_all),
+        "energy plants"  = get_names(c(802:806, 852:854, 866, 871, 801), codierung_all),
+        "summer oil-plant" = get_names(c(312, 316, 393, 341), codierung_all),
+        "umbelliferae"  = get_names(c(634, 641, 643, 648), codierung_all),
+        "fallow" = get_names(c(62, 560, 573, 576, 581:586, 583, 591:595, 849, 884, 910, 885, 593, 849, 884, 886, 887, 961), codierung_all),
+        "other vegtables" = get_names(c(610, 647, 644, 639, 638, 636, 637, 851), codierung_all),
+        "other fodder crops" = get_names(c(429, 430), codierung_all),
+        "summer mixed cereals"  = get_names(c(144, 145), codierung_all),
+        "winter mixed cereals" = get_names(c(125, 126), codierung_all),
+        "rare cereals"  = get_names(c(181:183, 186, 187, 999), codierung_all),
+        "maize"  = get_names(c(171, 172, 177, 411, 919), codierung_all),
+        "forest" = get_names(c(556, 568, 952, 955, 956, 995), codierung_all),
+        "ornamental plants" = get_names(c(720:776, 778:799, 510:520), codierung_all),
+        "flowering area"  = get_names(c(574, 575, 590, 777, 888, 915, 918), codierung_all),
+        "mixed crops" = get_names(c(150, 434, 882, 917), codierung_all),
+        "millet" = get_names(c(181, 183, 184), codierung_all),
+        "mustard" = get_names(c(612, 614, 619), codierung_all),
+        "fruits" = get_names(c(480, 481, 821:832, 836:839), codierung_all),
+        "landscape elements" = get_names(1:100, codierung_all),
+        "hops" = get_names(c(858, 857), codierung_all),
+        "accompanying flora" = get_names(c(640, 642), codierung_all),
+        "speciality crops" = get_names(c(705, 710), codierung_all)
+      )
+      
+      # Filter out empty classes and those with no matching crops
+      filtered_classes <- lapply(base_classes, function(class_names) {
+        intersect(class_names, unique_crops)
+      })
+      filtered_classes <- filtered_classes[sapply(filtered_classes, length) > 0]
+      
+      # Create initial classes list
+      initial_classes <- lapply(seq_along(filtered_classes), function(i) {
+        list(
+          id = paste0("class", i),
+          name = names(filtered_classes)[i],
+          crops = as.character(filtered_classes[[i]]),
+          color = color_palette[i]
+        )
+      })
+      
+      # Sort by number of crops
+      sorted_indices <- order(sapply(initial_classes, function(x) length(x$crops)), decreasing = F)
+      class_state(initial_classes[sorted_indices])
+      class_counter(length(filtered_classes))
+      
+      # Initially set all crops not in any class as available
+      assigned_crops <- unique(unlist(lapply(initial_classes, function(x) x$crops)))
+      unassigned_crops <- setdiff(unique_crops, assigned_crops)
+      available_crops(unassigned_crops)
+      
+      # Initialize class names storage
+      initial_names <- sapply(base_classes, function(x) names(x))
+      class_names(setNames(as.list(initial_names), paste0("class", seq_along(initial_names))))
+    }
+  })
+  
+  
+  # observer for class name changes
+  observe({
+    current_state <- class_state()
+    if (!is.null(current_state)) {
+      current_names <- class_names()
+      
+      # Update stored names when text inputs change
+      for (class in current_state) {
+        name_input <- input[[paste0(class$id, "_name")]]
+        if (!is.null(name_input)) {
+          current_names[[class$id]] <- name_input
+        }
+      }
+      class_names(current_names)
+    }
+  })
+  
+  # Update available_crops observer
+  observe({
+    req(class_state())
+    req(all_unique_crops())
+    
+    # Get currently assigned crops from all classes
+    assigned_crops <- character(0)
+    for(class in class_state()) {
+      class_crops <- input[[class$id]]
+      if(!is.null(class_crops)) {
+        assigned_crops <- c(assigned_crops, class_crops)
+      }
+    }
+    
+    # Set available crops as all unique crops minus assigned crops
+    available_crops(setdiff(all_unique_crops(), assigned_crops))
+  })
+  
+  # Add new aggregation class
+  observeEvent(input$add_class, {
+    req(class_state())
+    current_state <- class_state()
+    counter <- class_counter() + 1
+    class_counter(counter)
+    
+    new_id <- paste0("class", counter)
+    new_class <- list(
+      id = new_id,
+      name = paste("New Class", length(current_state) + 1),
+      crops = character(0),  # Start with empty crops vector
+      color = color_palette[counter %% length(color_palette) + 1]
+    )
+    
+    class_state(c(current_state, list(new_class)))
+  })
+  
+  # Generate UI for available crops
+  output$available_crops_ui <- renderUI({
+    bucket_list(
+      header = " ",
+      group_name = "crop_groups",
+      orientation = "vertical",
+      add_rank_list(
+        text = "Drag codes from here",
+        labels = available_crops(),
+        input_id = "available_crops"
+      )
+    )
+  })
+  
+  # Generate UI for aggregation classes
+  output$aggregation_classes <- renderUI({
+    req(class_state())
+    current_state <- class_state()
+    current_names <- class_names()
+    
+    lapply(current_state, function(class) {
+      # Get the current name from stored names or default
+      current_name <- current_names[[class$id]] %||% class$name
+      
+      div(
+        class = "crop-box",
+        style = sprintf("border-color: %s;", class$color),
+        div(
+          class = "name-input",
+          div(
+            textInput(paste0(class$id, "_name"), 
+                      NULL,
+                      value = current_name,
+                      placeholder = "Class Name"),
+            tags$style(sprintf(
+              "#%s {background-color: %s; border-color: %s;}",
+              paste0(class$id, "_name"), 
+              adjustcolor(class$color, alpha.f = 0.2),
+              class$color
+            ))
+          )
+        ),
+        bucket_list(
+          header = NULL,
+          group_name = "crop_groups",
+          orientation = "vertical",
+          add_rank_list(
+            text = "Drop codes",
+            labels = if(!is.null(input[[class$id]])) input[[class$id]] else class$crops,
+            input_id = class$id
+          )
+        ),
+        actionButton(paste0(class$id, "_remove"), 
+                     "×",
+                     class = "btn-danger remove-btn")
+      )
+    })
+  })
+  
+  # Handle class removal
+  observe({
+    current_state <- class_state()
+    lapply(current_state, function(class) {
+      observeEvent(input[[paste0(class$id, "_remove")]], {
+        crops_to_return <- input[[class$id]]
+        if(!is.null(crops_to_return)) {
+          available_crops(c(available_crops(), crops_to_return))
+        }
+        updated_state <- current_state[sapply(current_state, function(x) x$id != class$id)]
+        class_state(updated_state)
+      })
+    })
+  })
+  
+  # Prepare Sankey data
+  prepare_sankey_data <- reactive({
+    current_state <- class_state()
+    mapping <- data.frame(crop = character(), group = character(), color = character(), 
+                          stringsAsFactors = FALSE)
+    
+    # Get mappings from current classes
+    for(class in current_state) {
+      class_crops <- input[[class$id]]
+      if(!is.null(class_crops) && length(class_crops) > 0) {
+        mapping <- rbind(mapping,
+                         data.frame(
+                           crop = class_crops,
+                           group = if(is.null(input[[paste0(class$id, "_name")]])) 
+                             class$name else input[[paste0(class$id, "_name")]],
+                           color = class$color
+                         ))
+      }
+    }
+    
+    # Add unmapped crops as individual classes with their own names
+    unmapped_crops <- available_crops()
+    if(length(unmapped_crops) > 0) {
+      mapping <- rbind(mapping,
+                       data.frame(
+                         crop = unmapped_crops,
+                         group = unmapped_crops,  # Use crop name as the group name
+                         color = sapply(seq_along(unmapped_crops), function(i) {
+                           # Generate distinct colors for each unmapped crop
+                           color_palette[length(current_state) + i %% length(color_palette) + 1]
+                         })
+                       ))
+    }
+    
+    # Create nodes and links
+    unique_crops <- unique(mapping$crop)
+    unique_groups <- unique(mapping$group)
+    node_labels <- c(unique_crops, unique_groups)
+    
+    # Create node colors with distinct colors for individual crops
+    node_colors <- c(
+      rep("#808080", length(unique_crops)),  # Grey for individual codes
+      sapply(unique_groups, function(g) {
+        if(g %in% unmapped_crops) {
+          # For unmapped crops (individual classes), use their assigned color
+          mapping$color[mapping$group == g][1]
+        } else {
+          # For aggregated classes, use the class color
+          mapping$color[mapping$group == g][1]
+        }
+      })
+    )
+    
+    # Create links with values
+    links <- mapping %>%
+      mutate(
+        source = match(crop, node_labels) - 1,
+        target = match(group, node_labels) - 1,
+        value = 1  # Constant value for equal visibility
+      )
+    
+    list(
+      node = list(
+        label = node_labels,
+        color = node_colors,
+        pad = 15,
+        thickness = 20,
+        line = list(color = "black", width = 0.5)
+      ),
+      link = list(
+        source = links$source,
+        target = links$target,
+        value = links$value,
+        color = sapply(links$color, function(c) adjustcolor(c, alpha.f = 0.3))
+      )
+    )
+  })
+  
+  # Generate Plotly Sankey diagram
+  output$sankeyPlot <- renderPlotly({
+    sankey_data <- prepare_sankey_data()
+    
+    # Calculate number of unique items (crops + groups)
+    n_items <- length(sankey_data$node$label)
+    
+    # Calculate height based on number of items
+    # Assuming we want roughly 100px per item, with some minimum height
+    plot_height <- max(800, n_items * 13)  
+
+    plot_ly(
+      type = "sankey",
+      orientation = "h",
+      node = sankey_data$node,
+      link = sankey_data$link
+    ) %>%
+      layout(
+        title = "Crop Code Aggregation Flow",
+        font = list(size = 10),
+        xaxis = list(showgrid = FALSE, zeroline = FALSE),
+        yaxis = list(showgrid = FALSE, zeroline = FALSE),
+        hovermode = "x",
+        width = NULL,
+        height = plot_height
+      )
+  })
+  
+  prepare_aggregation_data <- reactive({
+    current_states <- class_state()
+    current_names <- class_names()
+    
+    # Initialize empty list to store results
+    result <- list()
+    
+    # Process each class in current_states
+    for(class in current_states) {
+      # Get the class name from stored names or default
+      class_name <- current_names[[class$id]] %||% class$name
+      
+      # Get the crops for this class from input or default
+      class_crops <- input[[class$id]] %||% class$crops
+      
+      if(length(class_crops) > 0) {
+        # Convert crop names to codes
+        codes <- unlist(sapply(class_crops, function(x) {
+          matches <- codierung_all$NC[codierung_all$Klarschrift == x]
+          if(length(matches) > 0) matches else NA
+        }))
+        
+        codes <- codes[!is.na(codes)]
+        
+        if(length(codes) > 0) {
+          result[[class_name]] <- codes
+        }
+      }
+    }
+    
+    # Handle unmapped crops
+    unmapped_crops <- available_crops()
+    if(length(unmapped_crops) > 0) {
+      for(crop in unmapped_crops) {
+        code <- codierung_all$NC[match(crop, codierung_all$Klarschrift)]
+        if(!is.na(code)) {
+          # Check if this code is already in any existing class
+          code_exists <- FALSE
+          for(existing_codes in result) {
+            if(code %in% existing_codes) {
+              code_exists <- TRUE
+              break
+            }
+          }
+          
+          # Only add if code doesn't exist in any class
+          if(!code_exists) {
+            result[[crop]] <- code
+          }
+        }
+      }
+    }
+    
+    # Return the converter list
+    list(converter = result)
+  })
+    
+  #----------------------------------------------------------------------------------------------------------
   # processor
   processor <- function(current_dir){
     # Start timing and memory tracking
     start_time <- Sys.time()
     initial_mem <- gc(reset = TRUE)
     
+    sankey_data <- prepare_sankey_data()
     all_files <- processed_files()
     years <- sapply(all_files, function(x) x$selected_year)
     
@@ -797,7 +1425,7 @@ sequencer_server <- function(input, output, session, app_data, output_dir = NA, 
         
         # pre-process the layers
         all_files <- add_names(all_files, codierung_all, input$id_or_name)
-
+        
         # start intersection
         incProgress(0.05, detail = "Intersecting")
         if(input$radio_process == "complete"){
@@ -805,15 +1433,23 @@ sequencer_server <- function(input, output, session, app_data, output_dir = NA, 
         }else{
           CropRotViz_intersection <- intersect_fields_simple(all_files)
         }
-        mem_checkpoints$after_intersection <- gc(reset = TRUE)
         
+        mem_checkpoints$after_intersection <- gc(reset = TRUE)
+
         # make aggregation if needed
-        if(input$aggregation == "Yes" & input$id_or_name == "NC"){
+        if(input$aggregation == "Yes" & input$id_or_name == "Code"){
+          
+          aggregation_codes <- prepare_aggregation_data()
+          aggregation_codes <- aggregation_codes$converter
+          
           incProgress(0.05, detail = "aggregating")
-          CropRotViz_intersection <- aggregator(CropRotViz_intersection, years, crop_codes, display_names)
+          CropRotViz_intersection <- aggregator(CropRotViz_intersection, years, aggregation_codes)
           mem_checkpoints$after_aggregation <- gc(reset = TRUE)
         }
-        
+        else{
+          aggregation_codes <- NA
+          }
+
         # intersect with attributes
         incProgress(0.05, detail = "intersecting with areas")
         list_intersect_with_borders <- intersect_with_borders(CropRotViz_intersection, 3, EZG)
@@ -825,10 +1461,7 @@ sequencer_server <- function(input, output, session, app_data, output_dir = NA, 
         if(length(list_intersect_with_borders) == 3){
           EZGs <- list_intersect_with_borders[[3]]
         }
-        
-        # calculate area in m²
-        CropRotViz_intersection$area <- as.numeric(st_area(CropRotViz_intersection))
-        
+
         incProgress(0.05, detail = "writing vector file")
         if(vector_file){
           if(input$filetype == "Shapefile"){
@@ -842,13 +1475,13 @@ sequencer_server <- function(input, output, session, app_data, output_dir = NA, 
           }
         }
         mem_checkpoints$after_file_write <- gc(reset = TRUE)
-        
-        if(input$id_or_name == "NC" & input$aggregation == "Yes"){
+
+        if(input$id_or_name == "Code" & input$aggregation == "Yes"){
           agg_cols <- grep("^Aggregated_", names(CropRotViz_intersection), value = TRUE)
         }else{
-          agg_cols <- grep("^Crop_", names(CropRotViz_intersection), value = TRUE)
+          agg_cols <- grep("^Name_", names(CropRotViz_intersection), value = TRUE)
         }
-        
+
         # diversity map
         incProgress(0.05, detail = "preparing diversity map")
         
@@ -871,28 +1504,63 @@ sequencer_server <- function(input, output, session, app_data, output_dir = NA, 
             NA
           }
         }
-        
+
         # preparing district_CropRotViz_intersection list
         district_CropRotViz_intersection <- list()
-        
+
         incProgress(0.05, detail = "preparing the rest of the outputs")
-        for (i in 1:length(unique(st_drop_geometry(Districts)[,1]))) {
-          
-          district <- unique(st_drop_geometry(Districts)[,1])[i]
-          current <- subset(CropRotViz_intersection, District == district)
-          
-          current <- current%>%
-            plyr::count(vars = agg_cols, wt_var = "area")%>%
-            mutate(id = row_number(),
-                   freq = freq/1e6)
-          
-          # ad rotation column
-          current$rotation <- do.call(paste, st_drop_geometry(current[agg_cols]))
-          
-          district_CropRotViz_intersection[[district]] <- current
-        }
-        mem_checkpoints$after_district_processing <- gc(reset = TRUE)
+        # Modified district processing section with error handling
+        district_CropRotViz_intersection <- list()
         
+        # district processing section with error handling
+        for (i in 1:dim(Districts)[2]) {
+          tryCatch({
+            district <- sf::st_drop_geometry(Districts)[i,1]
+            
+            # Get subset for current district
+            current <- subset(CropRotViz_intersection, District == district)
+            
+            # Check if subset has any rows
+            if (nrow(current) > 0) {
+              # Process the district data
+              current <- current %>%
+                plyr::count(vars = agg_cols, wt_var = "area") %>%
+                mutate(id = row_number(),
+                       freq = freq/1e6)
+              
+              # Only proceed if we have data after counting
+              if (nrow(current) > 0) {
+                # Add rotation column
+                current$rotation <- do.call(paste, st_drop_geometry(current[agg_cols]))
+                district_CropRotViz_intersection[[district]] <- current
+              } else {
+                warning(sprintf("No data after aggregation for district: %s", district))
+                # Add empty placeholder if needed
+                district_CropRotViz_intersection[[district]] <- data.frame()
+              }
+            } else {
+              warning(sprintf("No data found for district: %s", district))
+              # Add empty placeholder if needed
+              district_CropRotViz_intersection[[district]] <- data.frame()
+            }
+          }, error = function(e) {
+            warning(sprintf("Error processing district %s: %s", district, e$message))
+            # Add empty placeholder if needed
+            district_CropRotViz_intersection[[district]] <- data.frame()
+          })
+        }
+        
+        # After the loop, check if we have any valid data
+        if (all(sapply(district_CropRotViz_intersection, nrow) == 0)) {
+          stop("No valid data found for any district")
+        }
+        
+        # Remove any empty districts from the list (optional)
+        district_CropRotViz_intersection <- district_CropRotViz_intersection[
+          sapply(district_CropRotViz_intersection, nrow) > 0
+        ]
+        mem_checkpoints$after_district_processing <- gc(reset = TRUE)
+
         if("EZG" %in% names(CropRotViz_intersection)){
           EZG_CropRotViz_intersection <- list()
           
@@ -915,17 +1583,16 @@ sequencer_server <- function(input, output, session, app_data, output_dir = NA, 
           EZG_CropRotViz_intersection <- NA
         }
         mem_checkpoints$after_EZG_processing <- gc(reset = TRUE)
-        
+
         # calculate complete cropping area
         cropping_area <- sum(do.call(rbind, district_CropRotViz_intersection)$freq)
         
         # create all available choices
-        if(input$id_or_name == "NC" & input$aggregation == "Yes"){
+        if(input$id_or_name == "Code" & input$aggregation == "Yes"){
           Crop_choices <- unique(unlist(unique(c(st_drop_geometry(CropRotViz_intersection)[grep("^Aggregated_", names(CropRotViz_intersection), value = TRUE)]))))
         }else{
-          Crop_choices <- unique(unlist(unique(c(st_drop_geometry(CropRotViz_intersection)[grep("^Crop_", names(CropRotViz_intersection), value = TRUE)]))))
+          Crop_choices <- unique(unlist(unique(c(st_drop_geometry(CropRotViz_intersection)[grep("^Name_", names(CropRotViz_intersection), value = TRUE)]))))
         }
-        
         
         # create df for area distribution visualisation
         if(length(list_intersect_with_borders) == 3){
@@ -936,7 +1603,7 @@ sequencer_server <- function(input, output, session, app_data, output_dir = NA, 
         distribution_df <- st_drop_geometry(CropRotViz_intersection)[,agg_cols]
         
         # save environment
-        save(EZG_CropRotViz_intersection, district_CropRotViz_intersection, cropping_area, years, Crop_choices, Districts, EZGs, distribution_df, diversity_data, file = paste0(current_dir, "/CropRotViz_intersection.RData"))
+        save(EZG_CropRotViz_intersection, district_CropRotViz_intersection, cropping_area, years, Crop_choices, Districts, EZGs, distribution_df, diversity_data, sankey_data, aggregation_codes, file = paste0(current_dir, "/CropRotViz_intersection.RData"))
         
         #---------------------------------------------------
         incProgress(0.05, detail = "preparing images for fast preview version")
@@ -954,7 +1621,7 @@ sequencer_server <- function(input, output, session, app_data, output_dir = NA, 
         if(input$fastImages == "Yes"){
           # create dir
           dir.create(paste0(current_dir, "/images"))
-
+          
           # plot the districts 
           for(name in names(district_CropRotViz_intersection)){
             snipped <- district_CropRotViz_intersection[[name]]
@@ -977,7 +1644,7 @@ sequencer_server <- function(input, output, session, app_data, output_dir = NA, 
                                                 color = app_data$Input_App_data$crop_color_mapping)
           }
         }
-
+        
         #--------------------------------------------------------------------------------------------
         mem_checkpoints$after_save <- gc(reset = TRUE)
         
@@ -1037,7 +1704,7 @@ sequencer_server <- function(input, output, session, app_data, output_dir = NA, 
         writeLines("  journal = {GitHub repository},", file_conn)
         writeLines("  url = {https://github.com/franzschulze/CropRotationViz}", file_conn)
         writeLines("}", file_conn)
-
+        
         close(file_conn)
         
         print(paste(end_time, start_time))
@@ -1065,17 +1732,16 @@ sequencer_server <- function(input, output, session, app_data, output_dir = NA, 
   
   #----------------------------------------------------------------------------------------------------------
   
-  # Process button observer
+  # Process button observer with output_dir
   observeEvent(input$btn_process, {
-    req(selected_dir())  # Ensure directory is selected
-    processor(get_selected_dir())
+    if (!is.na(output_dir)) {
+      processor(output_dir)
+    } else {
+      req(selected_dir())  # Ensure directory is selected
+      processor(get_selected_dir())
+    }
   })
   
-  # Process button observer
-  observeEvent(input$btn_process, {
-    req(output_dir)  # Ensure directory is selected
-    processor(output_dir)
-  })
+  # Return the processed files reactive expression
   return(reactive({ processed_files() }))
 }
-

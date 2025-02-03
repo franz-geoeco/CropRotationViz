@@ -198,7 +198,7 @@ viz_ui <- function(input_dir = NA){
                                     plotlyOutput("sankey_plotly")
                                   )
                            )
-                         ), br(), br(), br(), br(),br(), br(), br(), br(),br(), br(), br(), br()
+                         )
                 ),
                 tabPanel("Plot Crop Specific Sequence",
                          br(),
@@ -308,7 +308,7 @@ viz_ui <- function(input_dir = NA){
                                     plotlyOutput("sankey_plotly_specific")
                                   )
                                   ),
-                           ), br(), br(),br(), br(),br(), br(),br(), br(),br(),br(), br(),br(), br(), br(), br(),br(), br(), br(), br()
+                           )
                          
                 ),
                 tabPanel("Plot Sequence per Area",
@@ -454,22 +454,24 @@ viz_ui <- function(input_dir = NA){
                              condition = "input.district_or_ezg != 'River Basin'",
                              column(9,
                                     shinycssloaders::withSpinner(
-                                      plotOutput("district_ridges", height = 800)
+                                      plotOutput("district_ridges")
                                     )
-                             )
+                             ), br()
                            ),
                            conditionalPanel(
                              condition = "input.district_or_ezg == 'River Basin'",
                              column(9,
                                     shinycssloaders::withSpinner(
-                                      plotOutput("basin_ridges" , height = 800)
+                                      plotOutput("basin_ridges")
                                     )
-                             )
+                             ), br()
                            )
                          )
                 ),
-                # Custom footer
+                div(style = "padding-bottom: 100px;"), # Add padding for footer
                 
+                
+                # Custom footer
                 tags$footer(
                   style = "position: fixed; 
                            bottom: 0; 
@@ -1404,58 +1406,52 @@ viz_server <- function(input, output, session, app_data, input_dir) {
     })
     
     #--------------------------------------------------------------------------------------------
-    
-    output$sankey_plotly <- renderPlotly({
-      Sys.sleep(1.5)
-      
-      crop_color_mapping_df <- as.data.frame(crop_color_mapping)
-      crop_color_mapping_df$crop <- names(crop_color_mapping)
-      crop_color_mapping_df <- crop_color_mapping_df[complete.cases(crop_color_mapping_df),]
-      
-      # Order the DataFrame
-      ordered_crop_color_mapping_df <- crop_color_mapping_df[match(unique(all_wrap_number_count_small$Aggregated_2023), crop_color_mapping_df$crop), ]
-      
-      
-      sankey_wrap <- plot_ly(
-        type = "sankey",
-        orientation = "h",
-        node = list(
-          pad = 15,
-          thickness = 5,
-          line = list(
-            color = "black",
-            width = 0.5
-          ),
-          label = unique(c(all_wrap_number_count_small$Name_2023, all_wrap_number_count_small$Aggregated_2023))
-        ),
+    observe({
+      req(data_loaded())
+      output$sankey_plotly <- renderPlotly({
+        Sys.sleep(1.5)
         
-        link = list(
-          source = as.integer(match(all_wrap_number_count_small$Name_2023, unique(c(all_wrap_number_count_small$Name_2023, all_wrap_number_count_small$Aggregated_2023))) - 1),
-          target = as.integer(match(all_wrap_number_count_small$Aggregated_2023, unique(c(all_wrap_number_count_small$Name_2023, all_wrap_number_count_small$Aggregated_2023))) - 1),
-          value = all_wrap_number_count_small$number
-        )
-      )
-      
-      # Customize the Sankey chart layout (optional)
-      sankey_wrap <- sankey_wrap %>%
-        layout(
-          title = "",
-          font = list(size = 15, color = "black"),
-          paper_bgcolor = 'lightgrey',  # Transparent background for the canvas
-          plot_bgcolor = 'lightgrey',   # Transparent background for the plot area
-          height = 2000
-        )
-      
-      # Display the Sankey chart
-      sankey_wrap %>%
-        config(
-          toImageButtonOptions = list(
-            format = "png",
-            filename = "reorganization",
-            width = 1000,
-            height = 1450
+        # crop_color_mapping_df <- as.data.frame(crop_color_mapping)
+        # crop_color_mapping_df$crop <- names(crop_color_mapping)
+        # crop_color_mapping_df <- crop_color_mapping_df[complete.cases(crop_color_mapping_df),]
+        # 
+        # # Order the DataFrame
+        # ordered_crop_color_mapping_df <- crop_color_mapping_df[match(unique(all_wrap_number_count_small$Aggregated_2023), crop_color_mapping_df$crop), ]
+        # 
+        # Calculate number of unique items (crops + groups)
+        n_items <- length(sankey_data$node$label)
+
+        # Calculate height based on number of items
+        # Assuming we want roughly 100px per item, with some minimum height
+        plot_height <- max(800, n_items * 15)  
+        
+        plotly <- plot_ly(
+          type = "sankey",
+          orientation = "h",
+          node = sankey_data$node,
+          link = sankey_data$link
+        ) %>%
+          layout(
+            title = "Crop Code Aggregation Flow",
+            font = list(size = 10),
+            xaxis = list(showgrid = FALSE, zeroline = FALSE),
+            yaxis = list(showgrid = FALSE, zeroline = FALSE),
+            hovermode = "x",
+            width = NULL,
+            height = plot_height
           )
-        )
+        
+        # Display the Sankey chart
+        plotly %>%
+          config(
+            toImageButtonOptions = list(
+              format = "png",
+              filename = "reorganization",
+              width = 1000,
+              height = 1450
+            )
+          )
+      })
     })
     
     #--------------------------------------------------------------------------------------------
@@ -1571,17 +1567,26 @@ viz_server <- function(input, output, session, app_data, input_dir) {
         colors <- replicate(50, generate_hex_color())
         }
       
-      
       ggplot(data %>%
                group_by(!!sym(column)) %>%
-               filter(n() > 3) %>%
+               filter(n() > 1) %>%
                ungroup(),
              aes(x = area/10000, y = !!sym(column), fill = !!sym(column))) +
-        geom_density_ridges(alpha = 0.7) +
+        geom_boxplot(alpha = 0.7, width = 0.5) +
+        theme_minimal() +
+        theme(axis.text = element_text(color = "white", size = 15, face="bold"),
+              axis.title.y = element_text(color = "white", size = 16, face="bold", margin = margin(r = 10)),
+              legend.background = element_rect(fill = "lightgrey", color = "black"),
+              panel.background = element_rect(fill = 'lightgrey', color = 'black'),
+              legend.position = "none",
+              plot.background = element_rect(fill = "#1f1b1b", color = NA),
+              legend.box.background = element_rect(fill = "#1f1b1b", color = NA),
+              plot.title = element_text(color = "white", hjust = 0.5, size = 18, face="bold")) +
+        labs(title = paste("Area Distribution per Crop (n() > 1)\n",  input$year_select, "in", input$District_sel),
+             x = "Area (ha)",
+             y = "") +
         scale_fill_manual(values = colors) +
-        theme_ridges() +
-        theme(legend.position = "none") +
-        labs(x = "Area in ha", y = "Crop Type", title = paste("Area Density per Crop (n() > 3)\n",  input$year_select, "in", input$District_sel))
+        scale_x_continuous(labels = scales::comma)
     })
     
     #--------------------------------------------------------------------------------------------
@@ -1596,17 +1601,26 @@ viz_server <- function(input, output, session, app_data, input_dir) {
         colors <- replicate(50, generate_hex_color())
       }
       
-      
       ggplot(data %>%
                group_by(!!sym(column)) %>%
-               filter(n() > 3) %>%
+               filter(n() > 1) %>%
                ungroup(),
              aes(x = area/10000, y = !!sym(column), fill = !!sym(column))) +
-        geom_density_ridges(alpha = 0.7) +
+        geom_boxplot(alpha = 0.7, width = 0.5) +
+        theme_minimal() +
+        theme(axis.text = element_text(color = "white", size = 15, face="bold"),
+              axis.title.y = element_text(color = "white", size = 16, face="bold", margin = margin(r = 10)),
+              legend.background = element_rect(fill = "lightgrey", color = "black"),
+              panel.background = element_rect(fill = 'lightgrey', color = 'black'),
+              legend.position = "none",
+              plot.background = element_rect(fill = "#1f1b1b", color = NA),
+              legend.box.background = element_rect(fill = "#1f1b1b", color = NA),
+              plot.title = element_text(color = "white", hjust = 0.5, size = 18, face="bold")) +
+        labs(title = paste("Area Distribution per Crop (n() > 1)\n",  input$year_select, "in", input$EZG_sel),
+             x = "Area (ha)",
+             y = "") +
         scale_fill_manual(values = colors) +
-        theme_ridges() +
-        theme(legend.position = "none") +
-        labs(x = "Area in ha", y = "Crop Type", title = paste("Area Density per Crop (n() > 3)\n",  input$year_select, "in", input$EZG_sel))
+        scale_x_continuous(labels = scales::comma)
     })
     
     #--------------------------------------------------------------------------------------------
