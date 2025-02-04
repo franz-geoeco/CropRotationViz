@@ -78,7 +78,17 @@
 #' 
 #' @keywords internal
 processing_ui <- function(app_data, output_dir = NA, start_year = NA, vector_file = TRUE) {
+  # Add Bootstrap dependencies
+  shiny::addResourcePath(
+    "shinyBS", 
+    system.file("www", package = "shinyBS")
+  )
+  
   fluidPage(
+    tags$head(
+      tags$link(rel = "stylesheet", type = "text/css", href = "shinyBS/shinyBS.css"),
+      tags$script(src = "shinyBS/shinyBS.js")
+    ),
     theme = shinytheme("cyborg"),
     #-------------------------------------------------------------------------------
     # Header Section
@@ -105,17 +115,24 @@ processing_ui <- function(app_data, output_dir = NA, start_year = NA, vector_fil
              radioButtons("id_or_name", label = "Select Crop Column Type", choices = c("Code", "Name"), inline = TRUE)
       ),
       column(1,
-             bsPopover(
-               id = "id-info",
-               title = "Crop Column",
-               content = HTML(paste0(
-                 "Here you can select the column which describes your crop. Use Code if you want to use the national coding or/and you want to use the aggregation, which summarizes some smaller classes to bigger groups."
-               )),
-               placement = "left",
-               trigger = "hover",
-               options = list(container = "body")
+             shinyBS::bsButton(
+               "id-info",
+               label = "",
+               icon = icon("info"),
+               style = "default",
+               size = "extra-small"
              ),
-             bsButton("id-info", label = "", icon = icon("info", lib = "font-awesome"), style = "default", size = "extra-small")
+             shinyBS::bsPopover(
+               "id-info",
+               "Crop Column",
+               "Here you can select the column which describes your crop. Use Code if you want to use the national coding or/and you want to use the aggregation, which summarizes some smaller classes to bigger groups.",
+               placement = "left",
+               trigger = "toggle",
+               options = list(
+                 container = 'body',
+                 html = TRUE
+               )
+             )
       ),
       conditionalPanel(
         condition = "input.id_or_name == 'Code'",
@@ -132,17 +149,24 @@ processing_ui <- function(app_data, output_dir = NA, start_year = NA, vector_fil
                             "Fast" = "fast"), inline = TRUE)
       ),
       column(1,
-             bsPopover(
-               id = "radio-info",
-               title = "Type of intersection",
-               content = HTML(paste0(
-                 "Here you can select the type of the intersection framework. The fast intersect just intersects your fields over the years and leaves out fields not present in a year. The comprehensive method is much slower but contains each area you put in with comprehensive union functions."
-               )),
-               placement = "left",
-               trigger = "hover",
-               options = list(container = "body")
+             shinyBS::bsButton(
+               "radio-info",
+               label = "",
+               icon = icon("info"),
+               style = "default",
+               size = "extra-small"
              ),
-             bsButton("radio-info", label = "", icon = icon("info", lib = "font-awesome"), style = "default", size = "extra-small")
+             shinyBS::bsPopover(
+               "radio-info",
+               "Type of intersection",
+               "Here you can select the type of the intersection framework. The fast intersect just intersects your fields over the years and leaves out fields not present in a year. The comprehensive method is much slower but contains each area you put in with comprehensive union functions.",
+               placement = "left",
+               trigger = "toggle",
+               options = list(
+                 container = 'body',
+                 html = TRUE
+               )
+             )
       )
     ),
     
@@ -284,12 +308,68 @@ processing_ui <- function(app_data, output_dir = NA, start_year = NA, vector_fil
                  )
           )
         },
+        if(vector_file){
+          column(1, style = "padding: 0; margin-left: 10px;",
+                 conditionalPanel(
+                   condition = "output.show_process_button", 
+                   shinyBS::bsButton(
+                     "format",  
+                     label = "",
+                     icon = icon("info"),
+                     style = "default",
+                     size = "extra-small"
+                   )
+                 ),
+                 conditionalPanel(
+                   condition = "output.show_process_button", 
+                   shinyBS::bsPopover(
+                     "format",  
+                     "Polygon Output Format",
+                     "Here you can select which output format you want for the intersected polygon file.",
+                     placement = "right",
+                     trigger = "hover",
+                     options = list(
+                       container = 'body',
+                       html = TRUE,
+                       delay = list(show = 0, hide = 0)  
+                     )
+                   )
+                 )
+          )
+        },
         column(3,
                conditionalPanel(
                  condition = "output.show_process_button",
                  radioButtons("fastImages",
                               "Do you want a fast visualization version?",
                               c("Yes", "No"), inline = TRUE)
+               )
+        ),
+        column(1, style = "padding: 0; margin-left: 10px;",
+               conditionalPanel(
+                 condition = "output.show_process_button", 
+                 shinyBS::bsButton(
+                   "fast_sel",  
+                   label = "",
+                   icon = icon("info"),
+                   style = "default",
+                   size = "extra-small"
+                 )
+               ),
+               conditionalPanel(
+                 condition = "output.show_process_button", 
+                 shinyBS::bsPopover(
+                   "fast_sel",  
+                   "Fast Version?",
+                   "Here you can select whether you want to create pre-rendered charts, which allow you to use a fast visualisation mode.",
+                   placement = "right",
+                   trigger = "hover",
+                   options = list(
+                     container = 'body',
+                     html = TRUE,
+                     delay = list(show = 0, hide = 0)  
+                   )
+                 )
                )
         )
       ),
@@ -305,7 +385,7 @@ processing_ui <- function(app_data, output_dir = NA, start_year = NA, vector_fil
                )
         )
       )
-    ),
+    ), br(), 
     tags$head(
       tags$style(HTML("
             .crop-box {
@@ -346,9 +426,31 @@ processing_ui <- function(app_data, output_dir = NA, start_year = NA, vector_fil
                 display: grid;
                 grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
                 grid-auto-rows: min-content;
-                grid-gap: 0;
+                grid-gap: 10px;
                 width: 100%;
                 justify-content: start;
+                max-height: 600px; /* Set a maximum height */
+                overflow-y: auto; /* Enable vertical scrolling */
+                padding: 10px;
+                /* Smooth scrolling for better UX */
+                scroll-behavior: smooth;
+                /* Style the scrollbar for better visibility */
+                scrollbar-width: thin;
+                scrollbar-color: rgba(116, 150, 30, 0.6) transparent;
+            }
+            
+            /* Webkit scrollbar styling */
+            .aggregation-container::-webkit-scrollbar {
+                width: 8px;
+            }
+            
+            .aggregation-container::-webkit-scrollbar-track {
+                background: transparent;
+            }
+            
+            .aggregation-container::-webkit-scrollbar-thumb {
+                background-color: rgba(116, 150, 30, 0.6);
+                border-radius: 4px;
             }
             .rank-list-item {
                 padding: 1px 3px !important;
@@ -382,10 +484,32 @@ processing_ui <- function(app_data, output_dir = NA, start_year = NA, vector_fil
                  div(id = "editor-header",
                      class = "collapse-header",
                      onclick = "$('#editor-content').collapse('toggle')",
-                     h4(
-                       span(id = "editor-icon", "▶", style = "margin-right: 10px;"),
-                       "Crop Code Aggregation Editor",
-                       style = "margin: 0;"
+                     div(style = "display: flex; align-items: center;",
+                         h4(style = "margin: 0; display: flex; align-items: center;",
+                            span(id = "editor-icon", "▶", style = "margin-right: 10px;"),
+                            "Crop Code Aggregation Editor"
+                         ),
+                         column(1, style = "padding: 0; margin-left: 10px;",
+                                shinyBS::bsButton(
+                                  "aggregation_editor_info",  # Changed ID
+                                  label = "",
+                                  icon = icon("info"),
+                                  style = "default",
+                                  size = "extra-small"
+                                ),
+                                shinyBS::bsPopover(
+                                  "aggregation_editor_info",  # Changed ID to match
+                                  "Crop Aggregation Info",
+                                  "Here you can inspect and change the default crop aggregation. You can create new classes, rename existing and drag and drop crops into the aggregation classes on the reight. Each single crop on the left list will be still processed but not aggregated.",
+                                  placement = "right",
+                                  trigger = "hover",
+                                  options = list(
+                                    container = 'body',
+                                    html = TRUE,
+                                    delay = list(show = 0, hide = 0)  
+                                  )
+                                )
+                         )
                      )
                  ),
                  # Editor Content
@@ -423,10 +547,31 @@ processing_ui <- function(app_data, output_dir = NA, start_year = NA, vector_fil
                  div(id = "plotly-header",
                      class = "collapse-header",
                      onclick = "$('#plotly-content').collapse('toggle')",
-                     h4(
-                       span(id = "plotly-icon", "▶", style = "margin-right: 10px;"),
-                       "Aggregation Visualization",
-                       style = "margin: 0;"
+                     div(style = "display: flex; align-items: center;",
+                         h4(style = "margin: 0; display: flex; align-items: center;",
+                            span(id = "plotly-icon", "▶", style = "margin-right: 10px;"),
+                            "Aggregation Visualization"
+                         ),
+                         column(1, style = "padding: 0; margin-left: 10px;",
+                                shinyBS::bsButton(
+                                  "aggregation_info",
+                                  label = "",
+                                  icon = icon("info"),
+                                  style = "default",
+                                  size = "extra-small"
+                                ),
+                                shinyBS::bsPopover(
+                                  "aggregation_info",
+                                  "Crop Aggregation Info",
+                                  "Here you can inspect the current aggragation of crops into broader classes, which will be used if you click on prosessing.",
+                                  placement = "right",
+                                  trigger = "hover",
+                                  options = list(
+                                    container = 'body',
+                                    html = TRUE
+                                  )
+                                )
+                         )
                      )
                  ),
                  # Plotly Content
@@ -496,7 +641,7 @@ processing_ui <- function(app_data, output_dir = NA, start_year = NA, vector_fil
       )
     )
   )
-}
+} 
 
 #' @title Crop Sequence Builder Server Logic
 #' @description Implements the server-side logic for analyzing and managing agricultural crop rotation sequences.
