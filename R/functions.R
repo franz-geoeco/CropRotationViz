@@ -30,7 +30,7 @@ add_names <- function(fields_list, codierung_all, column){
       file <- file[,c(f$selected_column, attr(file, "sf_column"))]
       st_geometry(file) <- "geometry"
       names(file) <- c("Crop", "geometry")
-      names(file)[names(file) == "Crop"] <- paste0("Crop_", f$selected_year)
+      names(file)[names(file) == "Crop"] <- paste0("Name_", f$selected_year)
       return(file)
     })
   }
@@ -662,62 +662,89 @@ aggregator <- function(intersected, years, crop_codes){
 #' }
 #' 
 #' @export
-create_crop_rotation_sankey <- function(data, 
-                                        min_area = 1,
-                                        exclude_crops = c("grassland", "forest", "flowering area",
-                                                          "fallow", "fruits", "permanent/tree", 
-                                                          "Meerettich"),
-                                        output_path = NULL,
-                                        width = 14,
-                                        height = 10,
-                                        resolution = 200,
-                                        color = NA) {
+create_crop_rotation_sankey <- function(data, min_area = 1, 
+                                        exclude_crops = c("grassland", "forest", "flowering area", "fallow", "fruits", "permanent/tree", "Meerettich"), 
+                                        output_path = NULL, 
+                                        width = 14, 
+                                        height = 10, 
+                                        resolution = 200, 
+                                        color = NULL) {
   require(ggalluvial)
+  require(dplyr)
+  require(stringr)
+  require(forcats)
   
-  # filter
-  rotation_data <- data %>%
-    filter(freq > min_area)
+  # Filter rotation data
+  rotation_data <- data %>% filter(freq > min_area)
   
+  # Determine transformation based on column names
   if (any(grepl("Aggregated_", names(rotation_data)))) {
-    # Final transformations
-    rotation_data <- rotation_data %>%
+    rotation_data <- rotation_data %>% 
       pivot_longer(
-        cols      = -c(freq, id, rotation),
-        names_to  = "value",
+        cols = -c(freq, id, rotation), 
+        names_to = "value", 
         values_to = "key"
-      ) %>%
+      ) %>% 
       mutate(
-        year = as.numeric(str_remove(value, "Aggregated_")),
-        key  = factor(key),
-        key  = fct_reorder(key, -key)
-      ) %>%
-      rename(Area = freq) %>%
+        year = as.numeric(str_remove(value, "Aggregated_")), 
+        key = factor(key), 
+        key = fct_reorder(key, -key)
+      ) %>% 
+      rename(Area = freq) %>% 
       select(Area, id, value, key, year)
-  }else{
-    # Final transformations
-    rotation_data <- rotation_data %>%
+  } else {
+    rotation_data <- rotation_data %>% 
       pivot_longer(
-        cols      = -c(freq, id, rotation),
-        names_to  = "value",
+        cols = -c(freq, id, rotation), 
+        names_to = "value", 
         values_to = "key"
-      ) %>%
+      ) %>% 
       mutate(
-        year = as.numeric(str_remove(value, "Name_")),
-        key  = factor(key),
-        key  = fct_reorder(key, -key)
-      ) %>%
-      rename(Area = freq) %>%
+        year = as.numeric(str_remove(value, "Name_")), 
+        key = factor(key), 
+        key = fct_reorder(key, -key)
+      ) %>% 
+      rename(Area = freq) %>% 
       select(Area, id, value, key, year)
+  }
+  
+  # Get unique keys
+  unique_keys <- unique(rotation_data$key)
+  
+  # Generate colors if needed
+  set.seed(123)  # for reproducibility
+  
+  # Color generation function
+  generate_random_color <- function() {
+    rgb(runif(1), runif(1), runif(1))
+  }
+  
+  # Handle color parameter
+  if (is.null(color)) {
+    # No colors provided, generate for all unique keys
+    color <- setNames(sapply(1:length(unique_keys), function(x) generate_random_color()), 
+                      unique_keys)
+  } else {
+    # If color is a named vector, ensure all keys have a color
+    missing_keys <- setdiff(unique_keys, names(color))
+    
+    if (length(missing_keys) > 0) {
+      # Generate colors for missing keys
+      additional_colors <- setNames(
+        sapply(1:length(missing_keys), function(x) generate_random_color()), 
+        missing_keys
+      )
+      color <- c(color, additional_colors)
+    }
+    
+    # Ensure color names match unique keys exactly
+    color <- color[as.character(unique_keys)]
   }
   
   # Create plot
   sankey_plot <- ggplot(rotation_data, 
-                        aes(x = year, 
-                            y = Area, 
-                            stratum = key, 
-                            fill = key,
-                            alluvium = id, 
-                            label = key)) +
+                        aes(x = year, y = Area, stratum = key, 
+                            fill = key, alluvium = id, label = key)) +
     scale_fill_manual(values = color) +
     geom_stratum(alpha = .90, show.legend = TRUE, color = NA) +
     geom_flow(show.legend = FALSE) +
@@ -738,26 +765,20 @@ create_crop_rotation_sankey <- function(data,
       legend.text = element_text(size = 10)
     )
   
-  unique_key_count <- length(unique(rotation_data$key))
-  
-  # Apply guides based on the unique count
-  if (length(unique_key_count) > 20) {
-    sankey_plot + guides(fill = guide_legend(nrow = 8))
+  # Adjust guides based on unique key count
+  unique_key_count <- length(unique_keys)
+  if (unique_key_count > 20) {
+    sankey_plot <- sankey_plot + guides(fill = guide_legend(nrow = 8))
   } else {
-    sankey_plot + guides(fill = guide_legend(nrow = 4))
+    sankey_plot <- sankey_plot + guides(fill = guide_legend(nrow = 4))
   }
-  
   
   # Save plot if output path is provided
   if (!is.null(output_path)) {
-    png(output_path,
-        width = width,
-        height = height,
-        units = 'in',
-        res = resolution)
+    png(output_path, width = width, height = height, units = 'in', res = resolution)
     print(sankey_plot)
     dev.off()
-  }else{
+  } else {
     print(sankey_plot)
   }
   
@@ -891,7 +912,7 @@ transform_rotation_data <- function(All_rot_big, distribution_df, input_area_ran
           values_to = "key"
         ) %>%
         mutate(
-          year = as.numeric(str_remove(value, "Crop_")),
+          year = as.numeric(str_remove(value, "Name_")),
           key  = factor(key),
           key  = fct_reorder(key, -key)
         ) %>%
@@ -974,7 +995,7 @@ transform_rotation_summary <- function(All_rot_big,
   }
   
   # Create year sequence for dynamic column creation
-  crop_cols <- paste0("Crop_", years)
+  crop_cols <- paste0("Name_", years)
   agg_cols <- paste0("Aggregated_", years)
   
   if (any(grepl("Aggregated_", names(All_rot_big)))) {
@@ -998,7 +1019,7 @@ transform_rotation_summary <- function(All_rot_big,
     # Rename columns if needed
     setnames(transformed_data, 
              old = agg_cols, 
-             new = sub("Aggregated_", "Crop_", agg_cols))
+             new = sub("Aggregated_", "Name_", agg_cols))
   }else{
     # Data.table transformation for Crop columns
     setDT(All_rot_big)
@@ -1064,11 +1085,17 @@ transform_rotation_summary <- function(All_rot_big,
 #' 
 #' @export
 process_specific_transitions <- function(data, crop) {
-  # Get column names starting with "Aggregated_"
-  year_cols <- grep("^Aggregated_", names(data), value = TRUE)
-  
-  # Extract years from column names
-  years <- as.numeric(sub("Aggregated_", "", year_cols))
+  if (any(grepl("Aggregated_", names(data)))) {
+    # Get column names starting with "Aggregated_"
+    year_cols <- grep("^Aggregated_", names(data), value = TRUE)
+    # Extract years from column names
+    years <- as.numeric(sub("Aggregated_", "", year_cols))
+  }else{
+    # Get column names starting with "Aggregated_"
+    year_cols <- grep("^Name_", names(data), value = TRUE)
+    # Extract years from column names
+    years <- as.numeric(sub("Name_", "", year_cols))
+  }
   
   # Sort years
   years <- sort(years)
@@ -1080,8 +1107,13 @@ process_specific_transitions <- function(data, crop) {
   }
   
   all_transitions <- map_dfr(year_pairs, function(yp) {
-    col1 <- paste0("Aggregated_", yp[1])
-    col2 <- paste0("Aggregated_", yp[2])
+    if (any(grepl("Aggregated_", names(data)))) {
+      col1 <- paste0("Aggregated_", yp[1])
+      col2 <- paste0("Aggregated_", yp[2])
+    }else{
+      col1 <- paste0("Name_", yp[1])
+      col2 <- paste0("Name_", yp[2])
+    }
     
     data %>%
       select(all_of(c(col1, col2)), freq) %>%
@@ -1280,7 +1312,7 @@ dummy_field_creator <- function(output_dir,
 #' # Create maps for both districts and river basins
 #' maps <- diversity_mapping(
 #'   input = crop_data,
-#'   agg_cols = c("crop_2020", "crop_2021", "crop_2022"),
+#'   agg_cols = c("Name_2020", "Name_2021", "Name_2022"),
 #'   districts = district_polygons,
 #'   EZGs = river_basin_polygons
 #' )

@@ -189,7 +189,7 @@ viz_ui <- function(input_dir = NA){
                          fluidRow(
                            column(1),
                            column(7,
-                                  h4("Crop Class Merging Stacking"))
+                                  h4("Crop Class Aggregation Visualization"))
                          ),
                          fluidRow(
                            column(1),
@@ -778,13 +778,13 @@ viz_server <- function(input, output, session, app_data, input_dir) {
         geom_dropped <- sf::st_drop_geometry(CropRotViz_intersection[, ..agg_cols])
         unique(unlist(geom_dropped, use.names = FALSE))
       } else {
-        # Fall back to Crop_ columns
-        crop_cols <- grep("^Crop_", names(CropRotViz_intersection), value = TRUE)
+        # Fall back to Name_ columns
+        crop_cols <- grep("^Name_", names(CropRotViz_intersection), value = TRUE)
         if(length(crop_cols) > 0) {
           geom_dropped <- sf::st_drop_geometry(CropRotViz_intersection[, ..crop_cols])
           unique(unlist(geom_dropped, use.names = FALSE))
         } else {
-          warning("No Aggregated_ or Crop_ columns found")
+          warning("No Aggregated_ or Name_ columns found")
           NULL
         }
       }
@@ -875,6 +875,51 @@ viz_server <- function(input, output, session, app_data, input_dir) {
         selected_crops = input$Crops_sec,
         type = "basic"
       )
+    })
+    
+    
+    crop_colors <- reactive({
+      req(rotation_data())
+      
+      # Get unique keys
+      unique_keys <- unique(rotation_data()[[1]]$key)
+      
+      # Set seed for reproducibility
+      set.seed(123)
+      
+      # Color generation function
+      generate_random_color <- function() {
+        rgb(runif(1), runif(1), runif(1))
+      }
+      
+      # Initialize color mapping
+      if (is.null(crop_color_mapping)) {
+        # No colors provided, generate for all unique keys
+        color_map <- setNames(
+          sapply(1:length(unique_keys), function(x) generate_random_color()), 
+          unique_keys
+        )
+      } else {
+        # Start with existing color mapping
+        color_map <- crop_color_mapping
+        
+        # Identify missing keys
+        missing_keys <- setdiff(unique_keys, names(color_map))
+        
+        # Generate colors for missing keys
+        if (length(missing_keys) > 0) {
+          additional_colors <- setNames(
+            sapply(1:length(missing_keys), function(x) generate_random_color()), 
+            missing_keys
+          )
+          color_map <- c(color_map, additional_colors)
+        }
+        
+        # Ensure color map matches unique keys exactly
+        color_map <- color_map[as.character(unique_keys)]
+      }
+      
+      return(color_map)
     })
     
     # spec_rotation_data
@@ -1101,6 +1146,7 @@ viz_server <- function(input, output, session, app_data, input_dir) {
     # Create reactive expression for the plot
     create_sankey_plot <- reactive({
       req(rotation_data())
+      req(crop_colors())
       
       base_plot <- ggplot(
         rotation_data()[[1]], 
@@ -1125,7 +1171,7 @@ viz_server <- function(input, output, session, app_data, input_dir) {
           legend.box.background = element_rect(fill = "#1f1b1b", color = NA)
         ) +
         geom_text(stat = "stratum", size = 4, check_overlap = TRUE) +
-        scale_fill_manual(name = "Crops", values = crop_color_mapping) +
+        scale_fill_manual(name = "Crops", values = crop_colors()) +
         ylab("Area [km²]") + 
         xlab("") + 
         scale_x_continuous(breaks = unique(rotation_data()[[1]]$year))+
@@ -1161,6 +1207,7 @@ viz_server <- function(input, output, session, app_data, input_dir) {
     
     create_specific_sankey_plot <- reactive({
       req(spec_rotation_data())
+      req(crop_colors())
       
       # make basic transition graph
       specific <- ggplot(spec_rotation_data()[[1]], aes(x = year, y = Area,
@@ -1180,7 +1227,7 @@ viz_server <- function(input, output, session, app_data, input_dir) {
               plot.background = element_rect(fill = "#1f1b1b", color = NA),
               legend.box.background = element_rect(fill = "#1f1b1b", color = NA))+
         geom_text(stat = "stratum", size = 4, check_overlap=T) +
-        scale_fill_manual(name = "Crops", values = crop_color_mapping) +
+        scale_fill_manual(name = "Crops", values = crop_colors()) +
         ylab("Area [km²]")+  xlab("")+ 
         scale_x_continuous(breaks = unique(spec_rotation_data()[[1]]$year))+
         geom_flow(show.legend = F)
@@ -1216,6 +1263,7 @@ viz_server <- function(input, output, session, app_data, input_dir) {
     
     create_district_sankey_plot <- reactive({
       req(district_rotation_data())
+      req(crop_colors())
 
       # make basic transition graph
       specific <- ggplot(district_rotation_data()[[1]], aes(x = year, y = Area,
@@ -1235,7 +1283,7 @@ viz_server <- function(input, output, session, app_data, input_dir) {
               plot.background = element_rect(fill = "#1f1b1b", color = NA),
               legend.box.background = element_rect(fill = "#1f1b1b", color = NA))+
         geom_text(stat = "stratum", size = 4, check_overlap=T) +
-        scale_fill_manual(name = "Crops", values = crop_color_mapping) +
+        scale_fill_manual(name = "Crops", values = crop_colors()) +
         ylab("Area [km²]")+  xlab("")+ 
         scale_x_continuous(breaks = unique(district_rotation_data()[[1]]$year))+
         geom_flow(show.legend = F)
@@ -1270,7 +1318,7 @@ viz_server <- function(input, output, session, app_data, input_dir) {
     
     create_basin_sankey_plot <- reactive({
       req(basin_rotation_data())
-      
+      req(crop_colors())
 
       # make basic transition graph
       specific <- ggplot(basin_rotation_data()[[1]], aes(x = year, y = Area,
@@ -1290,7 +1338,7 @@ viz_server <- function(input, output, session, app_data, input_dir) {
               plot.background = element_rect(fill = "#1f1b1b", color = NA),
               legend.box.background = element_rect(fill = "#1f1b1b", color = NA))+
         geom_text(stat = "stratum", size = 4, check_overlap=T) +
-        scale_fill_manual(name = "Crops", values = crop_color_mapping) +
+        scale_fill_manual(name = "Crops", values = crop_colors()) +
         ylab("Area [km²]")+  xlab("")+ 
         scale_x_continuous(breaks = unique(basin_rotation_data()[[1]]$year))+
         geom_flow(show.legend = F)
@@ -1328,9 +1376,10 @@ viz_server <- function(input, output, session, app_data, input_dir) {
     output$table <- renderDT({
       Sys.sleep(1.5)
       # coloring
-      crop_color_mapping_df <- as.data.frame(crop_color_mapping)
-      crop_color_mapping_df$crop <- names(crop_color_mapping)
+      crop_color_mapping_df <- as.data.frame(crop_colors())
+      crop_color_mapping_df$crop <- names(crop_colors())
       crop_color_mapping_df <- crop_color_mapping_df[complete.cases(crop_color_mapping_df),]
+      names(crop_color_mapping_df) <- c("color", "crop")
       
       All_rot_clean <- transform_rotation_summary(
         All_rot_big = CropRotViz_intersection,
@@ -1355,9 +1404,9 @@ viz_server <- function(input, output, session, app_data, input_dir) {
         purrr::reduce(years, 
                       .init = ., 
                       ~ .x %>%
-                        formatStyle(paste0('Crop_', .y),
+                        formatStyle(paste0('Name_', .y),
                                     backgroundColor = styleEqual(crop_color_mapping_df$crop, 
-                                                                 crop_color_mapping_df$crop_color_mapping))) %>%
+                                                                 crop_color_mapping_df$color))) %>%
         formatStyle('area_km2', color = "black",
                     backgroundColor = "lightgrey")
       
@@ -1369,9 +1418,10 @@ viz_server <- function(input, output, session, app_data, input_dir) {
     output$table_spec <- renderDT({
       Sys.sleep(1.5)
       # coloring
-      crop_color_mapping_df <- as.data.frame(crop_color_mapping)
-      crop_color_mapping_df$crop <- names(crop_color_mapping)
+      crop_color_mapping_df <- as.data.frame(crop_colors())
+      crop_color_mapping_df$crop <- names(crop_colors())
       crop_color_mapping_df <- crop_color_mapping_df[complete.cases(crop_color_mapping_df),]
+      names(crop_color_mapping_df) <- c("color", "crop")
       
       All_rot_clean <- transform_rotation_summary(
         All_rot_big = CropRotViz_intersection,
@@ -1397,9 +1447,9 @@ viz_server <- function(input, output, session, app_data, input_dir) {
         purrr::reduce(years, 
                       .init = ., 
                       ~ .x %>%
-                        formatStyle(paste0('Crop_', .y),
+                        formatStyle(paste0('Name_', .y),
                                     backgroundColor = styleEqual(crop_color_mapping_df$crop, 
-                                                                 crop_color_mapping_df$crop_color_mapping))) %>%
+                                                                 crop_color_mapping_df$color))) %>%
         formatStyle('area_km2', color = "black",
                     backgroundColor = "lightgrey")
       
@@ -1408,50 +1458,91 @@ viz_server <- function(input, output, session, app_data, input_dir) {
     #--------------------------------------------------------------------------------------------
     observe({
       req(data_loaded())
-      output$sankey_plotly <- renderPlotly({
-        Sys.sleep(1.5)
+      req(rotation_data())
+      
+      if (any(grepl("Aggregated_", names(rotation_data())))) {
         
-        # crop_color_mapping_df <- as.data.frame(crop_color_mapping)
-        # crop_color_mapping_df$crop <- names(crop_color_mapping)
-        # crop_color_mapping_df <- crop_color_mapping_df[complete.cases(crop_color_mapping_df),]
-        # 
-        # # Order the DataFrame
-        # ordered_crop_color_mapping_df <- crop_color_mapping_df[match(unique(all_wrap_number_count_small$Aggregated_2023), crop_color_mapping_df$crop), ]
-        # 
-        # Calculate number of unique items (crops + groups)
-        n_items <- length(sankey_data$node$label)
-
-        # Calculate height based on number of items
-        # Assuming we want roughly 100px per item, with some minimum height
-        plot_height <- max(800, n_items * 15)  
-        
-        plotly <- plot_ly(
-          type = "sankey",
-          orientation = "h",
-          node = sankey_data$node,
-          link = sankey_data$link
-        ) %>%
-          layout(
-            title = "Crop Code Aggregation Flow",
-            font = list(size = 10),
-            xaxis = list(showgrid = FALSE, zeroline = FALSE),
-            yaxis = list(showgrid = FALSE, zeroline = FALSE),
-            hovermode = "x",
-            width = NULL,
-            height = plot_height
-          )
-        
-        # Display the Sankey chart
-        plotly %>%
-          config(
-            toImageButtonOptions = list(
-              format = "png",
-              filename = "reorganization",
-              width = 1000,
-              height = 1450
+        output$sankey_plotly <- renderPlotly({
+          Sys.sleep(1.5)
+          
+          # Calculate number of unique items (crops + groups)
+          n_items <- length(sankey_data$node$label)
+  
+          # Calculate height based on number of items
+          # Assuming we want roughly 100px per item, with some minimum height
+          plot_height <- max(800, n_items * 15)  
+          
+          plotly <- plot_ly(
+            type = "sankey",
+            orientation = "h",
+            node = sankey_data$node,
+            link = sankey_data$link
+          ) %>%
+            layout(
+              title = "Crop Code Aggregation Flow",
+              font = list(size = 10),
+              xaxis = list(showgrid = FALSE, zeroline = FALSE),
+              yaxis = list(showgrid = FALSE, zeroline = FALSE),
+              hovermode = "x",
+              width = NULL,
+              height = plot_height
             )
-          )
-      })
+          
+          # Display the Sankey chart
+          plotly %>%
+            config(
+              toImageButtonOptions = list(
+                format = "png",
+                filename = "reorganization",
+                width = 1000,
+                height = 1450
+              )
+            )
+        })
+      }else{
+        output$sankey_plotly <- renderPlotly({
+          plot_ly(
+            x = c(0.5),  # Add a dummy point to create a valid trace
+            y = c(0.5),
+            type = "scatter",
+            mode = "markers",
+            marker = list(opacity = 0)  # Make the marker invisible
+          ) %>%
+            layout(
+              xaxis = list(
+                showline = FALSE,
+                showgrid = FALSE,
+                showticklabels = FALSE,
+                zeroline = FALSE,
+                range = c(0, 1)
+              ),
+              yaxis = list(
+                showline = FALSE,
+                showgrid = FALSE,
+                showticklabels = FALSE,
+                zeroline = FALSE,
+                range = c(0, 1)
+              ),
+              annotations = list(
+                x = 0.5,
+                y = 0.5,
+                text = "No Crop Class Aggregated Made",
+                xref = "paper",
+                yref = "paper",
+                showarrow = FALSE,
+                font = list(
+                  size = 20,
+                  color = "White"
+                )
+              ),
+              plot_bgcolor = "rgba(0,0,0,0)",
+              paper_bgcolor = "rgba(0,0,0,0)"
+            ) %>%
+            config(
+              displayModeBar = FALSE  # Hide Plotly mode bar
+            )
+        })
+      }
     })
     
     #--------------------------------------------------------------------------------------------
@@ -1563,7 +1654,7 @@ viz_server <- function(input, output, session, app_data, input_dir) {
         column <- paste0("Aggregated_" , input$year_select)
         colors <- crop_color_mapping
       }else{
-        column <- paste0("Crop_" , input$year_select)
+        column <- paste0("Name_" , input$year_select)
         colors <- replicate(50, generate_hex_color())
         }
       
@@ -1597,7 +1688,7 @@ viz_server <- function(input, output, session, app_data, input_dir) {
         column <- paste0("Aggregated_" , input$year_select)
         colors <- crop_color_mapping
       }else{
-        column <- paste0("Crop_" , input$year_select)
+        column <- paste0("Name_" , input$year_select)
         colors <- replicate(50, generate_hex_color())
       }
       

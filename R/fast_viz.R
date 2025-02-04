@@ -113,28 +113,45 @@ fast_viz_ui <- function(input_dir = NA){
                                imageOutput("secondImage", inline = T)
                              )
                       )
+                    ),
+                    # Horizontal line
+                    tags$hr(style = "border-top: 1px solid white; margin-top: 20px; margin-bottom: 20px;"),
+                    fluidRow(
+                      column(1),
+                      column(7,
+                             h4("Crop Class Aggregation Visualization"))
+                    ),
+                    fluidRow(
+                      column(1),
+                      column(10,
+                             shinycssloaders::withSpinner(
+                               plotlyOutput("sankey_plotly")
+                             )
+                      )
                     )
                   ),
-                tabPanel("Plot Diversity",
-                         titlePanel("Interactive District/River Catchment Crop Diversity Map"),
-                         fluidRow(column(3,
-                                         radioButtons("AreaType", 
-                                                      "Select Map Type:", inline = TRUE,
-                                                      choices = c("Districts" = "districts",
-                                                                  "Catchment" = "ezg"))),
-                                  column(5,
-                                         h4(paste0("The Structural Diversity is defined by the number of transitions and unique crops over the period ", 
-                                                   year_span, 
-                                                   ". The map shows the area weighted mean value per area."))
-                                         )),
-                         fluidRow(column(1),
-                                  column(10,
-                                        leafletOutput("diversity", height = "650px")
-                                        )),
-                         
-                ),
-                # Custom footer
+                if (!is.na(diversity_data)) {
+                  tabPanel("Plot Diversity",
+                           titlePanel("Interactive District/River Catchment Crop Diversity Map"),
+                           fluidRow(column(3,
+                                           radioButtons("AreaType", 
+                                                        "Select Map Type:", inline = TRUE,
+                                                        choices = c("Districts" = "districts",
+                                                                    "Catchment" = "ezg"))),
+                                    column(5,
+                                           h4(paste0("The Structural Diversity is defined by the number of transitions and unique crops over the period ", 
+                                                     year_span, 
+                                                     ". The map shows the area weighted mean value per area."))
+                                           )),
+                           fluidRow(column(1),
+                                    column(10,
+                                          leafletOutput("diversity", height = "650px")
+                                          )),
+                           
+                  )
+                },
                 
+                # Custom footer
                 tags$footer(
                   style = "position: fixed; 
                            bottom: 0; 
@@ -303,6 +320,7 @@ fast_viz_server <- function(input, output, session, app_data, input_dir) {
     shinyalert(text_1, text_2, type = "info")
   })
   
+  #--------------------------------------------------------------------------------------------
   # Render dynamic UI based on whether data is loaded
   output$fast_dynamic_ui <- renderUI({
     if (!data_loaded() & is.na(input_dir)) {
@@ -362,6 +380,7 @@ fast_viz_server <- function(input, output, session, app_data, input_dir) {
     }
   })
   
+  #--------------------------------------------------------------------------------------------
   # Handle file upload
   observeEvent(input$file, {
     req(input$file)
@@ -408,6 +427,7 @@ fast_viz_server <- function(input, output, session, app_data, input_dir) {
     }
   })
   
+  #--------------------------------------------------------------------------------------------
   # If data is loaded, run the main app server logic
   observe({
     req(data_loaded())
@@ -445,6 +465,12 @@ fast_viz_server <- function(input, output, session, app_data, input_dir) {
       data <- spatial_data()
       data <- st_transform(data, crs = "EPSG:4326")
       names(data) <- c("name", "geometry")
+      
+      # Get existing image files
+      image_files <- gsub("\\.png$", "", list.files(paste0(input_dir, "/images"), pattern = "\\.png$"))
+      
+      data <- data[sapply(data$name, function(x) any(grepl(gsub("/", "_", x), gsub("/", "_", image_files)))), ]
+      
       data$id <- 1:nrow(data)
       
       leaflet() %>%
@@ -477,6 +503,7 @@ fast_viz_server <- function(input, output, session, app_data, input_dir) {
                 zoom = 7)
     })
     
+    #--------------------------------------------------------------------------------------------
     # Handle clicks on the map
     observeEvent(input$map_shape_click, {
       click <- input$map_shape_click
@@ -507,6 +534,7 @@ fast_viz_server <- function(input, output, session, app_data, input_dir) {
       }
     })
     
+    #--------------------------------------------------------------------------------------------
     # Render first image
     output$firstImage <- renderImage({
       req(firstSelection())
@@ -544,6 +572,99 @@ fast_viz_server <- function(input, output, session, app_data, input_dir) {
       req(secondSelection())
       paste("Data visualization for", secondSelection())
     })
+    
+    
+    
+    #--------------------------------------------------------------------------------------------
+    observe({
+      req(data_loaded())
+      
+      if (any(grepl("Aggregated_", names(district_CropRotViz_intersection[[1]])))) {
+        
+        output$sankey_plotly <- renderPlotly({
+          Sys.sleep(1.5)
+          
+          # Calculate number of unique items (crops + groups)
+          n_items <- length(sankey_data$node$label)
+          
+          # Calculate height based on number of items
+          # Assuming we want roughly 100px per item, with some minimum height
+          plot_height <- max(800, n_items * 15)  
+          
+          plotly <- plot_ly(
+            type = "sankey",
+            orientation = "h",
+            node = sankey_data$node,
+            link = sankey_data$link
+          ) %>%
+            layout(
+              title = "Crop Code Aggregation Flow",
+              font = list(size = 10),
+              xaxis = list(showgrid = FALSE, zeroline = FALSE),
+              yaxis = list(showgrid = FALSE, zeroline = FALSE),
+              hovermode = "x",
+              width = NULL,
+              height = plot_height
+            )
+          
+          # Display the Sankey chart
+          plotly %>%
+            config(
+              toImageButtonOptions = list(
+                format = "png",
+                filename = "reorganization",
+                width = 1000,
+                height = 1450
+              )
+            )
+        })
+      }else{
+        output$sankey_plotly <- renderPlotly({
+          plot_ly(
+            x = c(0.5),  # Add a dummy point to create a valid trace
+            y = c(0.5),
+            type = "scatter",
+            mode = "markers",
+            marker = list(opacity = 0)  # Make the marker invisible
+          ) %>%
+            layout(
+              xaxis = list(
+                showline = FALSE,
+                showgrid = FALSE,
+                showticklabels = FALSE,
+                zeroline = FALSE,
+                range = c(0, 1)
+              ),
+              yaxis = list(
+                showline = FALSE,
+                showgrid = FALSE,
+                showticklabels = FALSE,
+                zeroline = FALSE,
+                range = c(0, 1)
+              ),
+              annotations = list(
+                x = 0.5,
+                y = 0.5,
+                text = "No Crop Class Aggregated Made",
+                xref = "paper",
+                yref = "paper",
+                showarrow = FALSE,
+                font = list(
+                  size = 20,
+                  color = "White"
+                )
+              ),
+              plot_bgcolor = "rgba(0,0,0,0)",
+              paper_bgcolor = "rgba(0,0,0,0)"
+            ) %>%
+            config(
+              displayModeBar = FALSE  # Hide Plotly mode bar
+            )
+        })
+      }
+    })
+    
+    
     
     # plot diversity maps
     output$diversity <- renderLeaflet(
