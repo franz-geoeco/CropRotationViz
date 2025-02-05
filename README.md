@@ -13,7 +13,13 @@
 
 ## Overview
 
-CropRotationViz is an R package providing interactive Shiny applications for processing, analyzing and visualizing crop rotation sequences from agricultural field data. It offers tools for processing field geometries, analyzing crop rotations across multiple years, and creating interactive visualizations.
+CropRotationViz is a comprehensive R package that provides interactive Shiny applications for analyzing and visualizing crop rotation patterns from multi-year agricultural field data. The package integrates spatial data processing, statistical analysis, and dynamic visualization tools to help researchers and practitioners understand temporal patterns in agricultural land use.
+The package consists of three main components:
+
+- A processing application for preparing and intersecting field data with user customisable settings
+- A full visualization application for detailed analysis
+- A fast visualization application for quick insights and area comparison
+
 
 <div align="center">
   <img src="images/example.png" alt="Descriptive Alt Text" width="100%">
@@ -116,12 +122,14 @@ If you do not have field data at hand or just want to test the functionality of 
    - Select the appropriate spatial file (SHP, GeoJSON, FlatGeobuf, GeoPackage, or SQLite)
    - Choose the column containing crop codes or names
    - Assign the correct year to each file
-
-3. **Process Data**
+3. **Select Settings**
    - Select processing options:
      - NC codes or crop names and years (if you didn't provide it)
      - Complete or fast intersection
-     - Aggregation preferences
+     - Select if you want to enable a fast visualization mode (run_fast_visualization())
+   - Customize the crop class aggregation (optional)
+
+3. **Process Data**
    - Choose output directory (if you didn't provide it in the start function) and format
    - Click "Process Files" to start analysis
 
@@ -156,7 +164,9 @@ If you do not have field data at hand or just want to test the functionality of 
 - Spatial files containing field boundaries
 - Crop type information (NC codes or crop names)
 - Minimum of 2 years of data
+- Valid geometries
 - Supported formats: SHP, GeoJSON, FlatGeobuf, GeoPackage, SQLite
+
 
 ### Input Data Structure
 Your input data should contain at minimum the following attributes for each field:
@@ -174,13 +184,19 @@ Where:
 - CROP_NAME: Text name of the crop
 - geometry: Spatial geometry of the field (POLYGON or MULTIPOLYGON)
 
-## Example Data
 
-The package includes example data that can be accessed:
+
+## Test Data
+
+The package includes a function for creating random test data:
 
 ```r
-# Load example data
-data("Input_App_data", package = "CropRotationViz")
+# create 100 test polygons from 2020-2023
+CropRotationViz::dummy_field_creator(
+  output_dir = "path/to/output",
+  field_count = 100,
+  years = 2020:2023
+)
 ```
 
 ## Dependencies
