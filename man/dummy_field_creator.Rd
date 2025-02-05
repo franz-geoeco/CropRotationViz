@@ -9,8 +9,8 @@ dummy_field_creator(
   base_location = c(2.3, 49.2),
   field_count = 100,
   years = 2020:2023,
-  min_field_size = 3e-04,
-  max_field_size = 5e-04
+  min_field_size = 0.003,
+  max_field_size = 0.005
 )
 }
 \arguments{

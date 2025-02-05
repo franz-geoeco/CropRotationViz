@@ -50,7 +50,7 @@ maps <- diversity_mapping(
 # Create maps for both districts and river basins
 maps <- diversity_mapping(
   input = crop_data,
-  agg_cols = c("crop_2020", "crop_2021", "crop_2022"),
+  agg_cols = c("Name_2020", "Name_2021", "Name_2022"),
   districts = district_polygons,
   EZGs = river_basin_polygons
 )

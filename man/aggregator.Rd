@@ -4,7 +4,7 @@
 \alias{aggregator}
 \title{Aggregate Field Data}
 \usage{
-aggregator(intersected, years, crop_codes, display_names)
+aggregator(intersected, years, crop_codes)
 }
 \arguments{
 \item{intersected}{sf object containing intersected fields}

@@ -13,7 +13,7 @@ create_crop_rotation_sankey(
   width = 14,
   height = 10,
   resolution = 200,
-  color = NA
+  color = NULL
 )
 }
 \arguments{
