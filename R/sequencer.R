@@ -783,7 +783,7 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
       showConfirmButton = TRUE,
       showCancelButton = FALSE,
       confirmButtonText = "Let's Begin!",
-      confirmButtonCol = "#3085d6",
+      confirmButtonCol = "#5d9bd9",
       timer = 0,
       imageUrl = "",
       animation = TRUE
@@ -1793,7 +1793,7 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
         writeLines("  year = {2024},", file_conn)
         writeLines("  publisher = {GitHub},", file_conn)
         writeLines("  journal = {GitHub repository},", file_conn)
-        writeLines("  url = {https://github.com/franzschulze/CropRotationViz}", file_conn)
+        writeLines("  url = {https://github.com/franz-geoeco/CropRotationViz}", file_conn)
         writeLines("}", file_conn)
         
         close(file_conn)

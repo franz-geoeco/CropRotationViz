@@ -501,7 +501,7 @@ viz_ui <- function(input_dir = NA){
                     p(
                       tags$span("Author: "),  # Using tags$span for text
                       tags$a(
-                        href = "https://github.com/franzschulze/CropRotationViz", 
+                        href = "https://github.com/franz-geoeco/CropRotationViz", 
                         "Franz Schulze",
                         style = "color: #5d9bd9; text-decoration: underline;"
                       ),
@@ -872,7 +872,7 @@ viz_server <- function(input, output, session, app_data, input_dir) {
         text_1 <- "Plot Sequence per Area"
         text_2 <- "Here you can create district specific rotation pattern plots."
       }
-      shinyalert(text_1, text_2, type = "info")
+      shinyalert(text_1, text_2, type = "info", confirmButtonCol = "#5d9bd9")
     })
     
     #--------------------------------------------------------------------------------------------

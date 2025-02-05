@@ -168,7 +168,7 @@ fast_viz_ui <- function(input_dir = NA){
                     p(
                       tags$span("Author: "),  # Using tags$span for text
                       tags$a(
-                        href = "https://github.com/franzschulze/CropRotationViz", 
+                        href = "https://github.com/franz-geoeco/CropRotationViz", 
                         "Franz Schulze",
                         style = "color: #5d9bd9; text-decoration: underline;"
                       ),
