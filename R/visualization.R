@@ -438,7 +438,7 @@ viz_ui <- function(input_dir = NA){
                          # Horizontal line
                          tags$hr(style = "border-top: 1px solid white; margin-top: 20px; margin-bottom: 20px;"),
                          fluidRow(
-                           column(2,
+                           column(3,
                                   sliderInput(
                                    "year_select",
                                    "Select Year",
@@ -447,9 +447,22 @@ viz_ui <- function(input_dir = NA){
                                    value = 2008,
                                    step = 1,
                                    sep = "",
-                                   ticks = F
+                                   ticks = T
+                                 ),
+                                 conditionalPanel(
+                                   condition = "input.district_or_ezg != 'River Basin'",
+                                   shinycssloaders::withSpinner(
+                                     plotlyOutput("district_donut_plot")  # Adjust height as needed
+                                   )
+                                 ),
+                                 conditionalPanel(
+                                   condition = "input.district_or_ezg == 'River Basin'",
+                                   shinycssloaders::withSpinner(
+                                     plotlyOutput("basin_donut_plot")  # Adjust height as needed
+                                   )
                                  )
                                  ),
+                           br(), br(), br(), br(), br(),
                            conditionalPanel(
                              condition = "input.district_or_ezg != 'River Basin'",
                              column(9,
@@ -1460,8 +1473,7 @@ viz_server <- function(input, output, session, app_data, input_dir) {
       req(data_loaded())
       req(rotation_data())
       
-      if (any(grepl("Aggregated_", names(rotation_data())))) {
-        
+      if (any(grepl("Aggregated_", names(rotation_data()[[2]])))) {
         output$sankey_plotly <- renderPlotly({
           Sys.sleep(1.5)
           
@@ -1652,7 +1664,7 @@ viz_server <- function(input, output, session, app_data, input_dir) {
       data <- district_rotation_data()[[2]]
       if (any(grepl("Aggregated_", names(data)))) {
         column <- paste0("Aggregated_" , input$year_select)
-        colors <- crop_color_mapping
+        colors <- crop_colors()
       }else{
         column <- paste0("Name_" , input$year_select)
         colors <- replicate(50, generate_hex_color())
@@ -1680,13 +1692,15 @@ viz_server <- function(input, output, session, app_data, input_dir) {
         scale_x_continuous(labels = scales::comma)
     })
     
+    
+    
     #--------------------------------------------------------------------------------------------
     
     output$basin_ridges <- renderPlot({
-      data <- district_rotation_data()[[2]]
+      data <- basin_rotation_data()[[2]]
       if (any(grepl("Aggregated_", names(data)))) {
         column <- paste0("Aggregated_" , input$year_select)
-        colors <- crop_color_mapping
+        colors <- crop_colors()
       }else{
         column <- paste0("Name_" , input$year_select)
         colors <- replicate(50, generate_hex_color())
@@ -1717,6 +1731,40 @@ viz_server <- function(input, output, session, app_data, input_dir) {
     #--------------------------------------------------------------------------------------------
     
     
+    output$district_donut_plot <- renderPlotly({
+      data <- district_rotation_data()[[2]]
+      
+      if (any(grepl("Aggregated_", names(data)))) {
+        prefix <- "Aggregated_"
+      }else{
+        prefix <- "Name_"
+      }    
+      
+      donut_plot <- create_multi_year_donut(data, 
+                                            year_columns = paste0(prefix, years),
+                                            title = paste("Crop Distribution", min(years), "-", max(years), "in", input$District_sel),
+                                            highlight_year = paste0(prefix, input$year_select),
+                                            colors = crop_colors()
+      )
+    })
+    
+    output$basin_donut_plot <- renderPlotly({
+      data <- basin_rotation_data()[[2]]
+      View(data)
+      if (any(grepl("Aggregated_", names(data)))) {
+        prefix <- "Aggregated_"
+      }else{
+        prefix <- "Name_"
+      }    
+      
+      donut_plot <- create_multi_year_donut(data, 
+                                            year_columns = paste0(prefix, years),
+                                            title = paste("Crop Distribution", min(years), "-", max(years), "in", input$EZG_sel),
+                                            highlight_year = paste0(prefix, input$year_select),
+                                            colors = crop_colors()
+      )
+      
+    })
     
   })
 }

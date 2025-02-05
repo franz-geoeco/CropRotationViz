@@ -1,3 +1,135 @@
+#' Filter Crop Classification Based on Available Codes
+#' 
+#' @description 
+#' Takes a list of initial crop classifications and filters them based on the codes 
+#' actually present in the processed spatial files. This ensures that only relevant
+#' crop classes are maintained in the classification system.
+#' 
+#' @param initial_classes List of character vectors where each vector contains crop names
+#'   belonging to a specific classification category
+#' @param processed_files List of processed spatial files, where each file contains:
+#'   \itemize{
+#'     \item sf_object: Simple features object containing the spatial data
+#'     \item selected_column: Character string indicating the column containing crop codes
+#'   }
+#' @param codierung_all Data frame mapping between numeric crop codes (NC) and clear text
+#'   names (Klarschrift)
+#' 
+#' @return List of filtered classification categories containing only crop names that
+#'   exist in the processed files. Empty categories are removed.
+#' 
+#' @details 
+#' The function performs several steps:
+#' 1. Extracts all unique crop codes from the processed spatial files
+#' 2. For each classification category:
+#'    - Converts crop names to their corresponding numeric codes
+#'    - Keeps only codes that exist in the processed files
+#'    - Converts filtered codes back to crop names
+#' 3. Removes any empty classification categories
+#' 
+#' @examples
+#' \dontrun{
+#' # Example initial classes
+#' initial_classes <- list(
+#'   cereals = c("winter wheat", "winter barley", "rye"),
+#'   oilseeds = c("rapeseed", "sunflower")
+#' )
+#' 
+#' # Filter based on available data
+#' filtered_classes <- filter_initial_classes(
+#'   initial_classes = initial_classes,
+#'   processed_files = my_processed_files,
+#'   codierung_all = crop_codes_df
+#' )
+#' }
+#' 
+#' @importFrom stats complete.cases
+#' @keywords internal
+filter_initial_classes <- function(initial_classes, processed_files, codierung_all) {
+  # Helper function to get codes from names
+  get_codes <- function(names, codierung_all) {
+    codes <- codierung_all$NC[match(names, codierung_all$Klarschrift)]
+    return(codes[!is.na(codes)])
+  }
+  
+  # Get all unique codes from the processed files
+  unique_file_codes <- unique(unlist(lapply(processed_files, function(file) {
+    if (!is.null(file)) {
+      col_data <- file$sf_object[[file$selected_column]]
+      if (is.character(col_data)) {
+        col_data <- as.numeric(col_data)
+      }
+      return(unique(col_data))
+    }
+    return(NULL)
+  })))
+  
+  unique_file_codes <- unique_file_codes[!is.na(unique_file_codes)]
+  
+  # Filter each class
+  filtered_classes <- lapply(initial_classes, function(class_names) {
+    class_codes <- get_codes(class_names, codierung_all)
+    existing_codes <- class_codes[class_codes %in% unique_file_codes]
+    existing_names <- codierung_all$Klarschrift[match(existing_codes, codierung_all$NC)]
+    return(existing_names[!is.na(existing_names)])
+  })
+  
+  # Remove empty classes
+  filtered_classes <- filtered_classes[sapply(filtered_classes, length) > 0]
+  return(filtered_classes)
+}
+
+#-------------------------------------------------------------------------------------------
+
+#' Extract Unique Crop Names from Spatial Files
+#' 
+#' @description 
+#' Extracts all unique crop names from a collection of processed spatial files by 
+#' converting numeric codes to their corresponding clear text names.
+#' 
+#' @param processed_files List of processed spatial files, where each file contains:
+#'   \itemize{
+#'     \item sf_object: Simple features object containing the spatial data
+#'     \item selected_column: Character string indicating the column containing crop codes
+#'   }
+#' @param codierung_all Data frame mapping between numeric crop codes (NC) and clear text
+#'   names (Klarschrift)
+#' 
+#' @return Character vector of unique crop names present in the processed files, with
+#'   NA values and invalid codes removed.
+#' 
+#' @examples
+#' \dontrun{
+#' # Get all unique crops from processed files
+#' unique_crops <- get_all_crops(
+#'   processed_files = my_processed_files,
+#'   codierung_all = crop_codes_df
+#' )
+#' }
+#' 
+#' @keywords internal
+get_all_crops <- function(processed_files, codierung_all) {
+  # Get all unique codes from files
+  all_codes <- unique(unlist(lapply(processed_files, function(file) {
+    if (!is.null(file)) {
+      col_data <- file$sf_object[[file$selected_column]]
+      if (is.character(col_data)) {
+        col_data <- as.numeric(col_data)
+      }
+      return(unique(col_data))
+    }
+    return(NULL)
+  })))
+  
+  all_codes <- all_codes[!is.na(all_codes)]
+  
+  # Convert codes to names
+  crop_names <- codierung_all$Klarschrift[match(all_codes, codierung_all$NC)]
+  return(crop_names[!is.na(crop_names)])
+}
+
+#-------------------------------------------------------------------------------------------
+
 #' Add Names to Fields
 #' 
 #' @param fields_list List of field data
@@ -38,6 +170,8 @@ add_names <- function(fields_list, codierung_all, column){
   return(fields_list)
 }
 
+#-------------------------------------------------------------------------------------------
+
 #' Extract Aggregation Status from Processing Summary
 #' 
 #' @param text Character string containing the processing summary text
@@ -65,6 +199,7 @@ extract_aggregation <- function(text) {
   return(aggregation)
 }
 
+#-------------------------------------------------------------------------------------------
 
 #' Clean Thin Polygons
 #' 
@@ -87,6 +222,8 @@ clean_thin_polygons <- function(sf_data, min_width = 1) {
   
   return(cleaned)
 }
+
+#-------------------------------------------------------------------------------------------
 
 #' Group Overlapping Polygons
 #' 
@@ -129,6 +266,8 @@ group_overlapping_polygons <- function(polygons_sf) {
   polygons_sf$group_id <- group_numbers
   return(polygons_sf)
 }
+
+#-------------------------------------------------------------------------------------------
 
 #' Check Spatial Intersections
 #' 
@@ -180,8 +319,8 @@ intersecting_check_spatial <- function(input_list, intersection) {
       
       counter2 <- 3
       
-      intersection_subset <- st_crop(intersection, tile)
-      
+      intersection_subset <- sf::st_crop(intersection, tile)
+
       for(i in 1:length(input_list)){
         input <- input_list[[i]]
         
@@ -193,7 +332,7 @@ intersecting_check_spatial <- function(input_list, intersection) {
           tryCatch({
             erase_result <- sf::st_make_valid(ms_erase(input_subset, intersection_subset))
             erase_result <- clean_thin_polygons(erase_result, 2)
-            
+
             if(!is.null(erase_result) && nrow(erase_result) > 0) {
               if(i == 1){
                 df_missing <- intersection[1:nrow(erase_result),]
@@ -202,7 +341,7 @@ intersecting_check_spatial <- function(input_list, intersection) {
                 df_missing$geometry <- erase_result$geometry
                 
                 results_list[[counter]] <- df_missing
-                
+  
                 # add an intersecting group id 
                 results_list[[counter]] <- results_list[[counter]]%>%
                   group_overlapping_polygons()%>% # add intersecting id 
@@ -216,7 +355,7 @@ intersecting_check_spatial <- function(input_list, intersection) {
                 
               }else{
                 df_missing <- intersection[1:nrow(erase_result),]
-                df_missing[,-c((counter2),(+counter2+1), ncol(df_missing))] <- "Not named"
+                df_missing[,-c((counter2),(counter2+1), ncol(df_missing))] <- "Not named"
                 df_missing[,c((counter2),(counter2+1))] <- st_drop_geometry(erase_result)
                 df_missing$geometry <- erase_result$geometry
                 
@@ -253,6 +392,8 @@ intersecting_check_spatial <- function(input_list, intersection) {
   
   return(erase)
 }
+
+#-------------------------------------------------------------------------------------------
 
 #' Intersect Multiple Field Layers
 #' 
@@ -315,7 +456,8 @@ intersect_fields <- function(fields_list, max_area = 20000 * 1e6) {
           field_clipped <- st_crop(st_make_valid(fields_list[[i]]), tile)
           if (length(field_clipped) > 0) {
             # Perform intersection
-            tile_intersect <- st_intersection(tile_intersect, st_make_valid(field_clipped))
+            tile_intersect <- st_intersection(sf::st_make_valid(tile_intersect),
+                                              sf::st_make_valid(field_clipped))
             
             # Filter valid geometries
             tile_intersect <- tile_intersect %>%
@@ -354,7 +496,7 @@ intersect_fields <- function(fields_list, max_area = 20000 * 1e6) {
     
     # Process normally if area is small enough
     for (i in 2:length(fields_list)) {
-      intersected <- st_intersection(intersected, st_make_valid(fields_list[[i]]))
+      intersected <- st_intersection(sf::st_make_valid(intersected), sf::st_make_valid(fields_list[[i]]))
       
       incProgress(0.0005, detail = paste("intersecting", i, "from", length(fields_list)))
       
@@ -380,6 +522,8 @@ intersect_fields <- function(fields_list, max_area = 20000 * 1e6) {
   message("Intersection process completed!")
   return(intersected)
 }
+
+#-------------------------------------------------------------------------------------------
 
 #' Simple Field Intersection
 #' 
@@ -441,11 +585,13 @@ intersect_fields_simple <- function(fields_list, max_area = 20000 * 1e6) {
         # Process remaining layers
         for (i in 2:length(fields_list)) {
           # Clip current field to tile
-          field_clipped <- st_intersection(st_make_valid(fields_list[[i]]), tile)
+          field_clipped <- st_intersection(sf::st_make_valid(fields_list[[i]]),
+                                           sf::st_make_valid(tile))
           
           if (length(field_clipped) > 0) {
             # Perform intersection
-            tile_intersect <- st_intersection(tile_intersect, st_make_valid(field_clipped))
+            tile_intersect <- st_intersection(sf::st_make_valid(tile_intersect),
+                                              sf::st_make_valid(field_clipped))
             
             # Filter valid geometries
             tile_intersect <- tile_intersect %>%
@@ -487,7 +633,7 @@ intersect_fields_simple <- function(fields_list, max_area = 20000 * 1e6) {
       
       incProgress(0.005, detail = paste("intersecting", i, "from", length(fields_list)))
       
-      intersected <- st_intersection(intersected, st_make_valid(fields_list[[i]]))
+      intersected <- st_intersection(intersected, sf::st_make_valid(fields_list[[i]]))
       
       intersected <- intersected %>%
         filter(st_geometry_type(geometry) %in% c("POLYGON", "MULTIPOLYGON")) %>%
@@ -504,6 +650,8 @@ intersect_fields_simple <- function(fields_list, max_area = 20000 * 1e6) {
   message("Intersection process completed!")
   return(intersected)
 }
+
+#-------------------------------------------------------------------------------------------
 
 #' Intersect Geometries with Administrative Borders
 #' 
@@ -595,6 +743,8 @@ intersect_with_borders <- function(input, level, EZG) {
   return(out_list)
 }
 
+#-------------------------------------------------------------------------------------------
+
 #' Aggregate Field Data
 #' 
 #' @description Aggregates field data by adding classified crop names for each year
@@ -621,6 +771,8 @@ aggregator <- function(intersected, years, crop_codes){
   }
   return(intersected)
 }
+
+#-------------------------------------------------------------------------------------------
 
 #' Create Crop Rotation Sankey Diagram
 #' 
@@ -785,7 +937,89 @@ create_crop_rotation_sankey <- function(data, min_area = 1,
   return(sankey_plot)
 }
 
+#-------------------------------------------------------------------------------------------
+
+#' Create a Multi-Year Donut Chart with Equal-Width Rings
+#'
+#' This function generates a multi-year donut chart where each year is represented as a concentric ring.
+#' All rings have equal width and are spaced evenly. Additionally, one specific year can be highlighted with a different border color.
+#'
+#' @param data A dataframe containing frequency values for each year and crop category.
+#' @param year_columns A vector of column names (as strings) from the `data` dataframe that represent years.
+#' @param title A string representing the title of the chart (default is "Crop Distribution").
+#' @param highlight_year A string specifying which year should be highlighted with a different border color. If NULL, no year is highlighted.
+#'
+#' @return A plotly donut chart with multiple concentric rings representing different years.
+#' @export
+#'
+#' @examples
+#' # Example usage of the function
+#' create_multi_year_donut(data = my_data, 
+#'                         year_columns = c("2018", "2019", "2020", "2021"), 
+#'                         highlight_year = "2020")
+#'
+#' @export
+create_multi_year_donut <- function(data, year_columns, title = "Crop Distribution", highlight_year = NULL, colors) {
+  # Validate number of years
+  if (length(year_columns) > 10) {
+    stop("Maximum of 10 years supported")
+  }
+  
+  # Define constants for equal ring widths and increased gaps
+  ring_width <- 0.1  
+  gap_size <- 0.0003 
+  outer_limit <- 0.9 
+  total_width <- length(year_columns) * (ring_width + gap_size)  # Total space occupied
+  inner_limit <- outer_limit - total_width  # Compute inner boundary
+  
+  # Compute hole sizes ensuring equal ring widths + increased gaps
+  hole_sizes <- seq(inner_limit, outer_limit - (ring_width + gap_size), length.out = length(year_columns))
+  
+  # Create a list to store traces for each year
+  traces <- lapply(seq_along(year_columns), function(i) {
+    year_col <- year_columns[i]
+    
+    # Determine border color based on highlight_year
+    border_color <- if (!is.null(highlight_year) && year_col == highlight_year) "red" else "black"
+    
+    plot_ly(data,
+            labels = as.formula(paste0("~", year_col)),
+            values = ~area/1e6,
+            type = 'pie',
+            name = year_col,
+            hole = hole_sizes[i],  # Apply equal width & gaps
+            domain = list(row = 0, column = 0),
+            marker = list(
+              colors = colors[data[[year_col]]],  # Colors for each category
+              line = list(color = border_color , width = 1)  # Adds thin black borders
+            ),
+            textposition = 'inside',
+            textinfo = ifelse(i == length(year_columns), 'label', 'none'),
+            insidetextfont = list(size = 12),
+            hoverinfo = 'text',
+            hovertemplate = paste(
+              "<b>", year_col, "</b><br>",
+              "Category: %{label}<br>",
+              "Area: %{value:.2f} km²<extra></extra>"  
+            ),
+            showlegend = FALSE)
+  })
+  
+  # Combine all traces
+  subplot(traces, nrows = 1, shareX = TRUE, shareY = TRUE) %>%
+    layout(title = list(
+              text = title,
+              font = list(color = 'white')
+            ),
+           xaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE),
+           yaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE),
+           uniformtext = list(minsize = 12, mode = 'hide'),
+           paper_bgcolor = '#1f1b1b',
+           plot_bgcolor = '#1f1b1b')
+}
+
 ###############################################################################################################################################################################################################################################
+#-------------------------------------------------------------------------------------------
 
 #' Transform Rotation Data
 #' 
@@ -927,6 +1161,8 @@ transform_rotation_data <- function(All_rot_big, distribution_df, input_area_ran
   })
 }
 
+#-------------------------------------------------------------------------------------------
+
 #' Transform Rotation Summary
 #' 
 #' @description Creates a detailed summary of crop rotation patterns including area calculations
@@ -1054,7 +1290,7 @@ transform_rotation_summary <- function(All_rot_big,
     slice_head(n = max_rows)
 }
 
-
+#-------------------------------------------------------------------------------------------
 
 
 #' Process Crop Transitions for Specific Crop Type
@@ -1150,6 +1386,8 @@ process_specific_transitions <- function(data, crop) {
     summarise(value = sum(freq) * 100, .groups = 'drop')
 }
 
+#-------------------------------------------------------------------------------------------
+
 #' Create Dummy Agricultural Fields
 #' 
 #' @description Generate a set of dummy agricultural fields over multiple years in a region of your choice.
@@ -1175,8 +1413,9 @@ dummy_field_creator <- function(output_dir,
                                 base_location = c(2.3, 49.2),
                                 field_count = 100,
                                 years = 2020:2023,
-                                min_field_size = 0.0003,
-                                max_field_size = 0.0005) {
+                                min_field_size = 0.003,  # Increased by factor of 10
+                                max_field_size = 0.005) { # Increased by factor of 10
+  options(warn = -1)
   
   # Input validation
   if (!is.character(output_dir)) {
@@ -1189,14 +1428,39 @@ dummy_field_creator <- function(output_dir,
     stop("field_count must be a positive number")
   }
   
-  # Create irregular field geometries
-  create_irregular_field <- function(base_x, base_y, max_points = 8) {
-    n_points <- sample(5:max_points, 1)
-    angles <- sort(runif(n_points - 1, 0, 2*pi))
-    angles <- c(angles, 2*pi)
+  # Create irregular field geometries with intersection checking
+  create_irregular_field <- function(base_x, base_y, existing_fields = NULL, max_attempts = 10) {
+    for (attempt in 1:max_attempts) {
+      n_points <- sample(5:8, 1)
+      angles <- sort(runif(n_points - 1, 0, 2*pi))
+      angles <- c(angles, 2*pi)
+      
+      distances <- runif(n_points, min_field_size, max_field_size)
+      
+      points <- matrix(
+        c(
+          base_x + cos(angles) * distances,
+          base_y + sin(angles) * distances
+        ),
+        ncol = 2
+      )
+      
+      points <- rbind(points, points[1,])
+      new_field <- st_polygon(list(points))
+      
+      # Check for intersections with existing fields
+      if (is.null(existing_fields) || length(existing_fields) == 0) {
+        return(points)
+      }
+      
+      existing_multi <- st_sfc(existing_fields, crs = 4326)
+      if (!any(st_intersects(st_sfc(new_field, crs = 4326), existing_multi, sparse = FALSE))) {
+        return(points)
+      }
+    }
     
-    distances <- runif(n_points, min_field_size, max_field_size)
-    
+    # If all attempts failed, create a smaller field as fallback
+    distances <- distances * 0.8
     points <- matrix(
       c(
         base_x + cos(angles) * distances,
@@ -1204,21 +1468,20 @@ dummy_field_creator <- function(output_dir,
       ),
       ncol = 2
     )
-    
     points <- rbind(points, points[1,])
     return(points)
   }
   
-  # Generate fields
+  # Generate fields with increased spacing
   fields_list <- list()
   grid_size <- ceiling(sqrt(field_count))
-  spacing_factor <- 0.001
+  spacing_factor <- 0.01  # Increased by factor of 10
   
   for(i in 1:field_count) {
-    base_x <- base_location[1] + (i %% grid_size) * spacing_factor + runif(1, -0.0001, 0.0001)
-    base_y <- base_location[2] + (i %/% grid_size) * spacing_factor + runif(1, -0.0001, 0.0001)
+    base_x <- base_location[1] + (i %% grid_size) * spacing_factor + runif(1, -0.001, 0.001)
+    base_y <- base_location[2] + (i %/% grid_size) * spacing_factor + runif(1, -0.001, 0.001)
     
-    field_points <- create_irregular_field(base_x, base_y)
+    field_points <- create_irregular_field(base_x, base_y, fields_list)
     fields_list[[i]] <- st_polygon(list(field_points))
   }
   
@@ -1253,7 +1516,7 @@ dummy_field_creator <- function(output_dir,
     transformed_data <- st_transform(yearly_data[[i]], 32631)  # UTM zone 31N
     
     # Snap vertices in projected coordinates
-    snapped_data <- st_snap(transformed_data, transformed_data, tolerance = 0.01)  # tolerance in meters
+    snapped_data <- st_snap(transformed_data, transformed_data, tolerance = 0.1)  # Increased tolerance
     
     # Transform back to WGS84
     yearly_data[[i]] <- st_transform(snapped_data, 4326)
@@ -1267,7 +1530,7 @@ dummy_field_creator <- function(output_dir,
   return(yearly_data)
 }
 
-
+#-------------------------------------------------------------------------------------------
 
 #' Create Bivariate Maps for Agricultural Diversity Analysis
 #' 
@@ -1402,6 +1665,7 @@ diversity_mapping <- function(input, agg_cols, districts, EZGs = NA){
   return(Data)
 }
 
+#-------------------------------------------------------------------------------------------
 
 #' Create a Bivariate Choropleth Map for Agricultural Diversity
 #'
@@ -1484,6 +1748,8 @@ diversity_mapper <- function(data, type){
     )
   return(Diversity_Map)
 }
+
+#-------------------------------------------------------------------------------------------
 
 # Function to generate a random hex color
 generate_hex_color <- function() {

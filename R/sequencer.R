@@ -767,7 +767,7 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
   initial_mem <- gc(reset = TRUE)
   
   # global options
-  # options(warn = -1)
+  options(warn = -1)
   sf_use_s2(F)
   
   # Show welcome alert when the app starts
@@ -1099,40 +1099,7 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
   
   
   #----------------------------------------------------------------------------------------------------------
-  # Function to filter initial classes based on codes present in files
-  filter_initial_classes <- function(initial_classes, processed_files, codierung_all) {
-    # Helper function to get codes from names
-    get_codes <- function(names, codierung_all) {
-      codes <- codierung_all$NC[match(names, codierung_all$Klarschrift)]
-      return(codes[!is.na(codes)])
-    }
-    
-    # Get all unique codes from the processed files
-    unique_file_codes <- unique(unlist(lapply(processed_files, function(file) {
-      if (!is.null(file)) {
-        col_data <- file$sf_object[[file$selected_column]]
-        if (is.character(col_data)) {
-          col_data <- as.numeric(col_data)
-        }
-        return(unique(col_data))
-      }
-      return(NULL)
-    })))
-    
-    unique_file_codes <- unique_file_codes[!is.na(unique_file_codes)]
-    
-    # Filter each class
-    filtered_classes <- lapply(initial_classes, function(class_names) {
-      class_codes <- get_codes(class_names, codierung_all)
-      existing_codes <- class_codes[class_codes %in% unique_file_codes]
-      existing_names <- codierung_all$Klarschrift[match(existing_codes, codierung_all$NC)]
-      return(existing_names[!is.na(existing_names)])
-    })
-    
-    # Remove empty classes
-    filtered_classes <- filtered_classes[sapply(filtered_classes, length) > 0]
-    return(filtered_classes)
-  }
+
   
   # Initialize reactive values
   class_state <- reactiveVal(NULL)
@@ -1141,27 +1108,6 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
   
   # Initialize all_unique_crops reactive value to store all crops from files
   all_unique_crops <- reactiveVal(NULL)
-  
-  # Function to get all unique crops from processed files
-  get_all_crops <- function(processed_files, codierung_all) {
-    # Get all unique codes from files
-    all_codes <- unique(unlist(lapply(processed_files, function(file) {
-      if (!is.null(file)) {
-        col_data <- file$sf_object[[file$selected_column]]
-        if (is.character(col_data)) {
-          col_data <- as.numeric(col_data)
-        }
-        return(unique(col_data))
-      }
-      return(NULL)
-    })))
-    
-    all_codes <- all_codes[!is.na(all_codes)]
-    
-    # Convert codes to names
-    crop_names <- codierung_all$Klarschrift[match(all_codes, codierung_all$NC)]
-    return(crop_names[!is.na(crop_names)])
-  }
   
   # Create observer to handle initialization of class_state
   observe({
@@ -1578,7 +1524,7 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
         }else{
           CropRotViz_intersection <- intersect_fields_simple(all_files)
         }
-        
+
         mem_checkpoints$after_intersection <- gc(reset = TRUE)
 
         # make aggregation if needed
