@@ -6,7 +6,6 @@
 # CropRotationViz  🌾 :corn:
 
 <!-- badges: start -->
-[![R-CMD-check](https://github.com/franz-geoeco/CropRotationViz/workflows/R-CMD-check/badge.svg)](https://github.com/franz-geoeco/CropRotationViz/actions)
 [![codecov](https://codecov.io/gh/franz-geoeco/repo/branch/main/graph/badge.svg)](https://codecov.io/gh/franz-geoeco/repo)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 <!-- badges: end -->
