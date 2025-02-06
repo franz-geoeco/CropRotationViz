@@ -13,7 +13,7 @@
 #'     \item selected_column: Character string indicating the column containing crop codes
 #'   }
 #' @param codierung_all Data frame mapping between numeric crop codes (NC) and clear text
-#'   names (Klarschrift)
+#'   names (english_names)
 #' 
 #' @return List of filtered classification categories containing only crop names that
 #'   exist in the processed files. Empty categories are removed.
@@ -48,7 +48,11 @@
 filter_initial_classes <- function(initial_classes, processed_files, codierung_all) {
   # Helper function to get codes from names
   get_codes <- function(names, codierung_all) {
-    codes <- codierung_all$NC[match(names, codierung_all$Klarschrift)]
+    if(input$language == "English"){
+      codes <- codierung_all$NC[match(names, codierung_all$english_names)]
+    }else{
+      codes <- codierung_all$NC[match(names, codierung_all$german_names)]
+    }
     return(codes[!is.na(codes)])
   }
   
@@ -70,7 +74,11 @@ filter_initial_classes <- function(initial_classes, processed_files, codierung_a
   filtered_classes <- lapply(initial_classes, function(class_names) {
     class_codes <- get_codes(class_names, codierung_all)
     existing_codes <- class_codes[class_codes %in% unique_file_codes]
-    existing_names <- codierung_all$Klarschrift[match(existing_codes, codierung_all$NC)]
+    if(input$language == "English"){
+      existing_names <- codierung_all$english_names[match(existing_codes, codierung_all$NC)]
+    }else{
+      existing_names <- codierung_all$german_names[match(existing_codes, codierung_all$NC)]
+    }
     return(existing_names[!is.na(existing_names)])
   })
   
@@ -93,7 +101,7 @@ filter_initial_classes <- function(initial_classes, processed_files, codierung_a
 #'     \item selected_column: Character string indicating the column containing crop codes
 #'   }
 #' @param codierung_all Data frame mapping between numeric crop codes (NC) and clear text
-#'   names (Klarschrift)
+#'   names (english_names)
 #' 
 #' @return Character vector of unique crop names present in the processed files, with
 #'   NA values and invalid codes removed.
@@ -108,24 +116,35 @@ filter_initial_classes <- function(initial_classes, processed_files, codierung_a
 #' }
 #' 
 #' @keywords internal
-get_all_crops <- function(processed_files, codierung_all) {
-  # Get all unique codes from files
-  all_codes <- unique(unlist(lapply(processed_files, function(file) {
+get_all_crops <- function(processed_files, codierung_all, language) {
+  # Get all unique values from files
+  all_values <- unique(unlist(lapply(processed_files, function(file) {
     if (!is.null(file)) {
       col_data <- file$sf_object[[file$selected_column]]
-      if (is.character(col_data)) {
-        col_data <- as.numeric(col_data)
-      }
       return(unique(col_data))
     }
     return(NULL)
   })))
   
-  all_codes <- all_codes[!is.na(all_codes)]
+  all_values <- all_values[!is.na(all_values)]
   
-  # Convert codes to names
-  crop_names <- codierung_all$Klarschrift[match(all_codes, codierung_all$NC)]
-  return(crop_names[!is.na(crop_names)])
+  # Check if we're dealing with codes or names
+  is_numeric <- all(suppressWarnings(!is.na(as.numeric(all_values))))
+  
+  if (is_numeric) {
+    # Convert numeric codes to names
+    all_values <- as.numeric(all_values)
+    if(language == "English"){
+      crop_names <- codierung_all$english_names[match(all_values, codierung_all$NC)]
+    }else{
+      crop_names <- codierung_all$german_names[match(all_values, codierung_all$NC)]
+    }
+    return(crop_names[!is.na(crop_names)])
+  } else {
+    # If we're dealing with names
+    existing_names <- all_values
+    return(existing_names)
+  }
 }
 
 #-------------------------------------------------------------------------------------------
@@ -137,7 +156,7 @@ get_all_crops <- function(processed_files, codierung_all) {
 #' @importFrom sf st_read st_transform
 #' @importFrom dplyr filter mutate select
 #' @export
-add_names <- function(fields_list, codierung_all, column){
+add_names <- function(fields_list, codierung_all, column, language){
   
   if(column == "Code"){
     fields_list <- lapply(fields_list, function(f) {
@@ -152,8 +171,14 @@ add_names <- function(fields_list, codierung_all, column){
       file <- merge(file, codierung_all)
       
       names(file)[names(file) == "NC"] <- paste0("NC_", f$selected_year)
-      names(file)[names(file) == "Klarschrift"] <- paste0("Name_", f$selected_year)
-      
+
+      if(language == "English"){
+        names(file)[names(file) == "english_names"] <- paste0("Name_", f$selected_year)
+        file <- file[, !colnames(file) %in% "german_names"]
+      }else{
+        names(file)[names(file) == "german_names"] <- paste0("Name_", f$selected_year)
+        file <- file[, !colnames(file) %in% "english_names"]
+      } 
       return(file)
     })
   }else{
@@ -755,19 +780,33 @@ intersect_with_borders <- function(input, level, EZG) {
 #' @param display_names names corresponding to the codes
 #' @return sf object with added aggregated columns
 #' @export
-aggregator <- function(intersected, years, crop_codes){
+aggregator <- function(intersected, years, crop_codes, type = "NC"){
   for(year in years) {
     nc_col <- paste0("NC_", year)
     name_col <- paste0("Name_", year)
     agg_col <- paste0("Aggregated_", year)
-  
-    intersected[[agg_col]] <- sapply(intersected[[nc_col]], function(x) {
-      if(x == "Not named") return("Not named")
-      for(class_name in names(crop_codes)) {
-        if(x %in% crop_codes[[class_name]]) return(class_name)
-      }
-      return(NA)
-    })
+    
+    if(type == "NC"){
+      intersected[[agg_col]] <- sapply(intersected[[nc_col]], function(x) {
+        if(x == "Not named") return("Not named")
+        for(class_name in names(crop_codes)) {
+          if(x %in% crop_codes[[class_name]]) return(class_name)
+        }
+        # Debug message for NA
+        print(paste("No aggregation found for NC", x, year))
+        return("Unclassified")
+      })
+    }else{
+      intersected[[agg_col]] <- sapply(intersected[[name_col]], function(x) {
+        if(x == "Not named") return("Not named")
+        for(class_name in names(crop_codes)) {
+          if(x %in% crop_codes[[class_name]]) return(class_name)
+        }
+        # Debug message for NA
+        print(paste("No aggregation found for crop name", x, year))
+        return("Unclassified")
+      })
+    }
   }
   return(intersected)
 }
@@ -972,6 +1011,14 @@ create_multi_year_donut <- function(data, year_columns, title = "Crop Distributi
   total_width <- length(year_columns) * (ring_width + gap_size)  # Total space occupied
   inner_limit <- outer_limit - total_width  # Compute inner boundary
   
+  # Function to lighten colors
+  lighten_color <- function(color) {
+    rgb_vals <- col2rgb(color)
+    # Mix with white (255,255,255) to create lighter version
+    lighter_vals <- rgb_vals + (255 - rgb_vals) * 0.4  # Adjust 0.4 to control lightness
+    rgb(lighter_vals[1], lighter_vals[2], lighter_vals[3], maxColorValue = 255)
+  }
+  
   # Compute hole sizes ensuring equal ring widths + increased gaps
   hole_sizes <- seq(inner_limit, outer_limit - (ring_width + gap_size), length.out = length(year_columns))
   
@@ -979,19 +1026,28 @@ create_multi_year_donut <- function(data, year_columns, title = "Crop Distributi
   traces <- lapply(seq_along(year_columns), function(i) {
     year_col <- year_columns[i]
     
-    # Determine border color based on highlight_year
-    border_color <- if (!is.null(highlight_year) && year_col == highlight_year) "red" else "black"
+    # Adjust colors based on highlight_year
+    year_colors <- if (!is.null(highlight_year)) {
+      if (year_col == highlight_year) {
+        colors[data[[year_col]]]  # Original colors for highlighted year
+      } else {
+        # Lighten colors for non-highlighted years
+        sapply(colors[data[[year_col]]], lighten_color)
+      }
+    } else {
+      colors[data[[year_col]]]  # No highlighting, use original colors
+    }
     
     plot_ly(data,
             labels = as.formula(paste0("~", year_col)),
             values = ~area/1e6,
             type = 'pie',
             name = year_col,
-            hole = hole_sizes[i],  # Apply equal width & gaps
+            hole = hole_sizes[i],
             domain = list(row = 0, column = 0),
             marker = list(
-              colors = colors[data[[year_col]]],  # Colors for each category
-              line = list(color = border_color , width = 1)  # Adds thin black borders
+              colors = year_colors,
+              line = list(color = 'black', width = 1)
             ),
             textposition = 'inside',
             textinfo = ifelse(i == length(year_columns), 'label', 'none'),
@@ -1008,14 +1064,14 @@ create_multi_year_donut <- function(data, year_columns, title = "Crop Distributi
   # Combine all traces
   subplot(traces, nrows = 1, shareX = TRUE, shareY = TRUE) %>%
     layout(title = list(
-              text = title,
-              font = list(color = 'white')
-            ),
-           xaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE),
-           yaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE),
-           uniformtext = list(minsize = 12, mode = 'hide'),
-           paper_bgcolor = '#1f1b1b',
-           plot_bgcolor = '#1f1b1b')
+      text = title,
+      font = list(color = 'white')
+    ),
+    xaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE),
+    yaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE),
+    uniformtext = list(minsize = 12, mode = 'hide'),
+    paper_bgcolor = '#1f1b1b',
+    plot_bgcolor = '#1f1b1b')
 }
 
 ###############################################################################################################################################################################################################################################

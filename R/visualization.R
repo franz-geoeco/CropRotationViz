@@ -64,12 +64,21 @@
 #' 
 #' @export
 viz_ui <- function(input_dir = NA){
+  # Add Bootstrap dependencies
+  shiny::addResourcePath(
+    "shinyBS", 
+    system.file("www", package = "shinyBS")
+  )
+  
   fluidPage(
     Crop_choices <- "",
     District_choices <- "",
     EZG_choices <- "",
     theme = shinytheme("cyborg"),
-    
+    tags$head(
+      tags$link(rel = "stylesheet", type = "text/css", href = "shinyBS/shinyBS.css"),
+      tags$script(src = "shinyBS/shinyBS.js")
+    ),
     tags$style(HTML("
       .dataTables_wrapper .dataTables_length, .dataTables_wrapper .dataTables_filter, .dataTables_wrapper .dataTables_info, .dataTables_wrapper .dataTables_processing,.dataTables_wrapper .dataTables_paginate .paginate_button, .dataTables_wrapper .dataTables_paginate .paginate_button.disabled {
         color: white !important;
@@ -104,7 +113,26 @@ viz_ui <- function(input_dir = NA){
                                                            min = 0, max = 4000,
                                                            value = c(0, 1000))
                            ),
-                           column(1, bsButton("range-info", label = "", icon = icon("info", lib = "font-awesome"), style = "default", size = "extra-small")),
+                           column(1, 
+                                  bsButton("range-info",
+                                              label = "",
+                                              icon = icon("info"),
+                                              style = "default",
+                                              size = "extra-small"
+                                           ),
+                                  bsPopover(
+                                    id = "range-info",
+                                    title = "Sequence Size",
+                                    content ="Here you can select the size of a full sequence to be displayed. Therfore a selection from 100-200 means that a full 7 year sequence has to be between 100 and 200 km².",
+                                    placement = "right",
+                                    trigger = "hover",
+                                    options = list(
+                                      container = 'body',
+                                      html = TRUE,
+                                      delay = list(show = 0, hide = 0) 
+                                    )
+                                  ),
+                                  ),
                            column(2, 
                                   pickerInput(
                                     inputId = "Crops_sec", 
@@ -117,28 +145,24 @@ viz_ui <- function(input_dir = NA){
                                       selectedTextFormat = "count > 3"
                                     ), multiple = TRUE)
                            ),
-                           column(1, bsButton("crops-info", label = "", icon = icon("info", lib = "font-awesome"), style = "default", size = "extra-small")),
+                           column(1, bsButton("crops-info",
+                                              label = "",
+                                              icon = icon("info"),
+                                              style = "default", size = "extra-small"),
+                                     bsPopover(
+                                        id = "crops-info",
+                                        title = "Crops Selection",
+                                        content = "Here you can include or exclude crops from charting if you want to highlight specific crops or disable to dominant wants.",
+                                        placement = "right",
+                                        trigger = "hover",
+                                        options = list(
+                                          container = 'body',
+                                          html = TRUE,
+                                          delay = list(show = 0, hide = 0) 
+                                        )
+                                      ),
+                                  ),
                            column(4, plotOutput("perc_plot", height = 80))
-                         ),
-                         bsPopover(
-                           id = "range-info",
-                           title = "Rotation Size",
-                           content = HTML(paste0(
-                             "Here you can select the size of a full rotation to be displayed. Therfore a selection from 100-200 means that a full 7 year rotation has to be between 100 and 200 km²."
-                           )),
-                           placement = "right",
-                           trigger = "hover",
-                           options = list(container = "body")
-                         ),
-                         bsPopover(
-                           id = "crops-info",
-                           title = "Crops Selection",
-                           content = HTML(paste0(
-                             "Here you can include or exclude crops from charting if you want to highlight specific crops or disable to dominant wants."
-                           )),
-                           placement = "right",
-                           trigger = "hover",
-                           options = list(container = "body")
                          ),
                          fluidRow(
                            column(1),
@@ -163,19 +187,26 @@ viz_ui <- function(input_dir = NA){
                          fluidRow(
                            column(1),
                            column(3,
-                                  h4("Unique Rotations and Size")),
-                           column(1, bsButton("table-info", label = "", icon = icon("info", lib = "font-awesome"), style = "default", size = "extra-small"))
+                                  h4("Unique SequenceS and Sizes")),
+                           column(1, bsButton("table-info",
+                                              label = "",
+                                              icon = icon("info"),
+                                              style = "default", size = "extra-small"),
+                                     bsPopover(
+                                        id = "table-info",
+                                        title = "Table with the Largest Crop Sequence Patterns",
+                                        content = "Here you can see the largest crop sequence pattern in MWP in a 7 year sequence (or selected range). You can search, sort or expand the table as you like.",
+                                        placement = "left",
+                                        trigger = "hover",
+                                        options = list(
+                                          container = 'body',
+                                          html = TRUE,
+                                          delay = list(show = 0, hide = 0) 
+                                        )
+                                      )
+                                  )
                          ),br(),
-                         bsPopover(
-                           id = "table-info",
-                           title = "Table with the Largest Crop Rotation Patterns",
-                           content = HTML(paste0(
-                             "Here you can see the largest crop rotation pattern in MWP in a 7 year rotation (or selected range). You can search, sort or expand the table as you like."
-                           )),
-                           placement = "left",
-                           trigger = "hover",
-                           options = list(container = "body")
-                         ),
+            
                          fluidRow(
                            column(1),
                            column(10,
@@ -209,11 +240,27 @@ viz_ui <- function(input_dir = NA){
                          ),
                          br(),
                          fluidRow(column(2,
-                                         numericRangeInput("Area_range_spec", "Considered Rotation Area Range (km²):",
+                                         numericRangeInput("Area_range_spec", "Sequence Area Range (km²):",
                                                            min = 0, max = 4000,
                                                            value = c(0, 1000))
                          ),
-                         column(1, bsButton("range_spec-info", label = "", icon = icon("info", lib = "font-awesome"), style = "default", size = "extra-small")),
+                         column(1, shinyBS::bsButton("range_spec-info",
+                                            label = "",
+                                            icon = icon("info"),
+                                            style = "default", size = "extra-small"),
+                                shinyBS::bsPopover(
+                                      id = "range_spec-info",
+                                      title = "sequence Size",
+                                      content = "Here you can select the size of a full sequence to be displayed. Therfore a selection from 100-200 means that a full 7 year sequence has to be between 100 and 200 km².",
+                                      placement = "right",
+                                      trigger = "hover",
+                                      options = list(
+                                        container = 'body',
+                                        html = TRUE,
+                                        delay = list(show = 0, hide = 0) 
+                                      )
+                                    )
+                                ),
                          column(2, 
                                 pickerInput(
                                   inputId = "Crop_spec", 
@@ -226,28 +273,24 @@ viz_ui <- function(input_dir = NA){
                                     selectedTextFormat = "count > 3"
                                   ), multiple = F)
                          ),
-                         column(1, bsButton("crops_spec-info", label = "", icon = icon("info", lib = "font-awesome"), style = "default", size = "extra-small")),
+                         column(1, shinyBS::bsButton("crops_spec-info",
+                                            label = "",
+                                            icon = icon("info"),
+                                            style = "default", size = "extra-small"),
+                                shinyBS::bsPopover(
+                                      id = "crops_spec-info",
+                                      title = "Crop Selection",
+                                      content = "Here you can choose a crop for charting. The crop has to be in one of the seven years (in the sequence)",
+                                      placement = "right",
+                                      trigger = "hover",
+                                      options = list(
+                                        container = 'body',
+                                        html = TRUE,
+                                        delay = list(show = 0, hide = 0) 
+                                      )
+                                    )
+                                ),
                          column(4, plotOutput("perc_spec_plot", height = 80))
-                         ),
-                         bsPopover(
-                           id = "range_spec-info",
-                           title = "Rotation Size",
-                           content = HTML(paste0(
-                             "Here you can select the size of a full sequence to be displayed. Therfore a selection from 100-200 means that a full 7 year sequence has to be between 100 and 200 km²."
-                           )),
-                           placement = "right",
-                           trigger = "hover",
-                           options = list(container = "body")
-                         ),
-                         bsPopover(
-                           id = "crops_spec-info",
-                           title = "Crop Selection",
-                           content = HTML(paste0(
-                             "Here you can choose a crop for charting. The crop has to be in one of the seven years (in the sequence)"
-                           )),
-                           placement = "right",
-                           trigger = "hover",
-                           options = list(container = "body")
                          ),
                          fluidRow(
                            column(1),
@@ -272,21 +315,27 @@ viz_ui <- function(input_dir = NA){
                          fluidRow(
                            column(1),
                            column(2,
-                                  h4("Unique Rotations and Size")),
-                           column(1, bsButton("table_spec-info", label = "", icon = icon("info", lib = "font-awesome"), style = "default", size = "extra-small"))
+                                  h4("Unique Sequences and Size")),
+                           column(1, shinyBS::bsButton("table_spec-info",
+                                              label = "",
+                                              icon = icon("info"),
+                                              style = "default", size = "extra-small"),
+                                  shinyBS::bsPopover(
+                                        id = "table_spec-info",
+                                        title = "Table with the Largest Crop Sequence Patterns",
+                                        content = "Here you can see the largest crop sequence pattern in MWP in a 7 year sequence (or selected range). You can search, sort or expand the table as you like.",
+                                        placement = "left",
+                                        trigger = "hover",
+                                        options = list(
+                                          container = 'body',
+                                          html = TRUE,
+                                          delay = list(show = 0, hide = 0) 
+                                        )
+                                      )
+                                  )
                            
                          ),
                          br(),
-                         bsPopover(
-                           id = "table_spec-info",
-                           title = "Table with the Largest Crop Rotation Patterns",
-                           content = HTML(paste0(
-                             "Here you can see the largest crop rotation pattern in MWP in a 7 year rotation (or selected range). You can search, sort or expand the table as you like."
-                           )),
-                           placement = "left",
-                           trigger = "hover",
-                           options = list(container = "body")
-                         ),
                          fluidRow(
                            column(1),
                            column(10,
@@ -658,6 +707,8 @@ ui <- function(app_data) {
 #' 
 #' @export
 viz_server <- function(input, output, session, app_data, input_dir) {
+  
+  library(ggalluvial)
   options(warn = -1) 
   
   all_wrap_number_count_small <- app_data$Input_App_data$all_wrap_number_count_small
@@ -1568,7 +1619,7 @@ viz_server <- function(input, output, session, app_data, input_dir) {
       unique_nodes <- unique(c(summarized_transitions$source, summarized_transitions$target))
       node_colors <- sapply(unique_nodes, function(name) {
         base_name <- gsub(" \\(before\\)| \\(after\\)", "", name)
-        crop_color_mapping[base_name] %||% "#808080"
+        crop_colors()[base_name] %||% "#808080"
       })
       
       # Create the Sankey plot

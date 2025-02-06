@@ -78,6 +78,7 @@
 #' 
 #' @keywords internal
 processing_ui <- function(app_data, output_dir = NA, start_year = NA, vector_file = TRUE) {
+  
   # Add Bootstrap dependencies
   shiny::addResourcePath(
     "shinyBS", 
@@ -134,14 +135,12 @@ processing_ui <- function(app_data, output_dir = NA, start_year = NA, vector_fil
                )
              )
       ),
-      conditionalPanel(
-        condition = "input.id_or_name == 'Code'",
-        column(2,             
-               radioButtons("aggregation", 
-                            label = "Aggregation of crop classes", 
-                            choices = c("Yes", "No"), 
-                            inline = TRUE)
-        )
+      column(2,             
+             radioButtons("aggregation", 
+                          label = "Aggregation of crop classes", 
+                          choices = c("Yes", "No"), 
+                          inline = TRUE)
+
       ),
       column(2,
              radioButtons("radio_process", "Type of field intersection",
@@ -275,6 +274,14 @@ processing_ui <- function(app_data, output_dir = NA, start_year = NA, vector_fil
                             class = "btn-primary btn-lg",
                             style = "margin-top: 20px; background-color: rgb(116, 150, 30); border-color: rgb(116, 150, 30); color: white;")
              )
+      ),
+      column(2,
+             conditionalPanel(
+               condition = "output.show_process_button && !input.btn_continue && input.id_or_name == 'Code'",
+               radioButtons("language",
+                            "Crop Name Language",
+                            c("English", "German"), inline = TRUE)
+             )
       )
     ),
     # Processing Options (shown after continue)
@@ -337,7 +344,7 @@ processing_ui <- function(app_data, output_dir = NA, start_year = NA, vector_fil
                  )
           )
         },
-        column(3,
+        column(2,
                conditionalPanel(
                  condition = "output.show_process_button",
                  radioButtons("fastImages",
@@ -371,7 +378,7 @@ processing_ui <- function(app_data, output_dir = NA, start_year = NA, vector_fil
                    )
                  )
                )
-        )
+        ),
       ),
       
       # Final Process Button
@@ -476,7 +483,7 @@ processing_ui <- function(app_data, output_dir = NA, start_year = NA, vector_fil
     ),
     # Step 5: Crop Code Aggregation Editor (appears after continue)
     conditionalPanel(
-      condition = "input.btn_continue && input.aggregation == 'Yes' && input.id_or_name == 'Code'",
+      condition = "input.btn_continue && input.aggregation == 'Yes'",
       fluidRow(
         column(12,
                wellPanel(
@@ -491,14 +498,14 @@ processing_ui <- function(app_data, output_dir = NA, start_year = NA, vector_fil
                          ),
                          column(1, style = "padding: 0; margin-left: 10px;",
                                 shinyBS::bsButton(
-                                  "aggregation_editor_info",  # Changed ID
+                                  "aggregation_editor_info",  
                                   label = "",
                                   icon = icon("info"),
                                   style = "default",
                                   size = "extra-small"
                                 ),
                                 shinyBS::bsPopover(
-                                  "aggregation_editor_info",  # Changed ID to match
+                                  "aggregation_editor_info", 
                                   "Crop Aggregation Info",
                                   "Here you can inspect and change the default crop aggregation. You can create new classes, rename existing and drag and drop crops into the aggregation classes on the reight. Each single crop on the left list will be still processed but not aggregated.",
                                   placement = "right",
@@ -762,6 +769,8 @@ processing_ui <- function(app_data, output_dir = NA, start_year = NA, vector_fil
 #' 
 #' @keywords internal
 processing_server <- function(input, output, session, app_data, output_dir = NA, common_column = NA, preview = TRUE, vector_file = TRUE) {
+  library(ggalluvial)
+  
   # Start timing
   start_time <- Sys.time()
   initial_mem <- gc(reset = TRUE)
@@ -799,7 +808,11 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
   
   # Helper function to get names from codes - defined once at the top
   get_names <- function(codes, codierung_all) {
-    names <- codierung_all$Klarschrift[match(codes, codierung_all$NC)]
+    if(input$language == "English"){
+      names <- codierung_all$english_names[match(codes, codierung_all$NC)]
+    }else{
+      names <- codierung_all$german_names[match(codes, codierung_all$NC)]
+    }
     return(names[!is.na(names)])
   }
   
@@ -1117,76 +1130,88 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
     # Initialize class_state if NULL
     if (is.null(class_state())) {
       # Get all unique crops first
-      unique_crops <- get_all_crops(processed_files(), codierung_all)
+      unique_crops <- get_all_crops(processed_files(), codierung_all, input$language)
       all_unique_crops(unique_crops)
       
-      # Define base classes
-      base_classes <- list(
-        "potatoes" = get_names(c(601, 602, 604, 605, 606), codierung_all),
-        "kitchen herbs" = get_names(c(650:687), codierung_all),
-        "cucurbits" = get_names(c(626:631), codierung_all),
-        "winter oil-plant" = get_names(c(311, 315, 390), codierung_all),
-        "fodder beet" = get_names(c(413, 414), codierung_all),
-        "gardens/plots" = get_names(c(914, 920), codierung_all),
-        "vegetables (cruciferous)" = get_names(c(613, 615:618, 611), codierung_all),
-        "grassland" = get_names(c(424, 451:460, 443, 444, 492, 493, 702, 844, 855, 912, 928, 991, 992, 960), codierung_all),
-        "protein plants" = get_names(c(210:292, 330, 635), codierung_all),
-        "clover/lutzerne" = get_names(c(421:423, 425:427, 431:433, 921, 922), codierung_all),
-        "solanaceae" = get_names(c(622:624), codierung_all),
-        "storage areas" = get_names(c(990, 994, 996), codierung_all),
-        "permanent/tree" = get_names(c(564, 834, 840:843, 982, 983), codierung_all),
-        "energy plants"  = get_names(c(802:806, 852:854, 866, 871, 801), codierung_all),
-        "summer oil-plant" = get_names(c(312, 316, 393, 341), codierung_all),
-        "umbelliferae"  = get_names(c(634, 641, 643, 648), codierung_all),
-        "fallow" = get_names(c(62, 560, 573, 576, 581:586, 583, 591:595, 849, 884, 910, 885, 593, 849, 884, 886, 887, 961), codierung_all),
-        "other vegtables" = get_names(c(610, 647, 644, 639, 638, 636, 637, 851), codierung_all),
-        "other fodder crops" = get_names(c(429, 430), codierung_all),
-        "summer mixed cereals"  = get_names(c(144, 145), codierung_all),
-        "winter mixed cereals" = get_names(c(125, 126), codierung_all),
-        "rare cereals"  = get_names(c(181:183, 186, 187, 999), codierung_all),
-        "maize"  = get_names(c(171, 172, 177, 411, 919), codierung_all),
-        "forest" = get_names(c(556, 568, 952, 955, 956, 995), codierung_all),
-        "ornamental plants" = get_names(c(720:776, 778:799, 510:520), codierung_all),
-        "flowering area"  = get_names(c(574, 575, 590, 777, 888, 915, 918), codierung_all),
-        "mixed crops" = get_names(c(150, 434, 882, 917), codierung_all),
-        "millet" = get_names(c(181, 183, 184), codierung_all),
-        "mustard" = get_names(c(612, 614, 619), codierung_all),
-        "fruits" = get_names(c(480, 481, 821:832, 836:839), codierung_all),
-        "landscape elements" = get_names(1:100, codierung_all),
-        "hops" = get_names(c(858, 857), codierung_all),
-        "accompanying flora" = get_names(c(640, 642), codierung_all),
-        "speciality crops" = get_names(c(705, 710), codierung_all)
-      )
-      
-      # Filter out empty classes and those with no matching crops
-      filtered_classes <- lapply(base_classes, function(class_names) {
-        intersect(class_names, unique_crops)
-      })
-      filtered_classes <- filtered_classes[sapply(filtered_classes, length) > 0]
-      
-      # Create initial classes list
-      initial_classes <- lapply(seq_along(filtered_classes), function(i) {
-        list(
-          id = paste0("class", i),
-          name = names(filtered_classes)[i],
-          crops = as.character(filtered_classes[[i]]),
-          color = color_palette[i]
+      if (input$id_or_name == "Code") {
+        # Define base classes
+        base_classes <- list(
+          "potatoes" = get_names(c(601, 602, 604, 605, 606), codierung_all),
+          "kitchen herbs" = get_names(c(650:687), codierung_all),
+          "cucurbits" = get_names(c(626:631), codierung_all),
+          "winter oil-plant" = get_names(c(311, 315, 390), codierung_all),
+          "fodder beet" = get_names(c(413, 414), codierung_all),
+          "gardens/plots" = get_names(c(914, 920), codierung_all),
+          "vegetables (cruciferous)" = get_names(c(613, 615:618, 611), codierung_all),
+          "grassland" = get_names(c(424, 451:460, 443, 444, 492, 493, 702, 844, 855, 912, 928, 991, 992, 960), codierung_all),
+          "protein plants" = get_names(c(210:292, 330, 635), codierung_all),
+          "clover/lutzerne" = get_names(c(421:423, 425:427, 431:433, 921, 922), codierung_all),
+          "solanaceae" = get_names(c(622:624), codierung_all),
+          "storage areas" = get_names(c(990, 994, 996), codierung_all),
+          "permanent/tree" = get_names(c(564, 834, 840:843, 982, 983), codierung_all),
+          "energy plants"  = get_names(c(802:806, 852:854, 866, 871, 801), codierung_all),
+          "summer oil-plant" = get_names(c(312, 316, 393, 341), codierung_all),
+          "umbelliferae"  = get_names(c(634, 641, 643, 648), codierung_all),
+          "fallow" = get_names(c(62, 560, 573, 576, 581:586, 583, 591:595, 849, 884, 910, 885, 593, 849, 884, 886, 887, 961), codierung_all),
+          "other vegtables" = get_names(c(610, 647, 644, 639, 638, 636, 637, 851), codierung_all),
+          "other fodder crops" = get_names(c(429, 430), codierung_all),
+          "summer mixed cereals"  = get_names(c(144, 145), codierung_all),
+          "winter mixed cereals" = get_names(c(125, 126), codierung_all),
+          "rare cereals"  = get_names(c(181:183, 186, 187, 999), codierung_all),
+          "maize"  = get_names(c(171, 172, 177, 411, 919), codierung_all),
+          "forest" = get_names(c(556, 568, 952, 955, 956, 995), codierung_all),
+          "ornamental plants" = get_names(c(720:776, 778:799, 510:520), codierung_all),
+          "flowering area"  = get_names(c(574, 575, 590, 777, 888, 915, 918), codierung_all),
+          "mixed crops" = get_names(c(150, 434, 882, 917), codierung_all),
+          "millet" = get_names(c(181, 183, 184), codierung_all),
+          "mustard" = get_names(c(612, 614, 619), codierung_all),
+          "fruits" = get_names(c(480, 481, 821:832, 836:839), codierung_all),
+          "landscape elements" = get_names(1:100, codierung_all),
+          "hops" = get_names(c(858, 857), codierung_all),
+          "accompanying flora" = get_names(c(640, 642), codierung_all),
+          "speciality crops" = get_names(c(705, 710), codierung_all)
         )
-      })
-      
-      # Sort by number of crops
-      sorted_indices <- order(sapply(initial_classes, function(x) length(x$crops)), decreasing = F)
-      class_state(initial_classes[sorted_indices])
-      class_counter(length(filtered_classes))
-      
-      # Initially set all crops not in any class as available
-      assigned_crops <- unique(unlist(lapply(initial_classes, function(x) x$crops)))
-      unassigned_crops <- setdiff(unique_crops, assigned_crops)
-      available_crops(unassigned_crops)
-      
-      # Initialize class names storage
-      initial_names <- sapply(base_classes, function(x) names(x))
-      class_names(setNames(as.list(initial_names), paste0("class", seq_along(initial_names))))
+        
+        # Filter out empty classes and those with no matching crops
+        filtered_classes <- lapply(base_classes, function(class_names) {
+          intersect(class_names, unique_crops)
+        })
+        filtered_classes <- filtered_classes[sapply(filtered_classes, length) > 0]
+        
+        # Create initial classes list
+        initial_classes <- lapply(seq_along(filtered_classes), function(i) {
+          list(
+            id = paste0("class", i),
+            name = names(filtered_classes)[i],
+            crops = as.character(filtered_classes[[i]]),
+            color = color_palette[i]
+          )
+        })
+        
+        # Sort by number of crops
+        sorted_indices <- order(sapply(initial_classes, function(x) length(x$crops)), decreasing = F)
+        class_state(initial_classes[sorted_indices])
+        class_counter(length(filtered_classes))
+        
+        # Initially set all crops not in any class as available
+        assigned_crops <- unique(unlist(lapply(initial_classes, function(x) x$crops)))
+        unassigned_crops <- setdiff(unique_crops, assigned_crops)
+        available_crops(unassigned_crops)
+        
+        # Initialize class names storage
+        initial_names <- sapply(base_classes, function(x) names(x))
+        class_names(setNames(as.list(initial_names), paste0("class", seq_along(initial_names))))
+      }else{
+        # For Name-based aggregation, start with empty classes
+        class_state(list())
+        class_counter(0)
+        
+        # Make all crops available initially
+        available_crops(unique_crops)
+        
+        # Initialize empty class names storage
+        class_names(list())
+      }
     }
   })
   
@@ -1440,16 +1465,25 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
       class_crops <- input[[class$id]] %||% class$crops
       
       if(length(class_crops) > 0) {
-        # Convert crop names to codes
-        codes <- unlist(sapply(class_crops, function(x) {
-          matches <- codierung_all$NC[codierung_all$Klarschrift == x]
-          if(length(matches) > 0) matches else NA
-        }))
-        
-        codes <- codes[!is.na(codes)]
-        
-        if(length(codes) > 0) {
-          result[[class_name]] <- codes
+        if(input$id_or_name == "Code") {
+          # Convert crop names to codes
+          codes <- unlist(sapply(class_crops, function(x) {
+            if(input$language == "English"){
+              matches <- codierung_all$NC[codierung_all$english_names == x]
+            }else{
+              matches <- codierung_all$NC[codierung_all$german_names == x]
+            }
+            if(length(matches) > 0) matches else NA
+          }))
+          
+          codes <- codes[!is.na(codes)]
+          
+          if(length(codes) > 0) {
+            result[[class_name]] <- codes
+          }
+        } else {
+          # For Name mode, use the crop names directly
+          result[[class_name]] <- class_crops
         }
       }
     }
@@ -1457,21 +1491,45 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
     # Handle unmapped crops
     unmapped_crops <- available_crops()
     if(length(unmapped_crops) > 0) {
-      for(crop in unmapped_crops) {
-        code <- codierung_all$NC[match(crop, codierung_all$Klarschrift)]
-        if(!is.na(code)) {
-          # Check if this code is already in any existing class
-          code_exists <- FALSE
-          for(existing_codes in result) {
-            if(code %in% existing_codes) {
-              code_exists <- TRUE
+      if(input$id_or_name == "Code") {
+        # For Code mode, convert unmapped crop names to individual codes
+        for(crop in unmapped_crops) {
+          if(input$language == "English"){
+            code <- codierung_all$NC[match(crop, codierung_all$english_names)]
+          }else{
+            code <- codierung_all$NC[match(crop, codierung_all$german_names)]
+          }
+          if(!is.na(code)) {
+            # Check if this code is already in any existing class
+            code_exists <- FALSE
+            for(existing_codes in result) {
+              if(code %in% existing_codes) {
+                code_exists <- TRUE
+                break
+              }
+            }
+            
+            # Only add if code doesn't exist in any class
+            if(!code_exists) {
+              result[[crop]] <- code
+            }
+          }
+        }
+      } else {
+        # For Name mode, add unmapped crops as individual classes
+        for(crop in unmapped_crops) {
+          # Check if this crop name is already in any existing class
+          crop_exists <- FALSE
+          for(existing_crops in result) {
+            if(crop %in% existing_crops) {
+              crop_exists <- TRUE
               break
             }
           }
           
-          # Only add if code doesn't exist in any class
-          if(!code_exists) {
-            result[[crop]] <- code
+          # Only add if crop doesn't exist in any class
+          if(!crop_exists) {
+            result[[crop]] <- crop
           }
         }
       }
@@ -1515,7 +1573,7 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
         mem_checkpoints$after_names <- gc(reset = TRUE)
         
         # pre-process the layers
-        all_files <- add_names(all_files, codierung_all, input$id_or_name)
+        all_files <- add_names(all_files, codierung_all, input$id_or_name, input$language)
         
         # start intersection
         incProgress(0.05, detail = "Intersecting")
@@ -1528,16 +1586,24 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
         mem_checkpoints$after_intersection <- gc(reset = TRUE)
 
         # make aggregation if needed
-        if(input$aggregation == "Yes" & input$id_or_name == "Code"){
+        if(input$aggregation == "Yes" && input$id_or_name == "Code"){
           
           aggregation_codes <- prepare_aggregation_data()
           aggregation_codes <- aggregation_codes$converter
           
           incProgress(0.05, detail = "aggregating")
-          CropRotViz_intersection <- aggregator(CropRotViz_intersection, years, aggregation_codes)
+
+          CropRotViz_intersection <- aggregator(CropRotViz_intersection, years, aggregation_codes, type = "NC")
           mem_checkpoints$after_aggregation <- gc(reset = TRUE)
-        }
-        else{
+          
+        }else if(input$aggregation == "Yes" && input$id_or_name == "Name"){
+          aggregation_codes <- prepare_aggregation_data()
+          aggregation_codes <- aggregation_codes$converter
+          
+          incProgress(0.05, detail = "aggregating")
+          CropRotViz_intersection <- aggregator(CropRotViz_intersection, years, aggregation_codes, type = "Name")
+          mem_checkpoints$after_aggregation <- gc(reset = TRUE)
+        }else{
           aggregation_codes <- NA
           }
 
@@ -1567,7 +1633,7 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
         }
         mem_checkpoints$after_file_write <- gc(reset = TRUE)
 
-        if(input$id_or_name == "Code" & input$aggregation == "Yes"){
+        if(input$aggregation == "Yes"){
           agg_cols <- grep("^Aggregated_", names(CropRotViz_intersection), value = TRUE)
         }else{
           agg_cols <- grep("^Name_", names(CropRotViz_intersection), value = TRUE)
@@ -1679,7 +1745,7 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
         cropping_area <- sum(do.call(rbind, district_CropRotViz_intersection)$freq)
         
         # create all available choices
-        if(input$id_or_name == "Code" & input$aggregation == "Yes"){
+        if(input$aggregation == "Yes"){
           Crop_choices <- unique(unlist(unique(c(st_drop_geometry(CropRotViz_intersection)[grep("^Aggregated_", names(CropRotViz_intersection), value = TRUE)]))))
         }else{
           Crop_choices <- unique(unlist(unique(c(st_drop_geometry(CropRotViz_intersection)[grep("^Name_", names(CropRotViz_intersection), value = TRUE)]))))
