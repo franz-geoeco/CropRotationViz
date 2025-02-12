@@ -26,6 +26,7 @@ Imports:
     ggplot2,
     htmltools,
     leaflet (>= 2.1.2),
+    leaflet.minicharts,
     purrr,
     rlang,
     plotly (>= 4.10.1),
@@ -43,6 +44,8 @@ Imports:
     sp,
     tidyr,
     units
+Suggests: 
+    testthat (>= 3.0.0)
 Encoding: UTF-8
 LazyData: true
 Roxygen: list(markdown = TRUE)
