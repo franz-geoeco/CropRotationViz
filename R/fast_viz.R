@@ -300,8 +300,11 @@ fast_ui <- function(app_data) {
 #' 
 #' @export
 fast_viz_server <- function(input, output, session, app_data, input_dir) {
-  
+  # global options
+  options(warn = -1)
+  sf_use_s2(F)
   options(shiny.maxRequestSize=1024^3 )
+  
   # Reactive value to track if data is loaded
   data_loaded <- reactiveVal(FALSE)
   
@@ -469,7 +472,15 @@ fast_viz_server <- function(input, output, session, app_data, input_dir) {
       # Get existing image files
       image_files <- gsub("\\.png$", "", list.files(paste0(input_dir, "/images"), pattern = "\\.png$"))
       
-      data <- data[sapply(data$name, function(x) any(grepl(gsub("/", "_", x), gsub("/", "_", image_files)))), ]
+      # Case-insensitive matching
+      data <- data[sapply(data$name, function(x) {
+        # Normalize both name and image files
+        normalized_x <- tolower(gsub("[/_ ]", "", x))
+        normalized_image_files <- tolower(gsub("[/_ ]", "", image_files))
+        
+        # Check for exact matches after normalization
+        any(normalized_x == normalized_image_files)
+      }), ]
       
       data$id <- 1:nrow(data)
       
@@ -510,6 +521,18 @@ fast_viz_server <- function(input, output, session, app_data, input_dir) {
       if (!is.null(click$id)) {
         data <- spatial_data()
         names(data) <- c("name", "geometry")
+        
+        image_files <- gsub("\\.png$", "", list.files(paste0(input_dir, "/images"), pattern = "\\.png$"))
+        
+        # Case-insensitive matching
+        data <- data[sapply(data$name, function(x) {
+          # Normalize both name and image files
+          normalized_x <- tolower(gsub("[/_ ]", "", x))
+          normalized_image_files <- tolower(gsub("[/_ ]", "", image_files))
+          
+          # Check for exact matches after normalization
+          any(normalized_x == normalized_image_files)
+        }), ]
         selected_name <- data$name[as.numeric(click$id)]
         
         # If clicking the same area that's already selected, deselect it
@@ -538,8 +561,10 @@ fast_viz_server <- function(input, output, session, app_data, input_dir) {
     # Render first image
     output$firstImage <- renderImage({
       req(firstSelection())
+      print(firstSelection())
       sanitized_name <- gsub("/", "_", firstSelection())
       filename <- normalizePath(paste0(input_dir, '/images/', sanitized_name, '.png'))
+      print(filename)
       list(
         src = filename,
         width = "100%",    # This makes it take full width of container

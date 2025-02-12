@@ -4,7 +4,7 @@
 \alias{get_all_crops}
 \title{Extract Unique Crop Names from Spatial Files}
 \usage{
-get_all_crops(processed_files, codierung_all)
+get_all_crops(processed_files, codierung_all, language)
 }
 \arguments{
 \item{processed_files}{List of processed spatial files, where each file contains:
@@ -14,7 +14,7 @@ get_all_crops(processed_files, codierung_all)
 }}
 
 \item{codierung_all}{Data frame mapping between numeric crop codes (NC) and clear text
-names (Klarschrift)}
+names (english_names)}
 }
 \value{
 Character vector of unique crop names present in the processed files, with

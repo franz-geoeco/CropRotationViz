@@ -4,7 +4,7 @@
 \alias{diversity_mapping}
 \title{Create Bivariate Maps for Agricultural Diversity Analysis}
 \usage{
-diversity_mapping(input, agg_cols, districts, EZGs = NA)
+diversity_mapping(input, agg_cols, districts, EZGs = NA, AOIs = NA)
 }
 \arguments{
 \item{input}{An sf object containing agricultural field data with crop information over multiple years}

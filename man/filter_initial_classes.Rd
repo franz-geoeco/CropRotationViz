@@ -17,7 +17,7 @@ belonging to a specific classification category}
 }}
 
 \item{codierung_all}{Data frame mapping between numeric crop codes (NC) and clear text
-names (Klarschrift)}
+names (english_names)}
 }
 \value{
 List of filtered classification categories containing only crop names that

@@ -30,6 +30,8 @@ create_crop_rotation_sankey(
 \item{height}{Plot height in inches (default: 10)}
 
 \item{resolution}{Plot resolution in dpi (default: 200)}
+
+\item{color}{Named vector of colors for each crop type}
 }
 \value{
 A ggplot object containing the Sankey diagram visualizing crop rotations over time

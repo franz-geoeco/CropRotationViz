@@ -168,7 +168,6 @@ processing_ui <- function(app_data, output_dir = NA, start_year = NA, vector_fil
              )
       )
     ),
-    
     tags$hr(style = "border-top: 1px solid white; margin-top: 20px; margin-bottom: 20px;"),
     
     #-------------------------------------------------------------------------------
@@ -184,7 +183,7 @@ processing_ui <- function(app_data, output_dir = NA, start_year = NA, vector_fil
           ),
           shinyFilesButton(
             sprintf("Btn_GetFile%d", i),
-            sprintf("Choose File year: %d", i),
+            sprintf("Choose Annual Field Polygon File: year %d", i),
             title = sprintf("Please select polygon file year: %d (.shp, .geojson, .fgb, .gpkg or .sqlite):", i),
             multiple = FALSE,
             buttonType = "default",
@@ -232,7 +231,6 @@ processing_ui <- function(app_data, output_dir = NA, start_year = NA, vector_fil
                    )
             )
           },
-          
           column(1,
                  conditionalPanel(
                    condition = sprintf("output.file%d_selected", i),
@@ -252,13 +250,56 @@ processing_ui <- function(app_data, output_dir = NA, start_year = NA, vector_fil
     # Step 3: File Summary and Map Preview
     #-------------------------------------------------------------------------------
     fluidRow(
-      column(4,
+      column(5,
              verbatimTextOutput("loaded_files_summary")
       ),
-      column(2),
       column(4,
              leafletOutput("map")
+      ),
+      column(2,
+             conditionalPanel(
+               condition = "output.show_process_button",
+               shinyFilesButton(
+                 "Choose_AOI_File",
+                 "Choose a AOI File (optional)",
+                 title = "Please select polygon file which will be used for splitting in areas of interest (.shp, .geojson, .fgb, .gpkg or .sqlite):",
+                 multiple = FALSE,
+                 buttonType = "default",
+                 class = "btn-primary",
+                 style = "background-color: rgb(116, 150, 30); border-color: rgb(116, 150, 30); color: white;"
+               )
+             ),
+             # Add column selector UI below the file button
+             conditionalPanel(
+               condition = "output.show_aoi_selector",
+               uiOutput("aoi_column_selector")
+             )
+      ),
+      column(1,
+             conditionalPanel(
+               condition = "output.show_process_button",
+               shinyBS::bsButton(
+                 "AOI_info",  
+                 label = "",
+                 icon = icon("info"),
+                 style = "default",
+                 size = "extra-small"
+               )
+               ),
+             shinyBS::bsPopover(
+               "AOI_info",  
+               "Choose a AOI File (optional)",
+               "Here you can add a polygon file defining areas of interest in your region. These are used to divide the region into areas of interest that can be analysed individually. This sectioning will be used besides the administrative boundaries from GADM and the river basins in Germany.",
+               placement = "left",
+               trigger = "hover",
+               options = list(
+                 container = 'body',
+                 html = TRUE,
+                 delay = list(show = 0, hide = 0)  
+               )
+             )
       )
+      
     ),
     
     tags$hr(style = "border-top: 1px solid white; margin-top: 20px; margin-bottom: 20px;"),
@@ -295,7 +336,7 @@ processing_ui <- function(app_data, output_dir = NA, start_year = NA, vector_fil
                    shinyDirButton(
                      "dir", 
                      "Choose Output Directory", 
-                     "Choose an output directory", 
+                     "Choose a output directory", 
                      style = "background-color: rgb(116, 150, 30); border-color: rgb(116, 150, 30); color: white;"
                    ),
                    verbatimTextOutput("selected_dir")
@@ -738,6 +779,7 @@ processing_ui <- function(app_data, output_dir = NA, start_year = NA, vector_fil
 #'     \item{filepath}{Original file path}
 #'   }
 #' 
+#' @import dplyr
 #' @import shiny
 #' @import sf
 #' @import leaflet
@@ -802,9 +844,9 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
   # Access the data from app_data
   codierung_all <- app_data$Input_App_data$codierung_all
   crop_codes    <- app_data$Input_App_data$crop_codes
+  countriesSP <- app_data$Input_App_data$countriesSP
   display_names <- app_data$Input_App_data$display_names
   EZG           <- app_data$Input_App_data$EZG
-  color_palette <- app_data$Input_App_data$crop_color_mapping
   
   # Helper function to get names from codes - defined once at the top
   get_names <- function(codes, codierung_all) {
@@ -1077,7 +1119,8 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
           fillOpacity = 0.3,
           weight = 2,
           color = "rgb(0,86,157)",
-          dashArray = "5,5"
+          dashArray = "5,5",
+          group = "field bbox"
         )
     }
   })
@@ -1112,6 +1155,178 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
   
   
   #----------------------------------------------------------------------------------------------------------
+  # Add reactive values for AOI data and column selection
+  output$show_aoi_selector <- reactive({
+    return(aoi_loaded())
+  })
+  outputOptions(output, "show_aoi_selector", suspendWhenHidden = FALSE)
+  aoi_data <- reactiveVal(NULL)
+  aoi_loaded <- reactiveVal(FALSE)
+  aoi_column <- reactiveVal(NULL)
+  
+  # Add observer for AOI file selection
+  observeEvent(input$Choose_AOI_File, {
+    shinyFileChoose(
+      input,
+      "Choose_AOI_File",
+      roots = volumes,
+      session = session,
+      restrictions = system.file(package = "base"),
+      filetypes = c("shp", "fgb", "gpkg", "sqlite", "geojson")
+    )
+    
+    if (!is.null(input$Choose_AOI_File)) {
+      file_selected <- parseFilePaths(volumes, input$Choose_AOI_File)
+      
+      if (nrow(file_selected) > 0) {
+        file_ext <- tolower(tools::file_ext(file_selected$datapath))
+        
+        if (file_ext %in% c("shp", "fgb", "gpkg", "sqlite", "geojson")) {
+          tryCatch({
+            # Read the AOI file
+            aoi_sf <- st_read(file_selected$datapath, quiet = TRUE)
+            
+            # Basic validation
+            if (!is(aoi_sf, "sf")) {
+              showNotification("Invalid AOI file format. Please ensure it contains polygon geometries.",
+                               type = "error")
+              return(NULL)
+            }
+            
+            if (!all(st_geometry_type(aoi_sf) %in% c("POLYGON", "MULTIPOLYGON"))) {
+              showNotification("AOI file must contain polygon geometries.",
+                               type = "error")
+              return(NULL)
+            }
+            
+            # Store the initial AOI data
+            aoi_data(aoi_sf)
+            aoi_loaded(TRUE)
+            
+            # Create column selector UI
+            output$aoi_column_selector <- renderUI({
+              req(aoi_loaded())
+              selectInput(
+                "aoi_name_column",
+                "Select column for AOI names:",
+                choices = setdiff(names(aoi_sf), attr(aoi_sf, "sf_column")),
+                selected = NULL,
+                width = "100%"
+              )
+            })
+            
+            # Show success notification
+            showNotification(
+              sprintf("AOI file loaded successfully. Please select the name column."),
+              type = "message"
+            )
+            
+          }, error = function(e) {
+            showNotification(
+              sprintf("Error reading AOI file: %s", e$message),
+              type = "error"
+            )
+            aoi_data(NULL)
+            aoi_loaded(FALSE)
+          })
+        } else {
+          showNotification(
+            "Invalid file type. Please select a .shp, .geojson, .fgb, .gpkg, or .sqlite file.",
+            type = "error"
+          )
+        }
+      }
+    }
+  })
+  
+  # Observer for column selection
+  observeEvent(input$aoi_name_column, {
+    req(first_layer_bbox(), aoi_loaded(), input$aoi_name_column, aoi_data())
+    
+    aoi_sf <- aoi_data()
+
+    selected_column <- input$aoi_name_column
+    
+    # Validate that selected column exists and has unique values
+    if (selected_column %in% names(aoi_sf)) {
+      # Check for NA or empty values in selected column
+      if (any(is.na(aoi_sf[[selected_column]]) | aoi_sf[[selected_column]] == "")) {
+        showNotification(
+          "Warning: Selected column contains missing or empty values. These may cause issues.",
+          type = "warning"
+        )
+      }
+      
+      # Check for duplicate values
+      if (any(duplicated(aoi_sf[[selected_column]]))) {
+        showNotification(
+          "Warning: Selected column contains duplicate values. This may cause issues with identification.",
+          type = "warning"
+        )
+      }
+      
+      # Keep only the selected column and geometry
+      aoi_sf_cleaned <- aoi_sf %>%
+        select(all_of(selected_column), geometry)
+      
+      # Rename the selected column to a standardized name
+      names(aoi_sf_cleaned)[names(aoi_sf_cleaned) == selected_column] <- "AOI_name"
+      
+      # Update stored AOI data
+      aoi_data(aoi_sf_cleaned)
+      aoi_column(selected_column)
+      
+      # Update the map to show the AOI boundaries with labels
+      observe({
+        if (aoi_loaded()) {
+          aoi <- aoi_data()
+      
+          bbox_polygon <- st_as_sfc(st_bbox(first_layer_bbox()))
+          bbox_polygon <- st_transform(bbox_polygon, 4326)
+          
+          # Transform to WGS84 if needed
+          if (st_crs(aoi) != 4326) {
+            aoi <- st_transform(aoi, 4326)
+          }
+
+          aoi <- sf::st_crop(aoi, bbox_polygon)
+          
+          # Update the leaflet map
+          leafletProxy("map") %>%
+            addPolygons(
+              data = aoi,
+              fillColor = "red",
+              fillOpacity = 0.2,
+              weight = 2,
+              color = "red",
+              dashArray = "5,5",
+              group = "aoi",
+              label = ~AOI_name,
+              labelOptions = labelOptions(
+                style = list("font-weight" = "normal", padding = "3px 8px"),
+                textsize = "12px",
+                direction = "auto"
+              )
+            )%>%
+            addLayersControl(overlayGroups = c("field bbox","aoi") , 
+                             options = layersControlOptions(collapsed = FALSE))
+        }
+      })
+      
+      showNotification(
+        sprintf("AOI column '%s' selected and data cleaned", selected_column),
+        type = "message"
+      )
+    }
+  })
+  
+  # Add reactive value to store AOI data for use in other parts of the app
+  aoi_reactive <- reactive({
+    req(aoi_data(), aoi_column())
+    return(aoi_data())
+  })
+  
+  #----------------------------------------------------------------------------------------------------------
 
   
   # Initialize reactive values
@@ -1127,6 +1342,12 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
     req(input$btn_continue)
     req(length(processed_files()) > 1)
     
+    if(input$language == "English"){
+      color_palette <- app_data$Input_App_data$crop_color_mapping$en
+    }else{
+      color_palette <- app_data$Input_App_data$crop_color_mapping$de
+    }
+    
     # Initialize class_state if NULL
     if (is.null(class_state())) {
       # Get all unique crops first
@@ -1135,42 +1356,81 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
       
       if (input$id_or_name == "Code") {
         # Define base classes
-        base_classes <- list(
-          "potatoes" = get_names(c(601, 602, 604, 605, 606), codierung_all),
-          "kitchen herbs" = get_names(c(650:687), codierung_all),
-          "cucurbits" = get_names(c(626:631), codierung_all),
-          "winter oil-plant" = get_names(c(311, 315, 390), codierung_all),
-          "fodder beet" = get_names(c(413, 414), codierung_all),
-          "gardens/plots" = get_names(c(914, 920), codierung_all),
-          "vegetables (cruciferous)" = get_names(c(613, 615:618, 611), codierung_all),
-          "grassland" = get_names(c(424, 451:460, 443, 444, 492, 493, 702, 844, 855, 912, 928, 991, 992, 960), codierung_all),
-          "protein plants" = get_names(c(210:292, 330, 635), codierung_all),
-          "clover/lutzerne" = get_names(c(421:423, 425:427, 431:433, 921, 922), codierung_all),
-          "solanaceae" = get_names(c(622:624), codierung_all),
-          "storage areas" = get_names(c(990, 994, 996), codierung_all),
-          "permanent/tree" = get_names(c(564, 834, 840:843, 982, 983), codierung_all),
-          "energy plants"  = get_names(c(802:806, 852:854, 866, 871, 801), codierung_all),
-          "summer oil-plant" = get_names(c(312, 316, 393, 341), codierung_all),
-          "umbelliferae"  = get_names(c(634, 641, 643, 648), codierung_all),
-          "fallow" = get_names(c(62, 560, 573, 576, 581:586, 583, 591:595, 849, 884, 910, 885, 593, 849, 884, 886, 887, 961), codierung_all),
-          "other vegtables" = get_names(c(610, 647, 644, 639, 638, 636, 637, 851), codierung_all),
-          "other fodder crops" = get_names(c(429, 430), codierung_all),
-          "summer mixed cereals"  = get_names(c(144, 145), codierung_all),
-          "winter mixed cereals" = get_names(c(125, 126), codierung_all),
-          "rare cereals"  = get_names(c(181:183, 186, 187, 999), codierung_all),
-          "maize"  = get_names(c(171, 172, 177, 411, 919), codierung_all),
-          "forest" = get_names(c(556, 568, 952, 955, 956, 995), codierung_all),
-          "ornamental plants" = get_names(c(720:776, 778:799, 510:520), codierung_all),
-          "flowering area"  = get_names(c(574, 575, 590, 777, 888, 915, 918), codierung_all),
-          "mixed crops" = get_names(c(150, 434, 882, 917), codierung_all),
-          "millet" = get_names(c(181, 183, 184), codierung_all),
-          "mustard" = get_names(c(612, 614, 619), codierung_all),
-          "fruits" = get_names(c(480, 481, 821:832, 836:839), codierung_all),
-          "landscape elements" = get_names(1:100, codierung_all),
-          "hops" = get_names(c(858, 857), codierung_all),
-          "accompanying flora" = get_names(c(640, 642), codierung_all),
-          "speciality crops" = get_names(c(705, 710), codierung_all)
-        )
+        if(input$language == "English"){
+          base_classes <- list(
+            "potatoes" = get_names(c(601, 602, 604, 605, 606), codierung_all),
+            "kitchen herbs" = get_names(c(650:687), codierung_all),
+            "cucurbits" = get_names(c(626:631), codierung_all),
+            "winter oil-plant" = get_names(c(311, 315, 390), codierung_all),
+            "fodder beet" = get_names(c(413, 414), codierung_all),
+            "gardens/plots" = get_names(c(914, 920), codierung_all),
+            "vegetables (cruciferous)" = get_names(c(613, 615:618, 611), codierung_all),
+            "grassland" = get_names(c(424, 451:460, 443, 444, 492, 493, 702, 844, 855, 912, 928, 991, 992, 960), codierung_all),
+            "protein plants" = get_names(c(210:292, 330, 635), codierung_all),
+            "clover/lutzerne" = get_names(c(421:423, 425:427, 431:433, 921, 922), codierung_all),
+            "solanaceae" = get_names(c(622:624), codierung_all),
+            "storage areas" = get_names(c(990, 994, 996), codierung_all),
+            "permanent/tree" = get_names(c(564, 834, 840:843, 982, 983), codierung_all),
+            "energy plants"  = get_names(c(802:806, 852:854, 866, 871, 801), codierung_all),
+            "summer oil-plant" = get_names(c(312, 316, 393, 341), codierung_all),
+            "umbelliferae"  = get_names(c(634, 641, 643, 648), codierung_all),
+            "fallow" = get_names(c(62, 560, 573, 576, 581:586, 583, 591:595, 849, 884, 910, 885, 593, 849, 884, 886, 887, 961), codierung_all),
+            "other vegtables" = get_names(c(610, 647, 644, 639, 638, 636, 637, 851), codierung_all),
+            "other fodder crops" = get_names(c(429, 430), codierung_all),
+            "summer mixed cereals"  = get_names(c(144, 145), codierung_all),
+            "winter mixed cereals" = get_names(c(125, 126), codierung_all),
+            "rare cereals"  = get_names(c(181:183, 186, 187, 999), codierung_all),
+            "maize"  = get_names(c(171, 172, 177, 411, 919), codierung_all),
+            "forest" = get_names(c(556, 568, 952, 955, 956, 995), codierung_all),
+            "ornamental plants" = get_names(c(720:776, 778:799, 510:520), codierung_all),
+            "flowering area"  = get_names(c(574, 575, 590, 777, 888, 915, 918), codierung_all),
+            "mixed crops" = get_names(c(150, 434, 882, 917), codierung_all),
+            "millet" = get_names(c(181, 183, 184), codierung_all),
+            "mustard" = get_names(c(612, 614, 619), codierung_all),
+            "fruits" = get_names(c(480, 481, 821:832, 836:839), codierung_all),
+            "landscape elements" = get_names(1:100, codierung_all),
+            "hops" = get_names(c(858, 857), codierung_all),
+            "accompanying flora" = get_names(c(640, 642), codierung_all),
+            "speciality crops" = get_names(c(705, 710), codierung_all)
+          )
+        }else{
+          base_classes <- list(
+            "Kartoffeln" = get_names(c(601, 602, 604, 605, 606), codierung_all),
+            "Küchenkräuter" = get_names(c(650:687), codierung_all),
+            "Kürbisgewächse" = get_names(c(626:631), codierung_all),
+            "Winter-Ölpflanzen" = get_names(c(311, 315, 390), codierung_all),
+            "Futterrüben" = get_names(c(413, 414), codierung_all),
+            "Gärten/Parzellen" = get_names(c(914, 920), codierung_all),
+            "Gemüse (Kreuzblütler)" = get_names(c(613, 615:618, 611), codierung_all),
+            "Grünland" = get_names(c(424, 451:460, 443, 444, 492, 493, 702, 844, 855, 912, 928, 991, 992, 960), codierung_all),
+            "Eiweißpflanzen" = get_names(c(210:292, 330, 635), codierung_all),
+            "Klee/Luzerne" = get_names(c(421:423, 425:427, 431:433, 921, 922), codierung_all),
+            "Nachtschattengewächse" = get_names(c(622:624), codierung_all),
+            "Lagerflächen" = get_names(c(990, 994, 996), codierung_all),
+            "Dauerkulturen/Bäume" = get_names(c(564, 834, 840:843, 982, 983), codierung_all),
+            "Energiepflanzen" = get_names(c(802:806, 852:854, 866, 871, 801), codierung_all),
+            "Sommer-Ölpflanzen" = get_names(c(312, 316, 393, 341), codierung_all),
+            "Doldenblütler" = get_names(c(634, 641, 643, 648), codierung_all),
+            "Brache" = get_names(c(62, 560, 573, 576, 581:586, 583, 591:595, 849, 884, 910, 885, 593, 849, 884, 886, 887, 961), codierung_all),
+            "Sonstiges Gemüse" = get_names(c(610, 647, 644, 639, 638, 636, 637, 851), codierung_all),
+            "Sonstige Futterpflanzen" = get_names(c(429, 430), codierung_all),
+            "Sommermenggetreide" = get_names(c(144, 145), codierung_all),
+            "Wintermenggetreide" = get_names(c(125, 126), codierung_all),
+            "Seltene Getreide" = get_names(c(181:183, 186, 187, 999), codierung_all),
+            "Mais" = get_names(c(171, 172, 177, 411, 919), codierung_all),
+            "Wald" = get_names(c(556, 568, 952, 955, 956, 995), codierung_all),
+            "Zierpflanzen" = get_names(c(720:776, 778:799, 510:520), codierung_all),
+            "Blühfläche" = get_names(c(574, 575, 590, 777, 888, 915, 918), codierung_all),
+            "Mischkulturen" = get_names(c(150, 434, 882, 917), codierung_all),
+            "Hirse" = get_names(c(181, 183, 184), codierung_all),
+            "Senf" = get_names(c(612, 614, 619), codierung_all),
+            "Obst" = get_names(c(480, 481, 821:832, 836:839), codierung_all),
+            "Landschaftselemente" = get_names(1:100, codierung_all),
+            "Hopfen" = get_names(c(858, 857), codierung_all),
+            "Begleitflora" = get_names(c(640, 642), codierung_all),
+            "Sonderkulturen" = get_names(c(705, 710), codierung_all)
+          )
+        }
         
         # Filter out empty classes and those with no matching crops
         filtered_classes <- lapply(base_classes, function(class_names) {
@@ -1295,7 +1555,7 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
       
       div(
         class = "crop-box",
-        style = sprintf("border-color: %s;", class$color),
+        style = sprintf("border-color: %s;border-width: 3px;", class$color),
         div(
           class = "name-input",
           div(
@@ -1304,7 +1564,7 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
                       value = current_name,
                       placeholder = "Class Name"),
             tags$style(sprintf(
-              "#%s {background-color: %s; border-color: %s;}",
+              "#%s {background-color: %s; border-color: %s;border-width: 3px;}",
               paste0(class$id, "_name"), 
               adjustcolor(class$color, alpha.f = 0.2),
               class$color
@@ -1346,6 +1606,13 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
   # Prepare Sankey data
   prepare_sankey_data <- reactive({
     current_state <- class_state()
+    
+    if(input$language == "English"){
+      color_palette <- app_data$Input_App_data$crop_color_mapping$en
+    }else{
+      color_palette <- app_data$Input_App_data$crop_color_mapping$de
+    }
+    
     mapping <- data.frame(crop = character(), group = character(), color = character(), 
                           stringsAsFactors = FALSE)
     
@@ -1546,10 +1813,17 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
     start_time <- Sys.time()
     initial_mem <- gc(reset = TRUE)
     
+    if(input$language == "English"){
+      color_palette <- app_data$Input_App_data$crop_color_mapping$en
+    }else{
+      color_palette <- app_data$Input_App_data$crop_color_mapping$de
+    }
+    
     sankey_data <- prepare_sankey_data()
     all_files <- processed_files()
     years <- sapply(all_files, function(x) x$selected_year)
-    
+    aoi_data <- aoi_data()
+
     # Check for large files
     for(i in seq_along(all_files)) {
       if(!is.null(all_files[[i]]) && nrow(all_files[[i]]$sf_object) > 100000) {
@@ -1585,6 +1859,7 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
 
         mem_checkpoints$after_intersection <- gc(reset = TRUE)
 
+        #--------------------------------------------------------------
         # make aggregation if needed
         if(input$aggregation == "Yes" && input$id_or_name == "Code"){
           
@@ -1605,20 +1880,30 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
           mem_checkpoints$after_aggregation <- gc(reset = TRUE)
         }else{
           aggregation_codes <- NA
-          }
-
+        }
+        
+        #--------------------------------------------------------------
         # intersect with attributes
         incProgress(0.05, detail = "intersecting with areas")
-        list_intersect_with_borders <- intersect_with_borders(CropRotViz_intersection, 3, EZG)
+        list_intersect_with_borders <- intersect_with_borders(CropRotViz_intersection, 3, countriesSP,
+                                                              EZG, aoi_data)
         
-        CropRotViz_intersection <- list_intersect_with_borders[[1]]
+        CropRotViz_intersection <- list_intersect_with_borders$intersected
         
-        Districts <- list_intersect_with_borders[[2]]
+        Districts <- list_intersect_with_borders$borders_inter
         
-        if(length(list_intersect_with_borders) == 3){
-          EZGs <- list_intersect_with_borders[[3]]
+        if("EZG_inter" %in% names(list_intersect_with_borders)){
+          EZGs <- list_intersect_with_borders$EZG_inter
+        }else{
+          EZGs <- NULL
         }
-
+        
+        if("AOI_inter" %in% names(list_intersect_with_borders)){
+          AOIs <- list_intersect_with_borders$AOI_inter
+        }else{
+          AOIs <- NULL
+        }
+        
         incProgress(0.05, detail = "writing vector file")
         if(vector_file){
           if(input$filetype == "Shapefile"){
@@ -1632,7 +1917,8 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
           }
         }
         mem_checkpoints$after_file_write <- gc(reset = TRUE)
-
+        
+        #--------------------------------------------------------------
         if(input$aggregation == "Yes"){
           agg_cols <- grep("^Aggregated_", names(CropRotViz_intersection), value = TRUE)
         }else{
@@ -1642,35 +1928,48 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
         # diversity map
         incProgress(0.05, detail = "preparing diversity map")
         
-        # Function to check if there's enough data for diversity mapping
-        has_sufficient_data <- function(data_list, min_rows = 9, min_years = 3) {
-          return(dim(data_list)[1] > min_rows && length(years) > min_years)
-        }
+        # diversity mapping
+        diversity_data <- handle_diversity_mapping(
+          list_intersect_with_borders = list_intersect_with_borders,
+          CropRotViz_intersection = CropRotViz_intersection,
+          agg_cols = agg_cols,
+          Districts = Districts,
+          EZGs = EZGs,
+          AOIs = AOIs
+        )
         
-        # Handle diversity mapping based on available borders
-        diversity_data <- if (length(list_intersect_with_borders) == 3) {
-          if (has_sufficient_data(list_intersect_with_borders[[3]])) {
-            diversity_mapping(CropRotViz_intersection, agg_cols, Districts, EZGs)
-          } else {
-            NA
-          }
-        } else {
-          if (has_sufficient_data(list_intersect_with_borders[[2]])) {
-            diversity_mapping(CropRotViz_intersection, agg_cols, Districts)
-          } else {
-            NA
-          }
-        }
-
-        # preparing district_CropRotViz_intersection list
-        district_CropRotViz_intersection <- list()
-
+        
+        
+        # # Handle diversity mapping based on available borders
+        # diversity_data <- if ("EZG_inter" %in% names(list_intersect_with_borders)) {
+        #   if (has_sufficient_data(list_intersect_with_borders$EZG_inter)) {
+        #     if ("AOI_inter" %in% names(list_intersect_with_borders)) {
+        #       diversity_mapping(CropRotViz_intersection, agg_cols, Districts, EZGs, AOIs)
+        #     }else{
+        #       diversity_mapping(CropRotViz_intersection, agg_cols, Districts, EZGs)
+        #     }
+        #   } else {
+        #     NA
+        #   }
+        # } else {
+        #   if (has_sufficient_data(list_intersect_with_borders$borders_inter)) {
+        #     if ("AOI_inter" %in% names(list_intersect_with_borders)) {
+        #       diversity_mapping(CropRotViz_intersection, agg_cols, Districts, AOIs)
+        #     }else{
+        #       diversity_mapping(CropRotViz_intersection, agg_cols, Districts)
+        #     }
+        #   } else {
+        #     NA
+        #   }
+        # }
+        
+        #--------------------------------------------------------------
         incProgress(0.05, detail = "preparing the rest of the outputs")
         # Modified district processing section with error handling
         district_CropRotViz_intersection <- list()
         
         # district processing section with error handling
-        for (i in 1:dim(Districts)[2]) {
+        for (i in 1:nrow(Districts)) {
           tryCatch({
             district <- sf::st_drop_geometry(Districts)[i,1]
             
@@ -1681,7 +1980,7 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
             if (nrow(current) > 0) {
               # Process the district data
               current <- current %>%
-                plyr::count(vars = agg_cols, wt_var = "area") %>%
+                dplyr::count(vars = agg_cols, wt_var = "area") %>%
                 mutate(id = row_number(),
                        freq = freq/1e6)
               
@@ -1712,7 +2011,7 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
           stop("No valid data found for any district")
         }
         
-        # Remove any empty districts from the list (optional)
+        # Remove any empty districts from the list 
         district_CropRotViz_intersection <- district_CropRotViz_intersection[
           sapply(district_CropRotViz_intersection, nrow) > 0
         ]
@@ -1726,7 +2025,7 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
             
             current <- subset(CropRotViz_intersection, EZG == EZG_sel)
             current <- current%>%
-              plyr::count(vars = agg_cols, wt_var = "area")%>%
+              dplyr::count(vars = agg_cols, wt_var = "area")%>%
               mutate(id = row_number(),
                      freq = freq/1e6)
             
@@ -1740,7 +2039,31 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
           EZG_CropRotViz_intersection <- NA
         }
         mem_checkpoints$after_EZG_processing <- gc(reset = TRUE)
-
+        
+        View(CropRotViz_intersection)
+        if("AOI" %in% names(CropRotViz_intersection)){
+          AOI_CropRotViz_intersection <- list()
+          
+          for (i in 1:length(unique(st_drop_geometry(AOIs)$AOI))) {
+            AOI_sel <- unique(st_drop_geometry(AOIs)$AOI)[i]
+            
+            current <- subset(CropRotViz_intersection, AOI == AOI_sel)
+            current <- current%>%
+              dplyr::count(vars = agg_cols, wt_var = "area")%>%
+              mutate(id = row_number(),
+                     freq = freq/1e6)
+            
+            # ad rotation column
+            current$rotation <- do.call(paste, st_drop_geometry(current[agg_cols]))  
+            
+            AOI_CropRotViz_intersection[[AOI_sel]] <- current
+          }
+        }else{
+          AOIs  <- NA
+          AOI_CropRotViz_intersection <- NA
+        }
+        
+        #----------------------------------------------------------------------------------------------------------------------------------
         # calculate complete cropping area
         cropping_area <- sum(do.call(rbind, district_CropRotViz_intersection)$freq)
         
@@ -1752,17 +2075,26 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
         }
         
         # create df for area distribution visualisation
-        if(length(list_intersect_with_borders) == 3){
-          agg_cols <- c(agg_cols, "EZG", "District", "area")
-        }else{
-          agg_cols <- c(agg_cols, "District", "area")
-        }
+        agg_cols <- c(
+          agg_cols,
+          "District", 
+          "area",
+          if ("EZG" %in% names(CropRotViz_intersection)) "EZG",
+          if ("EZG" %in% names(CropRotViz_intersection) && 
+              "AOI" %in% names(CropRotViz_intersection)) "AOI"
+        )
+        
         distribution_df <- st_drop_geometry(CropRotViz_intersection)[,agg_cols]
         
-        # save environment
-        save(EZG_CropRotViz_intersection, district_CropRotViz_intersection, cropping_area, years, Crop_choices, Districts, EZGs, distribution_df, diversity_data, sankey_data, aggregation_codes, file = paste0(current_dir, "/CropRotViz_intersection.RData"))
+        language <- input$language
         
-        #---------------------------------------------------
+        # save environment
+        save(EZG_CropRotViz_intersection, district_CropRotViz_intersection, AOI_CropRotViz_intersection,
+             cropping_area, years, Crop_choices, Districts, EZGs,
+             distribution_df, diversity_data, sankey_data, aggregation_codes, language, 
+             file = paste0(current_dir, "/CropRotViz_intersection.RData"))
+        
+        #-----------------------------------------------------------------------------------------------------
         incProgress(0.05, detail = "preparing images for fast preview version")
         
         # create snapshot if preview == T
@@ -1772,7 +2104,7 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
           create_crop_rotation_sankey(data, 
                                       output_path = paste0(current_dir, "/CropRotViz_intersection.png"), 
                                       min_area = 0, 
-                                      color = app_data$Input_App_data$crop_color_mapping)
+                                      color = color_palette)
         }
         
         if(input$fastImages == "Yes"){
@@ -1787,7 +2119,7 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
                                                 output_path = paste0(current_dir, "/images/", sanitized_name, ".png"),
                                                 min_area = 0, 
                                                 exclude_crops = c(),
-                                                color = app_data$Input_App_data$crop_color_mapping)
+                                                color = color_palette)
           }
           
           # plot the EZGs
@@ -1798,7 +2130,18 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
                                                 output_path = paste0(current_dir, "/images/", sanitized_name, ".png"), 
                                                 min_area = 0,
                                                 exclude_crops = c(),
-                                                color = app_data$Input_App_data$crop_color_mapping)
+                                                color = color_palette)
+          }
+          
+          # plot the AOIs
+          for(name in names(AOI_CropRotViz_intersection)){
+            snipped <- AOI_CropRotViz_intersection[[name]]
+            sanitized_name <- gsub("/", "_", name)
+            plot <- create_crop_rotation_sankey(snipped,
+                                                output_path = paste0(current_dir, "/images/", sanitized_name, ".png"), 
+                                                min_area = 0,
+                                                exclude_crops = c(),
+                                                color = color_palette)
           }
         }
         

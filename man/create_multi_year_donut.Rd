@@ -2,7 +2,7 @@
 % Please edit documentation in R/functions.R
 \name{create_multi_year_donut}
 \alias{create_multi_year_donut}
-\title{Create a Multi-Year Donut Chart with Equal-Width Rings}
+\title{Create a Multi-Year Donut Chart}
 \usage{
 create_multi_year_donut(
   data,
@@ -13,25 +13,66 @@ create_multi_year_donut(
 )
 }
 \arguments{
-\item{data}{A dataframe containing frequency values for each year and crop category.}
+\item{data}{A data frame containing crop distribution data with columns for each year
+and an 'area' column containing the area values in square meters.}
 
-\item{year_columns}{A vector of column names (as strings) from the \code{data} dataframe that represent years.}
+\item{year_columns}{Character vector of column names representing years in the data.
+Maximum 10 years supported.}
 
-\item{title}{A string representing the title of the chart (default is "Crop Distribution").}
+\item{title}{Character string for the chart title. Default is "Crop Distribution".}
 
-\item{highlight_year}{A string specifying which year should be highlighted with a different border color. If NULL, no year is highlighted.}
+\item{highlight_year}{Optional character string matching one of the year_columns to
+highlight that specific year's ring. Default is NULL.}
+
+\item{colors}{Named vector of colors for each crop category. Names should match unique
+values in the year columns.}
 }
 \value{
-A plotly donut chart with multiple concentric rings representing different years.
+A plotly object containing the multi-year donut chart visualization.
 }
 \description{
-This function generates a multi-year donut chart where each year is represented as a concentric ring.
-All rings have equal width and are spaced evenly. Additionally, one specific year can be highlighted with a different border color.
+Creates a donut chart visualization showing crop distribution across multiple years,
+with each year represented as a concentric ring. The function supports highlighting
+a specific year and ensures equal ring widths for better visualization.
+}
+\details{
+The visualization creates concentric rings where:
+\itemize{
+\item Each ring represents one year
+\item Outer ring shows labels
+\item Ring widths are equal
+\item Gaps between rings are consistent
+\item Areas are displayed in square kilometers
+}
+
+When a highlight_year is specified, that year's ring will use full color while
+other years are displayed in lighter shades.
 }
 \examples{
-# Example usage of the function
-create_multi_year_donut(data = my_data, 
-                        year_columns = c("2018", "2019", "2020", "2021"), 
-                        highlight_year = "2020")
+\dontrun{
+# Create sample data
+data <- data.frame(
+  "2020" = c("Wheat", "Corn", "Soy"),
+  "2021" = c("Corn", "Soy", "Wheat"),
+  "2022" = c("Soy", "Wheat", "Corn"),
+  area = c(1000000, 1500000, 2000000)
+)
+
+# Define colors for crops
+crop_colors <- c(
+  "Wheat" = "#FFD700",
+  "Corn" = "#90EE90",
+  "Soy" = "#87CEEB"
+)
+
+# Create visualization
+create_multi_year_donut(
+  data = data,
+  year_columns = c("2020", "2021", "2022"),
+  title = "Crop Distribution 2020-2022",
+  highlight_year = "2021",
+  colors = crop_colors
+)
+}
 
 }

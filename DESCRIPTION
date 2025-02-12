@@ -1,6 +1,6 @@
 Package: CropRotationViz
 Title: Interactive Tool for Crop Rotation Sequence Analysis and Visualization
-Version: 0.1.0
+Version: 0.0.1
 Authors@R: 
     person("Franz", "Schulze", , "franz.schulze@geo.uni-halle.de", role = c("aut", "cre"))
 Description: An interactive Shiny application for analyzing and visualizing crop rotation 
@@ -11,58 +11,38 @@ Description: An interactive Shiny application for analyzing and visualizing crop
     and customizable visualization options. Designed for agricultural researchers and 
     practitioners working with spatiotemporal crop rotation data.
 License: MIT + file LICENSE
-URL: https://github.com/franzschulze/CropRotationViz
-BugReports: https://github.com/franzschulze/CropRotationViz/issues
+URL: https://github.com/franz-geoeco/CropRotationViz
+BugReports: https://github.com/franz-geoeco/CropRotationViz/issues
 Depends:
     R (>= 3.5.0)
 Imports:
-    dplyr,
-    forcats,
-    htmltools,
-    plyr,
-    purrr,
-    stringr,
-    tidyr,
-    shiny,
-    sf (>= 1.0.12),
-    leaflet (>= 2.1.2),
-    ggplot2,
-    plotly (>= 4.10.1),
+    biscale,
     data.table,
     DT,
+    dplyr,
+    forcats,
+    geodata,
     ggalluvial,
+    ggplot2,
+    htmltools,
+    leaflet (>= 2.1.2),
+    purrr,
+    rlang,
+    plotly (>= 4.10.1),
+    progress (>= 1.2.2),
     rmapshaper,
+    sf (>= 1.0.12),
+    shiny,
     shinyBS,
     shinyFiles,
     shinyWidgets,
     shinyalert,
     shinycssloaders,
     shinythemes,
-    units
-Suggests:
-    testthat (>= 3.0.0),
-    knitr (>= 1.42),
-    rmarkdown (>= 2.21),
-    biscale,
-    DiagrammeR,
-    furrr,
-    future,
-    geodata,
-    ggmap,
-    ggpubr,
-    ggrepel (>= 0.9.3),
-    gridExtra (>= 2.3),
-    grDevices,
-    lattice (>= 0.20.45),
-    leaflet.minicharts (>= 0.6.2),
-    osmdata (>= 0.2.3),
-    progress (>= 1.2.2),
-    randomcoloR (>= 1.1.0),
-    rsvg (>= 2.4.0),
-    rworldmap,
+    sortable,
     sp,
-    tidyverse,
-    tools
+    tidyr,
+    units
 Encoding: UTF-8
 LazyData: true
 Roxygen: list(markdown = TRUE)

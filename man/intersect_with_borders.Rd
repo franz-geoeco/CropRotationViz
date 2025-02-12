@@ -4,13 +4,19 @@
 \alias{intersect_with_borders}
 \title{Intersect Geometries with Administrative Borders}
 \usage{
-intersect_with_borders(input, level, EZG)
+intersect_with_borders(input, level, countriesSP, EZG, aoi)
 }
 \arguments{
 \item{input}{An sf object containing the input geometries to be intersected}
 
 \item{level}{Numeric value specifying the administrative level for intersection
 (e.g., 1 for states/provinces, 2 for counties/districts)}
+
+\item{countriesSP}{SpatialPolygonsDataFrame object containing world map boundaries}
+
+\item{EZG}{SpatialPolygonsDataFrame object containing German river catchments}
+
+\item{aoi}{SpatialPolygonsDataFrame object containing the areas of interest}
 }
 \value{
 An sf object containing the intersected geometries

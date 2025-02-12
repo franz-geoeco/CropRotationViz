@@ -50,9 +50,7 @@
 #' @importFrom shinycssloaders withSpinner
 #' @importFrom htmltools tags HTML
 #' @importFrom tidyr pivot_longer
-#' @importFrom plyr count
 #' @importFrom purrr reduce
-#' @importFrom stringr str_remove
 #' @importFrom forcats fct_reorder
 #' @importFrom shinyalert shinyalert
 #' @import ggalluvial
@@ -102,12 +100,18 @@ viz_ui <- function(input_dir = NA){
                 tabPanel("Plot Sequence",
                          br(),
                          fluidRow(
+                           #-------------------------------------------------------------------------------
+                           # Header Section
+                           #-------------------------------------------------------------------------------
                            column(style = "margin-top: -30px; margin-bottom: 0px;", width = 4, h2("Crop Sequences")), 
                            column(5),
                            column(width = 2, style = "margin-top: 2vh;", tags$img(src = "www/GeoECO_MLU_LANG_2.png", height = "70px", width = "265px"))
                            ),
                            br(),
                          fluidRow(
+                           #-------------------------------------------------------------------------------
+                           # Step 1: Settings
+                           #-------------------------------------------------------------------------------
                            column(2,
                                          numericRangeInput("Area_range_sec", "Sequence Area Range (km²):",
                                                            min = 0, max = 4000,
@@ -164,6 +168,9 @@ viz_ui <- function(input_dir = NA){
                                   ),
                            column(4, plotOutput("perc_plot", height = 80))
                          ),
+                         #-------------------------------------------------------------------------------
+                         # Step 2: Major Sankey plot
+                         #-------------------------------------------------------------------------------
                          fluidRow(
                            column(1),
                            column(8,
@@ -177,13 +184,17 @@ viz_ui <- function(input_dir = NA){
                                   )
                            ),
                            column(1,
-                                  downloadButton("Save_sankey_plot", label = "Save Plot as PNG"
+                                  downloadButton("Save_sankey_plot", label = "Save Plot"
                                                  )
                                   )
                          ),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),
                          
                          # Horizontal line
                          tags$hr(style = "border-top: 1px solid white; margin-top: 20px; margin-bottom: 20px;"),
+                         
+                         #-------------------------------------------------------------------------------
+                         # Step 3: Data Table
+                         #-------------------------------------------------------------------------------
                          fluidRow(
                            column(1),
                            column(3,
@@ -217,6 +228,9 @@ viz_ui <- function(input_dir = NA){
                          ),
                          # Horizontal line
                          tags$hr(style = "border-top: 1px solid white; margin-top: 20px; margin-bottom: 20px;"),
+                         #-------------------------------------------------------------------------------
+                         # Step 4: Aggregation Visualization
+                         #-------------------------------------------------------------------------------
                          fluidRow(
                            column(1),
                            column(7,
@@ -696,7 +710,6 @@ ui <- function(app_data) {
 #' @importFrom shiny fluidPage tabsetPanel tabPanel fluidRow column
 #'   uiOutput renderUI verbatimTextOutput fileInput
 #'   actionButton wellPanel
-#' @importFrom ggridges geom_density_ridges theme_ridges
 #' @import data.table 
 #' @import ggalluvial
 #' @examples
@@ -712,9 +725,8 @@ viz_server <- function(input, output, session, app_data, input_dir) {
   options(warn = -1) 
   
   all_wrap_number_count_small <- app_data$Input_App_data$all_wrap_number_count_small
-  crop_color_mapping <- app_data$Input_App_data$crop_color_mapping
   loaded_env <- app_data$Input_App_data$loaded_env
-  
+
   options(shiny.maxRequestSize=1024^3 )
   # Reactive value to track if data is loaded
   data_loaded <- reactiveVal(FALSE)
@@ -722,6 +734,7 @@ viz_server <- function(input, output, session, app_data, input_dir) {
   # Render dynamic UI based on whether data is loaded
   output$dynamic_ui <- renderUI({
     if (!data_loaded() & is.na(input_dir)) {
+      
       # Show loader interface
       fluidPage(
         br(),
@@ -859,6 +872,11 @@ viz_server <- function(input, output, session, app_data, input_dir) {
     District_choices <- names(district_CropRotViz_intersection)
     EZG_choices      <- names(EZG_CropRotViz_intersection)
     
+    if(language == "English"){
+      crop_color_mapping <- app_data$Input_App_data$crop_color_mapping$en
+    }else{
+      crop_color_mapping <- app_data$Input_App_data$crop_color_mapping$de
+    }
     #--------------------------------------------------------------------------------------------
     
     # Update the pickerInput Crops_sec
@@ -1801,7 +1819,6 @@ viz_server <- function(input, output, session, app_data, input_dir) {
     
     output$basin_donut_plot <- renderPlotly({
       data <- basin_rotation_data()[[2]]
-      View(data)
       if (any(grepl("Aggregated_", names(data)))) {
         prefix <- "Aggregated_"
       }else{

@@ -151,10 +151,93 @@ get_all_crops <- function(processed_files, codierung_all, language) {
 
 #' Add Names to Fields
 #' 
-#' @param fields_list List of field data
-#' @return List of field data with added names
-#' @importFrom sf st_read st_transform
+#' This function processes a list of spatial field data and adds names to the fields
+#' based on either numeric codes or existing crop names. It can handle both English
+#' and German language options when working with coded data.
+#' 
+#' @param fields_list A list where each element contains spatial field data with the
+#'   following structure:
+#'   \itemize{
+#'     \item sf_object: An sf object containing the field geometries
+#'     \item selected_column: Name of the column containing codes or crop names
+#'     \item selected_year: The year associated with the data
+#'   }
+#' @param codierung_all A data frame containing the coding reference table with columns:
+#'   \itemize{
+#'     \item NC: Numeric codes
+#'     \item german_names: German crop names
+#'     \item english_names: English crop names
+#'   }
+#' @param column Character string specifying the type of input data. Must be either
+#'   "Code" for numeric codes or any other value for direct crop names.
+#' @param language Character string specifying the desired output language.
+#'   Must be either "English" or "German". Only used when column = "Code".
+#' 
+#' @return A list of sf objects where each element contains:
+#'   \itemize{
+#'     \item Geometry column named "geometry"
+#'     \item For coded data (column = "Code"):
+#'       \itemize{
+#'         \item NC_{year}: Original numeric codes
+#'         \item Name_{year}: Crop names in specified language
+#'       }
+#'     \item For direct names:
+#'       \itemize{
+#'         \item Name_{year}: Original crop names
+#'       }
+#'   }
+#' 
+#' @details
+#' When processing coded data (column = "Code"), the function:
+#' \itemize{
+#'   \item Filters out codes less than 100
+#'   \item Merges with the coding reference table
+#'   \item Selects the appropriate language names
+#' }
+#' For direct names, it simply renames the crop name column to include the year.
+#' 
+#' @note
+#' The function assumes that the input sf objects have valid geometries and that
+#' the coding reference table contains all necessary codes when working with coded data.
+#' 
+#' @examples
+#' \dontrun{
+#' # Example with coded data
+#' fields <- list(
+#'   list(
+#'     sf_object = sf::st_read("fields_2020.shp"),
+#'     selected_column = "crop_code",
+#'     selected_year = "2020"
+#'   )
+#' )
+#' 
+#' codes <- data.frame(
+#'   NC = c(101, 102),
+#'   german_names = c("Weizen", "Gerste"),
+#'   english_names = c("Wheat", "Barley")
+#' )
+#' 
+#' # Process with German names
+#' result_de <- add_names(fields, codes, "Code", "German")
+#' 
+#' # Process with English names
+#' result_en <- add_names(fields, codes, "Code", "English")
+#' 
+#' # Example with direct crop names
+#' fields_named <- list(
+#'   list(
+#'     sf_object = sf::st_read("crops_2020.shp"),
+#'     selected_column = "crop_name",
+#'     selected_year = "2020"
+#'   )
+#' )
+#' 
+#' result_direct <- add_names(fields_named, NULL, "Name", NULL)
+#' }
+#' 
+#' @importFrom sf st_read st_transform st_geometry
 #' @importFrom dplyr filter mutate select
+#' 
 #' @export
 add_names <- function(fields_list, codierung_all, column, language){
   
@@ -193,35 +276,6 @@ add_names <- function(fields_list, codierung_all, column, language){
   }
   
   return(fields_list)
-}
-
-#-------------------------------------------------------------------------------------------
-
-#' Extract Aggregation Status from Processing Summary
-#' 
-#' @param text Character string containing the processing summary text
-#' @return Character string indicating the aggregation status ("Yes" or "No")
-#' @description
-#' This function extracts the aggregation status from a processing summary text.
-#' It searches for a line beginning with "Aggregation:" and returns its value.
-#' The function assumes the text contains a properly formatted Options section
-#' with an Aggregation field.
-#' 
-#' @examples
-#' text <- "Options\nAggregation: Yes\nIntersection: complete"
-#' extract_aggregation(text)  # Returns "Yes"
-#' 
-extract_aggregation <- function(text) {
-  # Split text into lines
-  lines <- strsplit(text, "\n")[[1]]
-  
-  # Find the line containing "Aggregation:"
-  agg_line <- grep("^Aggregation:", lines, value = TRUE)
-  
-  # Extract the value after the colon and trim whitespace
-  aggregation <- gsub("^Aggregation:\\s*", "", agg_line)
-  
-  return(aggregation)
 }
 
 #-------------------------------------------------------------------------------------------
@@ -689,6 +743,9 @@ intersect_fields_simple <- function(fields_list, max_area = 20000 * 1e6) {
 #' @param input An sf object containing the input geometries to be intersected
 #' @param level Numeric value specifying the administrative level for intersection 
 #'             (e.g., 1 for states/provinces, 2 for counties/districts)
+#'@param countriesSP SpatialPolygonsDataFrame object containing world map boundaries
+#'@param EZG SpatialPolygonsDataFrame object containing German river catchments
+#'@param aoi SpatialPolygonsDataFrame object containing the areas of interest
 #' 
 #' @return An sf object containing the intersected geometries
 #' 
@@ -712,7 +769,7 @@ intersect_fields_simple <- function(fields_list, max_area = 20000 * 1e6) {
 #' }
 #' 
 #' @export
-intersect_with_borders <- function(input, level, EZG) {
+intersect_with_borders <- function(input, level, countriesSP, EZG, aoi) {
   # Create bounding box and center point
   point <- sf::st_bbox(input)
   point <- sf::st_as_sf(data.frame(
@@ -721,9 +778,6 @@ intersect_with_borders <- function(input, level, EZG) {
   ), coords = c("lon", "lat"))
   sf::st_crs(point) <- sf::st_crs(input)
 
-  # Get world map
-  countriesSP <- rworldmap::getMap(resolution = 'low')
-  
   # Convert sf point to sp
   pointsSP <- as(sf::st_transform(point, crs = sf::st_crs(countriesSP)), "Spatial")
   
@@ -736,7 +790,7 @@ intersect_with_borders <- function(input, level, EZG) {
   
   borders <- borders[paste0("NAME_", level)]
   borders <- sf::st_as_sf(borders)
-  borders <- st_transform(borders, crs = sf::st_crs(input))  
+  borders <- sf::st_transform(borders, crs = sf::st_crs(input))  
   borders_inter <- borders[apply(st_intersects(borders, input, sparse = FALSE), 1, any), ]
   
   
@@ -757,13 +811,21 @@ intersect_with_borders <- function(input, level, EZG) {
     intersected <- sf::st_intersection(intersected, sf::st_transform(EZG, crs = sf::st_crs(input)))
     EZG_inter <- subset(EZG, EZG %in% unique(st_drop_geometry(intersected)$EZG))
     EZG_inter <- st_transform(EZG_inter, crs = sf::st_crs(input))
-    EZG_inter <- sf::st_crop(EZG_inter, borders_inter)
+    EZG_inter <- sf::st_intersection(EZG_inter, borders_inter)
     # Prepare the output list
-    out_list <- list(intersected, borders_inter, EZG_inter)
+    out_list <- list(intersected = intersected, borders_inter = borders_inter, EZG_inter = EZG_inter)
   } else {
     # If no intersection, keep intersected as is and notify
-    out_list <- list(intersected, borders_inter)
+    out_list <- list(intersected = intersected, borders_inter = borders_inter)
     message("No intersection found between German river basins and intersected features")
+  }
+  
+  if(!is.null(aoi)){
+    names(aoi) <- c("AOI", "geometry")
+    intersected <- sf::st_intersection(intersected, sf::st_transform(aoi, crs = sf::st_crs(input)))
+    out_list$intersected <- intersected
+    # Prepare the output list with aoi
+    out_list <- c(out_list,  list(AOI_inter = intersected))
   }
   return(out_list)
 }
@@ -824,6 +886,7 @@ aggregator <- function(intersected, years, crop_codes, type = "NC"){
 #' @param width Plot width in inches (default: 14)
 #' @param height Plot height in inches (default: 10)
 #' @param resolution Plot resolution in dpi (default: 200)
+#' @param color Named vector of colors for each crop type
 #' 
 #' @return A ggplot object containing the Sankey diagram visualizing crop rotations over time
 #' 
@@ -836,8 +899,6 @@ aggregator <- function(intersected, years, crop_codes, type = "NC"){
 #' @importFrom ggalluvial geom_stratum geom_flow
 #' @importFrom dplyr %>% mutate filter select if_any row_number rename
 #' @importFrom tidyr gather
-#' @importFrom stringr str_remove
-#' @importFrom plyr count
 #' @importFrom grDevices png dev.off
 #' @importFrom sf st_area
 #' @importFrom tidyr pivot_longer
@@ -877,7 +938,7 @@ create_crop_rotation_sankey <- function(data, min_area = 1,
         values_to = "key"
       ) %>% 
       mutate(
-        year = as.numeric(str_remove(value, "Aggregated_")), 
+        year = as.numeric(gsub(value, "Aggregated_")), 
         key = factor(key), 
         key = fct_reorder(key, -key)
       ) %>% 
@@ -891,7 +952,7 @@ create_crop_rotation_sankey <- function(data, min_area = 1,
         values_to = "key"
       ) %>% 
       mutate(
-        year = as.numeric(str_remove(value, "Name_")), 
+        year = as.numeric(gsub(value, "Name_")), 
         key = factor(key), 
         key = fct_reorder(key, -key)
       ) %>% 
@@ -901,9 +962,6 @@ create_crop_rotation_sankey <- function(data, min_area = 1,
   
   # Get unique keys
   unique_keys <- unique(rotation_data$key)
-  
-  # Generate colors if needed
-  set.seed(123)  # for reproducibility
   
   # Color generation function
   generate_random_color <- function() {
@@ -978,64 +1036,126 @@ create_crop_rotation_sankey <- function(data, min_area = 1,
 
 #-------------------------------------------------------------------------------------------
 
-#' Create a Multi-Year Donut Chart with Equal-Width Rings
-#'
-#' This function generates a multi-year donut chart where each year is represented as a concentric ring.
-#' All rings have equal width and are spaced evenly. Additionally, one specific year can be highlighted with a different border color.
-#'
-#' @param data A dataframe containing frequency values for each year and crop category.
-#' @param year_columns A vector of column names (as strings) from the `data` dataframe that represent years.
-#' @param title A string representing the title of the chart (default is "Crop Distribution").
-#' @param highlight_year A string specifying which year should be highlighted with a different border color. If NULL, no year is highlighted.
-#'
-#' @return A plotly donut chart with multiple concentric rings representing different years.
-#' @export
-#'
+#' Create a Multi-Year Donut Chart
+#' 
+#' Creates a donut chart visualization showing crop distribution across multiple years,
+#' with each year represented as a concentric ring. The function supports highlighting
+#' a specific year and ensures equal ring widths for better visualization.
+#' 
+#' @param data A data frame containing crop distribution data with columns for each year
+#'   and an 'area' column containing the area values in square meters.
+#' @param year_columns Character vector of column names representing years in the data.
+#'   Maximum 10 years supported.
+#' @param title Character string for the chart title. Default is "Crop Distribution".
+#' @param highlight_year Optional character string matching one of the year_columns to
+#'   highlight that specific year's ring. Default is NULL.
+#' @param colors Named vector of colors for each crop category. Names should match unique
+#'   values in the year columns.
+#' 
+#' @return A plotly object containing the multi-year donut chart visualization.
+#' 
+#' @details
+#' The visualization creates concentric rings where:
+#' - Each ring represents one year
+#' - Outer ring shows labels
+#' - Ring widths are equal
+#' - Gaps between rings are consistent
+#' - Areas are displayed in square kilometers
+#' 
+#' When a highlight_year is specified, that year's ring will use full color while
+#' other years are displayed in lighter shades.
+#' 
 #' @examples
-#' # Example usage of the function
-#' create_multi_year_donut(data = my_data, 
-#'                         year_columns = c("2018", "2019", "2020", "2021"), 
-#'                         highlight_year = "2020")
-#'
+#' \dontrun{
+#' # Create sample data
+#' data <- data.frame(
+#'   "2020" = c("Wheat", "Corn", "Soy"),
+#'   "2021" = c("Corn", "Soy", "Wheat"),
+#'   "2022" = c("Soy", "Wheat", "Corn"),
+#'   area = c(1000000, 1500000, 2000000)
+#' )
+#' 
+#' # Define colors for crops
+#' crop_colors <- c(
+#'   "Wheat" = "#FFD700",
+#'   "Corn" = "#90EE90",
+#'   "Soy" = "#87CEEB"
+#' )
+#' 
+#' # Create visualization
+#' create_multi_year_donut(
+#'   data = data,
+#'   year_columns = c("2020", "2021", "2022"),
+#'   title = "Crop Distribution 2020-2022",
+#'   highlight_year = "2021",
+#'   colors = crop_colors
+#' )
+#' }
+#' 
+#' @importFrom plotly plot_ly subplot layout
+#' @importFrom grDevices col2rgb rgb
+#' 
 #' @export
-create_multi_year_donut <- function(data, year_columns, title = "Crop Distribution", highlight_year = NULL, colors) {
-  # Validate number of years
+create_multi_year_donut <- function(data, year_columns, title = "Crop Distribution", 
+                                    highlight_year = NULL, colors) {
+  # Input validation
+  if (!is.data.frame(data)) {
+    stop("'data' must be a data frame")
+  }
+  
+  if (!all(year_columns %in% names(data))) {
+    stop("All year_columns must exist in data")
+  }
+  
+  if (!("area" %in% names(data))) {
+    stop("'area' column must exist in data")
+  }
+  
   if (length(year_columns) > 10) {
     stop("Maximum of 10 years supported")
+  }
+  
+  if (!is.null(highlight_year) && !(highlight_year %in% year_columns)) {
+    stop("highlight_year must be NULL or one of the year_columns")
+  }
+  
+  # Validate colors
+  all_categories <- unique(unlist(data[year_columns]))
+  if (!all(all_categories %in% names(colors))) {
+    stop("colors must be provided for all unique categories in the data")
   }
   
   # Define constants for equal ring widths and increased gaps
   ring_width <- 0.1  
   gap_size <- 0.0003 
   outer_limit <- 0.9 
-  total_width <- length(year_columns) * (ring_width + gap_size)  # Total space occupied
-  inner_limit <- outer_limit - total_width  # Compute inner boundary
+  total_width <- length(year_columns) * (ring_width + gap_size)
+  inner_limit <- outer_limit - total_width
   
   # Function to lighten colors
   lighten_color <- function(color) {
     rgb_vals <- col2rgb(color)
-    # Mix with white (255,255,255) to create lighter version
-    lighter_vals <- rgb_vals + (255 - rgb_vals) * 0.4  # Adjust 0.4 to control lightness
+    lighter_vals <- rgb_vals + (255 - rgb_vals) * 0.4
     rgb(lighter_vals[1], lighter_vals[2], lighter_vals[3], maxColorValue = 255)
   }
   
-  # Compute hole sizes ensuring equal ring widths + increased gaps
-  hole_sizes <- seq(inner_limit, outer_limit - (ring_width + gap_size), length.out = length(year_columns))
+  # Compute hole sizes for equal ring widths + gaps
+  hole_sizes <- seq(inner_limit, outer_limit - (ring_width + gap_size), 
+                    length.out = length(year_columns))
   
-  # Create a list to store traces for each year
+  # Create traces for each year
   traces <- lapply(seq_along(year_columns), function(i) {
     year_col <- year_columns[i]
     
     # Adjust colors based on highlight_year
     year_colors <- if (!is.null(highlight_year)) {
       if (year_col == highlight_year) {
-        colors[data[[year_col]]]  # Original colors for highlighted year
+        colors[data[[year_col]]]
       } else {
-        # Lighten colors for non-highlighted years
         sapply(colors[data[[year_col]]], lighten_color)
       }
     } else {
-      colors[data[[year_col]]]  # No highlighting, use original colors
+      colors[data[[year_col]]]
     }
     
     plot_ly(data,
@@ -1056,22 +1176,35 @@ create_multi_year_donut <- function(data, year_columns, title = "Crop Distributi
             hovertemplate = paste(
               "<b>", year_col, "</b><br>",
               "Category: %{label}<br>",
-              "Area: %{value:.2f} km²<extra></extra>"  
+              "Area: %{value:.2f} km²<extra></extra>"
             ),
             showlegend = FALSE)
   })
   
-  # Combine all traces
+  # Combine traces and set layout
   subplot(traces, nrows = 1, shareX = TRUE, shareY = TRUE) %>%
-    layout(title = list(
-      text = title,
-      font = list(color = 'white')
-    ),
-    xaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE),
-    yaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE),
-    uniformtext = list(minsize = 12, mode = 'hide'),
-    paper_bgcolor = '#1f1b1b',
-    plot_bgcolor = '#1f1b1b')
+    layout(
+      title = list(
+        text = title,
+        font = list(color = 'white')
+      ),
+      xaxis = list(
+        showgrid = FALSE, 
+        zeroline = FALSE, 
+        showticklabels = FALSE
+      ),
+      yaxis = list(
+        showgrid = FALSE, 
+        zeroline = FALSE, 
+        showticklabels = FALSE
+      ),
+      uniformtext = list(
+        minsize = 12, 
+        mode = 'hide'
+      ),
+      paper_bgcolor = '#1f1b1b',
+      plot_bgcolor = '#1f1b1b'
+    )
 }
 
 ###############################################################################################################################################################################################################################################
@@ -1101,10 +1234,8 @@ create_multi_year_donut <- function(data, year_columns, title = "Crop Distributi
 #'   \item{year}{Numeric, year of rotation}
 #' 
 #' @importFrom dplyr %>% mutate filter select if_any row_number rename
-#' @importFrom plyr count
 #' @importFrom tidyr pivot_longer
 #' @importFrom forcats fct_reorder
-#' @importFrom stringr str_remove
 #' 
 #' @examples
 #' \dontrun{
@@ -1187,7 +1318,7 @@ transform_rotation_data <- function(All_rot_big, distribution_df, input_area_ran
           values_to = "key"
         ) %>%
         mutate(
-          year = as.numeric(str_remove(value, "Aggregated_")),
+          year = as.numeric(gsub(value, "Aggregated_")),
           key  = factor(key),
           key  = fct_reorder(key, -key)
         ) %>%
@@ -1202,7 +1333,7 @@ transform_rotation_data <- function(All_rot_big, distribution_df, input_area_ran
           values_to = "key"
         ) %>%
         mutate(
-          year = as.numeric(str_remove(value, "Name_")),
+          year = as.numeric(gsub(value, "Name_")),
           key  = factor(key),
           key  = fct_reorder(key, -key)
         ) %>%
@@ -1638,7 +1769,7 @@ dummy_field_creator <- function(output_dir,
 #' }
 #' 
 #' @export
-diversity_mapping <- function(input, agg_cols, districts, EZGs = NA){
+diversity_mapping <- function(input, agg_cols, districts, EZGs = NA, AOIs = NA){
   
   invekos_df <- st_drop_geometry(input)
   
@@ -1715,14 +1846,157 @@ diversity_mapping <- function(input, agg_cols, districts, EZGs = NA){
     EZG_div_data <- list(BISCALE = BISCALE, color_pal = color_pal, labels1 = labels1)
   }
   
+  if(all(is.na(EZGs))) {  # Check if EZGs is entirely NA
+    AOI_div_data <- NA
+  }else{
+    AOI_names <- c("AOI", "area", "unique_count", "transitions")
+    BISCALE <- invekos_df[,AOI_names]
+    
+    BISCALE <- BISCALE%>%
+      group_by(AOI)%>%
+      summarise(mean_unique = mean(unique_count),
+                meant_transi = mean(transitions),
+                mean_unique_weight = weighted.mean(unique_count, area),
+                mean_transi_weight = weighted.mean(transitions, area)
+      )
+    
+    BISCALE <- merge(EZGs, BISCALE)
+    
+    # create classes
+    BISCALE <- bi_class(BISCALE, x = mean_unique_weight, y = mean_transi_weight, style = "quantile", dim = 3)
+    labels1 <- bi_class_breaks(BISCALE, x = mean_unique_weight, y = mean_transi_weight, style = "quantile", 
+                               dim = 3, dig_lab = c(2,2), split = FALSE)
+    
+    BISCALE <- st_transform(BISCALE, crs = "EPSG:4326")
+    
+    # Create a color palette based on the bi_class
+    color_pal <- colorFactor(
+      palette = palette,
+      domain = BISCALE$bi_class
+    )
+    
+    AOI_div_data <- list(BISCALE = BISCALE, color_pal = color_pal, labels1 = labels1)
+  }
+  
   # list the maps
-  Data <- list(District_div_data, EZG_div_data)
+  Data <- list(District_div_data, EZG_div_data, AOI_div_data) 
   
   return(Data)
 }
 
 #-------------------------------------------------------------------------------------------
 
+#' Calculate and Map Diversity Metrics with Error Handling 
+#'
+#' different administrative and ecological boundaries. It includes comprehensive error
+#' handling and data validation.
+#'
+#' @param list_intersect_with_borders List containing intersection data with different boundary types
+#'        Must contain either 'EZG_inter' or 'borders_inter' elements
+#' @param CropRotViz_intersection Data frame containing crop rotation visualization data
+#' @param agg_cols Character vector of column names to use for aggregation
+#' @param Districts sf object containing district boundaries
+#' @param EZGs sf object containing ecological zone boundaries (optional)
+#' @param AOIs sf object containing areas of interest boundaries (optional)
+#' @param min_rows Minimum number of rows required for sufficient data (default: 9)
+#' @param min_years Minimum number of years required for sufficient data (default: 3)
+#'
+#' @return Returns either:
+#'         - A spatial object with diversity metrics if successful
+#'         - NULL if warnings occurred during processing
+#'         - NA if errors occurred or insufficient data was available
+#'
+#' @examples
+#' \dontrun{
+#' # Basic usage with only Districts
+#' result <- handle_diversity_mapping(
+#'   list_intersect_with_borders = list(borders_inter = borders_data),
+#'   CropRotViz_intersection = crop_data,
+#'   agg_cols = c("year", "crop_type"),
+#'   Districts = district_sf
+#' )
+#'
+#' # Usage with all boundary types
+#' result_full <- handle_diversity_mapping(
+#'   list_intersect_with_borders = list(
+#'     EZG_inter = ezg_data,
+#'     borders_inter = borders_data
+#'   ),
+#'   CropRotViz_intersection = crop_data,
+#'   agg_cols = c("year", "crop_type"),
+#'   Districts = district_sf,
+#'   EZGs = ezg_sf,
+#'   AOIs = aoi_sf
+#' )
+#' }
+#'
+#' @export
+handle_diversity_mapping <- function(list_intersect_with_borders, CropRotViz_intersection, 
+                                     agg_cols, Districts, EZGs = NULL, AOIs = NULL) {
+  
+  # Function to check if there's enough data for diversity mapping
+  has_sufficient_data <- function(data_list, min_rows = 9, min_years = 3) {
+    return(dim(data_list)[1] > min_rows && length(years) > min_years)
+  }
+  
+  # Helper function to handle the actual mapping with error handling
+  safe_diversity_mapping <- function(...) {
+    tryCatch({
+      diversity_mapping(...)
+    }, error = function(e) {
+      warning(sprintf("Error in diversity mapping: %s", e$message))
+      return(NA)
+    }, warning = function(w) {
+      warning(sprintf("Warning in diversity mapping: %s", w$message))
+      return(NULL)
+    })
+  }
+  
+  # Helper function to log the mapping attempt
+  log_mapping_attempt <- function(mapping_type) {
+    message(sprintf("Attempting diversity mapping with %s", mapping_type))
+  }
+  
+  diversity_data <- try({
+    if (!is.null(EZGs)) {
+      log_mapping_attempt("EZG borders")
+      
+      if (has_sufficient_data(list_intersect_with_borders$EZG_inter)) {
+        if (!is.null(AOIs)) {
+          safe_diversity_mapping(CropRotViz_intersection, agg_cols, Districts, EZGs, AOIs)
+        } else {
+          safe_diversity_mapping(CropRotViz_intersection, agg_cols, Districts, EZGs)
+        }
+      } else {
+        warning("Insufficient data for EZG intersection")
+        NA
+      }
+    } else {
+      log_mapping_attempt("standard borders")
+      
+      if (has_sufficient_data(list_intersect_with_borders$borders_inter)) {
+        if (!is.null(AOIs)) {
+          safe_diversity_mapping(CropRotViz_intersection, agg_cols, Districts, AOIs)
+        } else {
+          safe_diversity_mapping(CropRotViz_intersection, agg_cols, Districts)
+        }
+      } else {
+        warning("Insufficient data for borders intersection")
+        NA
+      }
+    }
+  }, silent = TRUE)
+  
+  # Handle any errors that occurred during the entire process
+  if (inherits(diversity_data, "try-error")) {
+    warning(sprintf("Error in diversity mapping process: %s", attr(diversity_data, "condition")$message))
+    return(NA)
+  }
+  
+  return(diversity_data)
+}
+
+#-------------------------------------------------------------------------------------------
 #' Create a Bivariate Choropleth Map for Agricultural Diversity
 #'
 #' @description

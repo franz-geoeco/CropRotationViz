@@ -4,14 +4,96 @@
 \alias{add_names}
 \title{Add Names to Fields}
 \usage{
-add_names(fields_list, codierung_all, column)
+add_names(fields_list, codierung_all, column, language)
 }
 \arguments{
-\item{fields_list}{List of field data}
+\item{fields_list}{A list where each element contains spatial field data with the
+following structure:
+\itemize{
+\item sf_object: An sf object containing the field geometries
+\item selected_column: Name of the column containing codes or crop names
+\item selected_year: The year associated with the data
+}}
+
+\item{codierung_all}{A data frame containing the coding reference table with columns:
+\itemize{
+\item NC: Numeric codes
+\item german_names: German crop names
+\item english_names: English crop names
+}}
+
+\item{column}{Character string specifying the type of input data. Must be either
+"Code" for numeric codes or any other value for direct crop names.}
+
+\item{language}{Character string specifying the desired output language.
+Must be either "English" or "German". Only used when column = "Code".}
 }
 \value{
-List of field data with added names
+A list of sf objects where each element contains:
+\itemize{
+\item Geometry column named "geometry"
+\item For coded data (column = "Code"):
+\itemize{
+\item NC_{year}: Original numeric codes
+\item Name_{year}: Crop names in specified language
+}
+\item For direct names:
+\itemize{
+\item Name_{year}: Original crop names
+}
+}
 }
 \description{
-Add Names to Fields
+This function processes a list of spatial field data and adds names to the fields
+based on either numeric codes or existing crop names. It can handle both English
+and German language options when working with coded data.
+}
+\details{
+When processing coded data (column = "Code"), the function:
+\itemize{
+\item Filters out codes less than 100
+\item Merges with the coding reference table
+\item Selects the appropriate language names
+}
+For direct names, it simply renames the crop name column to include the year.
+}
+\note{
+The function assumes that the input sf objects have valid geometries and that
+the coding reference table contains all necessary codes when working with coded data.
+}
+\examples{
+\dontrun{
+# Example with coded data
+fields <- list(
+  list(
+    sf_object = sf::st_read("fields_2020.shp"),
+    selected_column = "crop_code",
+    selected_year = "2020"
+  )
+)
+
+codes <- data.frame(
+  NC = c(101, 102),
+  german_names = c("Weizen", "Gerste"),
+  english_names = c("Wheat", "Barley")
+)
+
+# Process with German names
+result_de <- add_names(fields, codes, "Code", "German")
+
+# Process with English names
+result_en <- add_names(fields, codes, "Code", "English")
+
+# Example with direct crop names
+fields_named <- list(
+  list(
+    sf_object = sf::st_read("crops_2020.shp"),
+    selected_column = "crop_name",
+    selected_year = "2020"
+  )
+)
+
+result_direct <- add_names(fields_named, NULL, "Name", NULL)
+}
+
 }
