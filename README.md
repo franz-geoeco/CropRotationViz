@@ -248,7 +248,7 @@ Consider a dataset spanning two years with varying fields:
 
 
 ## User Manual
-To get a more detailed description about the specific functionalities, look into the detailed [user manual](/docs/user-manual.pdf).
+To get a more detailed description about the specific functionalities, look into the detailed [user manual](/docs/User_Manual.pdf).
 
 
 ## Contributing
