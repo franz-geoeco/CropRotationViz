@@ -246,6 +246,11 @@ Consider a dataset spanning two years with varying fields:
   <img src="images/intersection.png" alt="Descriptive Alt Text" width="100%">
 </div>
 
+
+## User Manual
+To get a more detailed description about the specific functionalities, look into the detailed [user manual](/docs/user-manual.pdf).
+
+
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request. For major changes, please open an issue first to discuss what you would like to change.
