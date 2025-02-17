@@ -246,7 +246,7 @@ Consider a dataset spanning two years with varying fields:
   <img src="images/intersection.png" alt="Descriptive Alt Text" width="100%">
 </div>
 <div align="center">
-  <img src="images/Flow_chart_Module_2.png" alt="Descriptive Alt Text" width="100%">
+  <img src="images/Flow_chart_Module_2.png" alt="Descriptive Alt Text" width="50%">
 </div>
 
 
