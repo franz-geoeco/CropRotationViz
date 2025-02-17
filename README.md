@@ -236,15 +236,18 @@ Fast Intersection: Only includes fields that are consistently present across all
 - **Fast Intersection Mode**
   - Only retains fields that appear consistently across all years Reduces processing overhead Results in a smaller, more consistent dataset Activated by setting `intersection_type = "Fast"`
 
-### Example
-Consider a dataset spanning two years with varying fields:
-
+### Description
+Processing interface structure:
 <div align="center">
   <img src="images/Flow_chart.png" alt="Descriptive Alt Text" width="100%">
 </div>
+
+Intesection description example with a dataset spanning two years with varying fields:
 <div align="center">
   <img src="images/intersection.png" alt="Descriptive Alt Text" width="100%">
 </div>
+
+Visualization Interface structure:
 <div align="center">
   <img src="images/Flow_chart_Module_2.png" alt="Descriptive Alt Text" width="50%">
 </div>
