@@ -1,20 +1,20 @@
-#' Field-Level Crop Rotation Visualization Server
+#' Field-Level Crop Rotation Server Function
 #' 
-#' @description Advanced server logic for field-level crop rotation visualization
-library(shiny)
-library(shinythemes)
-library(tidyverse)
-library(leaflet)
-library(ggalluvial)
-library(shinyWidgets)
-library(plotly)
-library(shinyBS)
-library(DT)
-library(sf)
-library(leaflet.minicharts)
-library(shinycssloaders)
-library(shinyalert)
-
+#' @description Server-side function that handles the core logic for visualizing field-level crop rotations.
+#' The function processes uploaded spatial data files, manages interactive map displays, and generates
+#' crop rotation visualizations. It includes features such as:
+#' - File upload handling for spatial data (.shp, .gpkg, .fgb formats)
+#' - Interactive map generation with field boundaries
+#' - District-based filtering of field data
+#' - Click-based field selection and rotation pattern display
+#' - Dynamic plot generation for crop sequences
+#' 
+#' @param input Shiny input object containing user inputs
+#' @param output Shiny output object for rendering UI elements
+#' @param session Shiny session object for managing the current session
+#' @param app_data Additional application data passed to the server
+#' 
+#' @return None (modifies Shiny reactive context)
 field_level_server <- function(input, output, session, app_data) {
   options(shiny.maxRequestSize = 10000*1024^2)
   
@@ -46,37 +46,83 @@ field_level_server <- function(input, output, session, app_data) {
   observeEvent(input$vector_file, {
     req(input$vector_file)
     
+    # Show loading message for large files
+    showNotification(
+      "Loading vector file... This may take several minutes for large files.",
+      type = "message",
+      duration = NULL,
+      id = "loading"
+    )
+    
     tryCatch({
       sf::sf_use_s2(FALSE)
       
-      # Get file extension
-      file_ext <- tolower(tools::file_ext(input$vector_file$datapath))
-      
-      # Read spatial data
-      data <- if(file_ext == "shp") {
-        temp_dir <- tempdir()
-        file_base <- tools::file_path_sans_ext(input$vector_file$name)
+      if (any(tools::file_ext(input$vector_file$name) == "shp")) {
+        # Create temporary directory
+        temp_dir <- tempfile()
+        dir.create(temp_dir)
         
-        for(ext in c("shp", "dbf", "shx", "prj")) {
-          from_file <- file.path(dirname(input$vector_file$datapath), paste0(file_base, ".", ext))
-          to_file <- file.path(temp_dir, paste0(file_base, ".", ext))
-          if(file.exists(from_file)) file.copy(from_file, to_file, overwrite = TRUE)
+        # Check if all required files are present
+        required_extensions <- c("shp", "dbf", "shx")
+        uploaded_files <- tools::file_ext(input$vector_file$name)
+        
+        missing_files <- required_extensions[!required_extensions %in% uploaded_files]
+        if (length(missing_files) > 0) {
+          stop(paste("Missing required shapefile components:", 
+                     paste(missing_files, collapse = ", "), 
+                     ". Please upload all required files."))
         }
         
-        st_read(file.path(temp_dir, paste0(file_base, ".shp")), quiet = TRUE)
+        # Copy all files to temp directory with consistent base name
+        base_name <- "shapefile"
+        
+        for (i in seq_along(input$vector_file$datapath)) {
+          ext <- tools::file_ext(input$vector_file$name[i])
+          file.copy(input$vector_file$datapath[i], 
+                    file.path(temp_dir, paste0(base_name, ".", ext)),
+                    overwrite = TRUE)
+        }
+        
+        # Read the shapefile from temp directory
+        data <- st_read(file.path(temp_dir, paste0(base_name, ".shp")), quiet = TRUE)
+        
+        # Clean up temporary directory
+        unlink(temp_dir, recursive = TRUE)
+        
+        # Handle abbreviated column names for shapefiles
+        names(data) <- ifelse(names(data) == "Distrct", "District",
+                              ifelse(grepl("^Ag_", names(data)), 
+                                     sub("^Ag_", "Aggregated_", names(data)),
+                                     ifelse(grepl("^Nm_", names(data)),
+                                            sub("^Nm_", "Name_", names(data)),
+                                            names(data))))
+        
+        # Update district selector choices
+        updateSelectInput(session, "district", 
+                          choices = unique(data$District), 
+                          selected = unique(data$District)[1])
+        
       } else {
-        st_read(input$vector_file$datapath, quiet = TRUE)
+        # For non-shapefile formats (gpkg, fgb), read directly
+        data <- st_read(input$vector_file$datapath[1], quiet = TRUE)
+        # Update district selector choices
+        updateSelectInput(session, "district", 
+                          choices = unique(data$District), 
+                          selected = unique(data$District)[1])
       }
       
       vector_data(data)
       
-      # Update district selector choices
-      updateSelectInput(session, "district", choices = unique(data$District), selected = unique(data$District)[1])
-      
+      removeNotification(id = "loading")
       showNotification("Vector file loaded successfully!", type = "message")
       
     }, error = function(e) {
-      showNotification(paste("Error reading file:", e$message), type = "error")
+      removeNotification(id = "loading")
+      showNotification(
+        paste("Error reading file:", e$message), 
+        type = "error",
+        duration = NULL
+      )
     })
   })
   
@@ -86,6 +132,7 @@ field_level_server <- function(input, output, session, app_data) {
     vector_data()[vector_data()$District == input$district, ]
   })
   
+  # Field map output
   output$field_map <- renderLeaflet({
     req(filtered_data())
     Sys.sleep(1.5)
@@ -105,9 +152,12 @@ field_level_server <- function(input, output, session, app_data) {
       
       # Create hover text containing all crop years and area info
       data$hover_info <- apply(data, 1, function(field) {
-        crop_cols <- grep("^Aggregated_\\d{4}$", names(field), value = TRUE)
-        if(length(crop_cols) == 0) {
-          crop_cols <- grep("^Name_\\d{4}$", names(field), value = TRUE)
+        # First check for Aggregated/Ag columns
+        agg_cols <- grep("^(Aggregated_|Ag_)\\d{4}$", names(field), value = TRUE)
+        
+        # If no Aggregated/Ag columns found, check for Name/Nm columns
+        crop_cols <- if(length(agg_cols) > 0) agg_cols else {
+          grep("^(Name_|Nm_)\\d{4}$", names(field), value = TRUE)
         }
         
         # Format area with 2 decimal places
@@ -118,7 +168,7 @@ field_level_server <- function(input, output, session, app_data) {
           "<b>Area:</b> ", area_text, " ha<br>",
           "<b>Crop Sequence:</b><br>",
           paste(sapply(crop_cols, function(col) {
-            year <- gsub("(Aggregated_|Name_)", "", col)
+            year <- gsub("(Aggregated_|Ag_|Name_|Nm_)", "", col)
             crop <- field[[col]]
             paste0(year, ": ", crop)
           }), collapse = "<br>")
@@ -145,7 +195,6 @@ field_level_server <- function(input, output, session, app_data) {
     })
   })
   
-  
   # Handle map clicks
   observeEvent(input$field_map_shape_click, {
     click <- input$field_map_shape_click
@@ -160,12 +209,17 @@ field_level_server <- function(input, output, session, app_data) {
   
   # Crop rotation plots
   extract_crop_rotation_data <- function(field) {
-    agg_cols <- grep("^Aggregated_\\d{4}$", names(field), value = TRUE)
-    if (length(agg_cols) == 0) agg_cols <- grep("^Name_\\d{4}$", names(field), value = TRUE)
+    # First check for Aggregated/Ag columns
+    agg_cols <- grep("^(Aggregated_|Ag_)\\d{4}$", names(field), value = TRUE)
+    
+    # If no Aggregated/Ag columns found, check for Name/Nm columns
+    crop_cols <- if(length(agg_cols) > 0) agg_cols else {
+      grep("^(Name_|Nm_)\\d{4}$", names(field), value = TRUE)
+    }
     
     data.frame(
-      Year = as.numeric(sub(".*_(\\d{4})$", "\\1", agg_cols)),
-      Crop = sapply(agg_cols, function(col) field[[col]])
+      Year = as.numeric(sub(".*_(\\d{4})$", "\\1", crop_cols)),
+      Crop = sapply(crop_cols, function(col) field[[col]])
     ) %>%
       arrange(Year)
   }
@@ -182,15 +236,31 @@ field_level_server <- function(input, output, session, app_data) {
     plot_ly(plot_data, x = ~Year, y = ~Crop, type = 'scatter', mode = 'lines+markers',
             line = list(color = '#1f77b4'), marker = list(size = 10, color = '#1f77b4')) %>%
       layout(
-        title = plot_title, 
+        title = list(
+          text = plot_title,
+          y = 0.95  # Moves the title up by adding more space above
+        ),
         xaxis = list(title = "Year", tickangle = 45),
-        yaxis = list(title = "Crop Type"), 
+        yaxis = list(title = ""), 
         showlegend = FALSE
       )
   })
 }
 
-# UI Function
+#' Field-Level Crop Rotation UI Function
+#' 
+#' @description User interface function that creates the layout for the field-level crop rotation
+#' visualization tool. The UI includes:
+#' - File upload interface for vector data
+#' - District selection dropdown
+#' - Interactive map display for field visualization
+#' - Conditional panels for displaying crop rotation patterns
+#' - Responsive layout with bootstrap grid system
+#' - Footer with author and institutional information
+#' 
+#' @param app_data Application data passed to the UI for initialization
+#' 
+#' @return A Shiny UI definition that creates a fluid page layout with multiple components
 field_level_ui <- function(app_data) {
   fluidPage(
     theme = shinytheme("cyborg"),
@@ -205,7 +275,11 @@ field_level_ui <- function(app_data) {
     
     # File Upload & District Selection
     fluidRow(
-      column(4, fileInput("vector_file", "Choose Processed Vector File", accept = c(".shp", ".gpkg", ".fgb"), multiple = FALSE)),
+      column(4, fileInput("vector_file", 
+                          "Choose Vector File (if shapefile select all corresponding files)",
+                          accept = c(".shp", ".dbf", ".shx", ".prj", ".cpg", ".gpkg", ".fgb"),
+                          multiple = TRUE)
+             ),
       column(4, selectInput("district", "Select District:", choices = NULL))
     ),
     
