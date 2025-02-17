@@ -158,6 +158,19 @@ If you do not have field data at hand or just want to test the functionality of 
 3. **View Results**
    - Examine the interactive map
    - Review processed data statistics
+
+#### Field Visualization
+1. **Launch the Field Visualization Application**
+   - Run `CropRotationViz::run_field_level_app()`
+   - the application will open your default web browser
+
+2. **Load Data**
+   - Click "Browser" or drag and drop the .shp/.fgb/.gpkg File from the processing output
+     
+3. **View Results**
+   - wait for file loading
+   - select region of interest
+   - click on fields of interest
      
 ## Data Requirements
 
