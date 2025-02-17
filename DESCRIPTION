@@ -30,6 +30,7 @@ Imports:
     purrr,
     rlang,
     plotly (>= 4.10.1),
+    plyr,
     progress (>= 1.2.2),
     rmapshaper,
     sf (>= 1.0.12),
@@ -42,6 +43,7 @@ Imports:
     shinythemes,
     sortable,
     sp,
+    stringr,
     tidyr,
     units
 Suggests: 

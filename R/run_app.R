@@ -248,3 +248,46 @@ run_fast_visualization_app <- function(input_dir = NA) {
     }
   )
 }
+
+
+#' Launch the Field Level Visualization Application
+#' 
+#' @description
+#' This function initializes and launches a Shiny application for visualizing crop rotation
+#' data at the field level. It loads required data from the CropRotationViz package,
+#' sets up the necessary environment and resources, and configures the application
+#' settings before launching.
+#' 
+#' @details
+#' The function performs the following steps:
+#' 1. Loads the Input_App_data dataset from the CropRotationViz package
+#' 2. Creates a new environment to store application data
+#' 3. Sets up resource paths for static files
+#' 4. Configures Shiny options including browser launch and maximum request size
+#' 5. Launches the Shiny application with field level UI and server components
+#'
+#' @return A Shiny application object that can be run with runApp()
+#'
+#' @examples
+#' \dontrun{
+#' run_field_level_app()
+#' }
+#'
+#' @export
+run_field_level_app <- function() {
+  utils::data("Input_App_data", package = "CropRotationViz", envir = environment())
+  
+  app_data <- new.env(parent = emptyenv())
+  app_data$Input_App_data <- Input_App_data
+  
+  addResourcePath("www", system.file("www", package = "CropRotationViz"))
+  
+  options(shiny.launch.browser = TRUE, shiny.maxRequestSize = 10000*1024^2)
+  
+  shinyApp(
+    ui = field_level_ui(app_data),
+    server = function(input, output, session) {
+      field_level_server(input, output, session, app_data)
+    }
+  )
+}
