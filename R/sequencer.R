@@ -140,7 +140,7 @@ processing_ui <- function(app_data, output_dir = NA, start_year = NA, vector_fil
                           label = "Aggregation of crop classes", 
                           choices = c("Yes", "No"), 
                           inline = TRUE)
-
+             
       ),
       column(2,
              radioButtons("radio_process", "Type of field intersection",
@@ -285,7 +285,7 @@ processing_ui <- function(app_data, output_dir = NA, start_year = NA, vector_fil
                  style = "default",
                  size = "extra-small"
                )
-               ),
+             ),
              shinyBS::bsPopover(
                "AOI_info",  
                "Choose a AOI File (optional)",
@@ -1244,7 +1244,7 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
     req(first_layer_bbox(), aoi_loaded(), input$aoi_name_column, aoi_data())
     
     aoi_sf <- aoi_data()
-
+    
     selected_column <- input$aoi_name_column
     
     # Validate that selected column exists and has unique values
@@ -1280,7 +1280,7 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
       observe({
         if (aoi_loaded()) {
           aoi <- aoi_data()
-      
+          
           bbox_polygon <- st_as_sfc(st_bbox(first_layer_bbox()))
           bbox_polygon <- st_transform(bbox_polygon, 4326)
           
@@ -1288,7 +1288,7 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
           if (st_crs(aoi) != 4326) {
             aoi <- st_transform(aoi, 4326)
           }
-
+          
           aoi <- sf::st_crop(aoi, bbox_polygon)
           
           # Update the leaflet map
@@ -1327,7 +1327,7 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
   })
   
   #----------------------------------------------------------------------------------------------------------
-
+  
   
   # Initialize reactive values
   class_state <- reactiveVal(NULL)
@@ -1511,10 +1511,21 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
     available_crops(setdiff(all_unique_crops(), assigned_crops))
   })
   
+  
+  # Add this block before where color_palette is used
+  color_palette <- reactive({
+    if(input$language == "English"){
+      app_data$Input_App_data$crop_color_mapping$en
+    } else {
+      app_data$Input_App_data$crop_color_mapping$de
+    }
+  })
+  
   # Add new aggregation class
   observeEvent(input$add_class, {
     req(class_state())
     current_state <- class_state()
+    color_palette <- color_palette()
     counter <- class_counter() + 1
     class_counter(counter)
     
@@ -1551,7 +1562,7 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
     
     lapply(current_state, function(class) {
       # Get the current name from stored names or default
-      current_name <- current_names[[class$id]] %||% class$name
+      current_name <- if (is.null(current_names[[class$id]])) class$name else current_names[[class$id]]
       
       div(
         class = "crop-box",
@@ -1607,11 +1618,7 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
   prepare_sankey_data <- reactive({
     current_state <- class_state()
     
-    if(input$language == "English"){
-      color_palette <- app_data$Input_App_data$crop_color_mapping$en
-    }else{
-      color_palette <- app_data$Input_App_data$crop_color_mapping$de
-    }
+    color_palette <- color_palette()
     
     mapping <- data.frame(crop = character(), group = character(), color = character(), 
                           stringsAsFactors = FALSE)
@@ -1698,7 +1705,7 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
     # Calculate height based on number of items
     # Assuming we want roughly 100px per item, with some minimum height
     plot_height <- max(800, n_items * 13)  
-
+    
     plot_ly(
       type = "sankey",
       orientation = "h",
@@ -1726,10 +1733,10 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
     # Process each class in current_states
     for(class in current_states) {
       # Get the class name from stored names or default
-      class_name <- current_names[[class$id]] %||% class$name
+      class_name <- if (is.null(current_names[[class$id]])) class$name else current_names[[class$id]]
       
       # Get the crops for this class from input or default
-      class_crops <- input[[class$id]] %||% class$crops
+      class_crops <- if (is.null(input[[class$id]])) class$crops else input[[class$id]]
       
       if(length(class_crops) > 0) {
         if(input$id_or_name == "Code") {
@@ -1805,7 +1812,7 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
     # Return the converter list
     list(converter = result)
   })
-    
+  
   #----------------------------------------------------------------------------------------------------------
   # processor
   processor <- function(current_dir){
@@ -1813,17 +1820,12 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
     start_time <- Sys.time()
     initial_mem <- gc(reset = TRUE)
     
-    if(input$language == "English"){
-      color_palette <- app_data$Input_App_data$crop_color_mapping$en
-    }else{
-      color_palette <- app_data$Input_App_data$crop_color_mapping$de
-    }
-    
+    color_palette <- color_palette()
     sankey_data <- prepare_sankey_data()
     all_files <- processed_files()
     years <- sapply(all_files, function(x) x$selected_year)
     aoi_data <- aoi_data()
-
+    
     # Check for large files
     for(i in seq_along(all_files)) {
       if(!is.null(all_files[[i]]) && nrow(all_files[[i]]$sf_object) > 100000) {
@@ -1856,9 +1858,9 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
         }else{
           CropRotViz_intersection <- intersect_fields_simple(all_files)
         }
-
+        
         mem_checkpoints$after_intersection <- gc(reset = TRUE)
-
+        
         #--------------------------------------------------------------
         # make aggregation if needed
         if(input$aggregation == "Yes" && input$id_or_name == "Code"){
@@ -1867,7 +1869,7 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
           aggregation_codes <- aggregation_codes$converter
           
           incProgress(0.05, detail = "aggregating")
-
+          
           CropRotViz_intersection <- aggregator(CropRotViz_intersection, years, aggregation_codes, type = "NC")
           mem_checkpoints$after_aggregation <- gc(reset = TRUE)
           
@@ -1907,13 +1909,13 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
         incProgress(0.05, detail = "writing vector file")
         if(vector_file){
           if(input$filetype == "Shapefile"){
-            st_write(CropRotViz_intersection, paste0(current_dir, "/CropRotViz_intersection.shp"), quiet = TRUE, driver = "ESRI Shapefile", append = F, delete_layer = TRUE)
+            sf::st_write(sf::st_make_valid(CropRotViz_intersection), paste0(current_dir, "/CropRotViz_intersection.shp"), quiet = TRUE, driver = "ESRI Shapefile", append = F, delete_layer = TRUE)
             
           }else if(input$filetype == "GeoPackage"){
-            st_write(CropRotViz_intersection, paste0(current_dir, "/CropRotViz_intersection.gpkg"), quiet = TRUE, append = F, delete_layer = TRUE)
+            sf::st_write(sf::st_make_valid(CropRotViz_intersection), paste0(current_dir, "/CropRotViz_intersection.gpkg"), quiet = TRUE, append = F, delete_layer = TRUE)
             
           }else{
-            st_write(CropRotViz_intersection, paste0(current_dir, "/CropRotViz_intersection.fgb"), quiet = TRUE, driver = "FlatGeobuf", append = F, delete_layer = T)
+            sf::st_write(sf::st_make_valid(CropRotViz_intersection), paste0(current_dir, "/CropRotViz_intersection.fgb"), quiet = TRUE, driver = "FlatGeobuf", append = F, delete_layer = T)
           }
         }
         mem_checkpoints$after_file_write <- gc(reset = TRUE)
@@ -1924,7 +1926,7 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
         }else{
           agg_cols <- grep("^Name_", names(CropRotViz_intersection), value = TRUE)
         }
-
+        
         # diversity map
         incProgress(0.05, detail = "preparing diversity map")
         
@@ -1937,31 +1939,6 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
           EZGs = EZGs,
           AOIs = AOIs
         )
-        
-        
-        
-        # # Handle diversity mapping based on available borders
-        # diversity_data <- if ("EZG_inter" %in% names(list_intersect_with_borders)) {
-        #   if (has_sufficient_data(list_intersect_with_borders$EZG_inter)) {
-        #     if ("AOI_inter" %in% names(list_intersect_with_borders)) {
-        #       diversity_mapping(CropRotViz_intersection, agg_cols, Districts, EZGs, AOIs)
-        #     }else{
-        #       diversity_mapping(CropRotViz_intersection, agg_cols, Districts, EZGs)
-        #     }
-        #   } else {
-        #     NA
-        #   }
-        # } else {
-        #   if (has_sufficient_data(list_intersect_with_borders$borders_inter)) {
-        #     if ("AOI_inter" %in% names(list_intersect_with_borders)) {
-        #       diversity_mapping(CropRotViz_intersection, agg_cols, Districts, AOIs)
-        #     }else{
-        #       diversity_mapping(CropRotViz_intersection, agg_cols, Districts)
-        #     }
-        #   } else {
-        #     NA
-        #   }
-        # }
         
         #--------------------------------------------------------------
         incProgress(0.05, detail = "preparing the rest of the outputs")
@@ -1980,7 +1957,7 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
             if (nrow(current) > 0) {
               # Process the district data
               current <- current %>%
-                dplyr::count(vars = agg_cols, wt_var = "area") %>%
+                plyr::count(vars = agg_cols, wt_var = "area") %>%
                 mutate(id = row_number(),
                        freq = freq/1e6)
               
@@ -2016,7 +1993,7 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
           sapply(district_CropRotViz_intersection, nrow) > 0
         ]
         mem_checkpoints$after_district_processing <- gc(reset = TRUE)
-
+        
         if("EZG" %in% names(CropRotViz_intersection)){
           EZG_CropRotViz_intersection <- list()
           
@@ -2025,7 +2002,7 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
             
             current <- subset(CropRotViz_intersection, EZG == EZG_sel)
             current <- current%>%
-              dplyr::count(vars = agg_cols, wt_var = "area")%>%
+              plyr::count(vars = agg_cols, wt_var = "area")%>%
               mutate(id = row_number(),
                      freq = freq/1e6)
             
@@ -2040,7 +2017,6 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
         }
         mem_checkpoints$after_EZG_processing <- gc(reset = TRUE)
         
-        View(CropRotViz_intersection)
         if("AOI" %in% names(CropRotViz_intersection)){
           AOI_CropRotViz_intersection <- list()
           
@@ -2049,7 +2025,7 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
             
             current <- subset(CropRotViz_intersection, AOI == AOI_sel)
             current <- current%>%
-              dplyr::count(vars = agg_cols, wt_var = "area")%>%
+              plyr::count(vars = agg_cols, wt_var = "area")%>%
               mutate(id = row_number(),
                      freq = freq/1e6)
             
@@ -2115,33 +2091,39 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
           for(name in names(district_CropRotViz_intersection)){
             snipped <- district_CropRotViz_intersection[[name]]
             sanitized_name <- gsub("/", "_", name)
-            plot <- create_crop_rotation_sankey(snipped,
-                                                output_path = paste0(current_dir, "/images/", sanitized_name, ".png"),
-                                                min_area = 0, 
-                                                exclude_crops = c(),
-                                                color = color_palette)
+            if(sum(snipped$freq) > 1){
+              create_crop_rotation_sankey(snipped,
+                                          output_path = paste0(current_dir, "/images/", sanitized_name, ".png"),
+                                          min_area = 0, 
+                                          exclude_crops = c(),
+                                          color = color_palette)
+            }
           }
           
           # plot the EZGs
           for(name in names(EZG_CropRotViz_intersection)){
             snipped <- EZG_CropRotViz_intersection[[name]]
             sanitized_name <- gsub("/", "_", name)
-            plot <- create_crop_rotation_sankey(snipped,
-                                                output_path = paste0(current_dir, "/images/", sanitized_name, ".png"), 
-                                                min_area = 0,
-                                                exclude_crops = c(),
-                                                color = color_palette)
+            if(sum(snipped$freq) > 1){
+              create_crop_rotation_sankey(snipped,
+                                          output_path = paste0(current_dir, "/images/", sanitized_name, ".png"), 
+                                          min_area = 0,
+                                          exclude_crops = c(),
+                                          color = color_palette)
+            }
           }
           
           # plot the AOIs
           for(name in names(AOI_CropRotViz_intersection)){
             snipped <- AOI_CropRotViz_intersection[[name]]
             sanitized_name <- gsub("/", "_", name)
-            plot <- create_crop_rotation_sankey(snipped,
-                                                output_path = paste0(current_dir, "/images/", sanitized_name, ".png"), 
-                                                min_area = 0,
-                                                exclude_crops = c(),
-                                                color = color_palette)
+            if(sum(snipped$freq) > 1){
+              create_crop_rotation_sankey(snipped,
+                                          output_path = paste0(current_dir, "/images/", sanitized_name, ".png"), 
+                                          min_area = 0,
+                                          exclude_crops = c(),
+                                          color = color_palette)
+            }
           }
         }
         

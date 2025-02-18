@@ -66,70 +66,70 @@ fast_viz_ui <- function(input_dir = NA){
     tabsetPanel(id = "tabs",
                 tabPanel("Plot Sequence",
                          
-                  titlePanel("Interactive District/River Catchment Crop Sequence Map"),
-                    fluidRow(
-                      column(3,
-                             radioButtons("mapType", 
-                                          "Select Map Type:", inline = TRUE,
-                                          choices = c("Districts" = "districts",
-                                                      "Catchment" = "ezg"))
-                      ),
-                      column(5,
-                             h4("Click on one or two areas of interest click again to hide them again. All charts are saved in your folder in `images`"))
-                    ),
-                    fluidRow(
-                      column(5,
-                             conditionalPanel(
-                               condition = "output.hasFirstSelection",
-                               div(textOutput("plotFirstTitle"), 
-                                   style="color: red; font-size: 24px; font-weight: bold; margin: 10px 0;")
-                             )
-                      ),
-                      column(2),
-                      column(5,
-                             conditionalPanel(
-                               condition = "output.hasSecondSelection",
-                               div(textOutput("plotSecondTitle"), 
-                                   style="color: orange; font-size: 24px; font-weight: bold; margin: 10px 0;")
-                             )
-                      )
-                    ),
-                    fluidRow(
-                      # Left image panel
-                      column(5,
-                             conditionalPanel(
-                               condition = "output.hasFirstSelection",
-                               imageOutput("firstImage", inline = T)
-                             )
-                      ),
-                      # Center map panel
-                      column(2,
-                             leafletOutput("map", height = "600px")
-                      ),
-                      # Right image panel
-                      column(5,
-                             conditionalPanel(
-                               condition = "output.hasSecondSelection",
-                               imageOutput("secondImage", inline = T)
-                             )
-                      )
-                    ),
-                    # Horizontal line
-                    tags$hr(style = "border-top: 1px solid white; margin-top: 20px; margin-bottom: 20px;"),
-                    fluidRow(
-                      column(1),
-                      column(7,
-                             h4("Crop Class Aggregation Visualization"))
-                    ),
-                    fluidRow(
-                      column(1),
-                      column(10,
-                             shinycssloaders::withSpinner(
-                               plotlyOutput("sankey_plotly")
-                             )
-                      )
-                    )
-                  ),
+                         titlePanel("Interactive District/River Catchment Crop Sequence Map"),
+                         fluidRow(
+                           column(3,
+                                  radioButtons("mapType", 
+                                               "Select Map Type:", inline = TRUE,
+                                               choices = c("Districts" = "districts",
+                                                           "Catchment" = "ezg"))
+                           ),
+                           column(5,
+                                  h4("Click on one or two areas of interest click again to hide them again. All charts are saved in your folder in `images`"))
+                         ),
+                         fluidRow(
+                           column(5,
+                                  conditionalPanel(
+                                    condition = "output.hasFirstSelection",
+                                    div(textOutput("plotFirstTitle"), 
+                                        style="color: red; font-size: 24px; font-weight: bold; margin: 10px 0;")
+                                  )
+                           ),
+                           column(2),
+                           column(5,
+                                  conditionalPanel(
+                                    condition = "output.hasSecondSelection",
+                                    div(textOutput("plotSecondTitle"), 
+                                        style="color: orange; font-size: 24px; font-weight: bold; margin: 10px 0;")
+                                  )
+                           )
+                         ),
+                         fluidRow(
+                           # Left image panel
+                           column(5,
+                                  conditionalPanel(
+                                    condition = "output.hasFirstSelection",
+                                    imageOutput("firstImage", inline = T)
+                                  )
+                           ),
+                           # Center map panel
+                           column(2,
+                                  leafletOutput("map", height = "600px")
+                           ),
+                           # Right image panel
+                           column(5,
+                                  conditionalPanel(
+                                    condition = "output.hasSecondSelection",
+                                    imageOutput("secondImage", inline = T)
+                                  )
+                           )
+                         ),
+                         # Horizontal line
+                         tags$hr(style = "border-top: 1px solid white; margin-top: 20px; margin-bottom: 20px;"),
+                         fluidRow(
+                           column(1),
+                           column(7,
+                                  h4("Crop Class Aggregation Visualization"))
+                         ),
+                         fluidRow(
+                           column(1),
+                           column(10,
+                                  shinycssloaders::withSpinner(
+                                    plotlyOutput("sankey_plotly")
+                                  )
+                           )
+                         )
+                ),
                 if (!is.na(diversity_data)) {
                   tabPanel("Plot Diversity",
                            titlePanel("Interactive District/River Catchment Crop Diversity Map"),
@@ -142,11 +142,11 @@ fast_viz_ui <- function(input_dir = NA){
                                            h4(paste0("The Structural Diversity is defined by the number of transitions and unique crops over the period ", 
                                                      year_span, 
                                                      ". The map shows the area weighted mean value per area."))
-                                           )),
+                                    )),
                            fluidRow(column(1),
                                     column(10,
-                                          leafletOutput("diversity", height = "650px")
-                                          )),
+                                           leafletOutput("diversity", height = "650px")
+                                    )),
                            
                   )
                 },
@@ -459,7 +459,7 @@ fast_viz_server <- function(input, output, session, app_data, input_dir) {
       if(input$mapType == "districts") {
         Districts
       } else {
-        EZGs 
+        EZGs[,1]
       }
     })
     
@@ -586,7 +586,7 @@ fast_viz_server <- function(input, output, session, app_data, input_dir) {
       )
     }, deleteFile = FALSE)
     
-  
+    
     # Update plot title
     output$plotFirstTitle <- renderText({
       req(firstSelection())

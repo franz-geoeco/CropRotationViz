@@ -812,6 +812,11 @@ intersect_with_borders <- function(input, level, countriesSP, EZG, aoi) {
     EZG_inter <- subset(EZG, EZG %in% unique(st_drop_geometry(intersected)$EZG))
     EZG_inter <- st_transform(EZG_inter, crs = sf::st_crs(input))
     EZG_inter <- sf::st_intersection(EZG_inter, borders_inter)
+    EZG_inter <- EZG_inter[,-2] %>%
+      group_by(EZG) %>%
+      summarise(
+        geometry = st_union(geometry)
+      )
     # Prepare the output list
     out_list <- list(intersected = intersected, borders_inter = borders_inter, EZG_inter = EZG_inter)
   } else {
@@ -926,33 +931,30 @@ create_crop_rotation_sankey <- function(data, min_area = 1,
   require(stringr)
   require(forcats)
   
-  # Filter rotation data
-  rotation_data <- data %>% filter(freq > min_area)
-  
   # Determine transformation based on column names
-  if (any(grepl("Aggregated_", names(rotation_data)))) {
-    rotation_data <- rotation_data %>% 
+  if (any(grepl("Aggregated_", names(data)))) {
+    data <- data %>% 
       pivot_longer(
         cols = -c(freq, id, rotation), 
         names_to = "value", 
         values_to = "key"
       ) %>% 
       mutate(
-        year = as.numeric(gsub(value, "Aggregated_")), 
+        year = as.numeric(str_remove(value, "Aggregated_")), 
         key = factor(key), 
         key = fct_reorder(key, -key)
       ) %>% 
       rename(Area = freq) %>% 
       select(Area, id, value, key, year)
   } else {
-    rotation_data <- rotation_data %>% 
+    data <- data %>% 
       pivot_longer(
         cols = -c(freq, id, rotation), 
         names_to = "value", 
         values_to = "key"
       ) %>% 
       mutate(
-        year = as.numeric(gsub(value, "Name_")), 
+        year = as.numeric(str_remove(value, "Name_")), 
         key = factor(key), 
         key = fct_reorder(key, -key)
       ) %>% 
@@ -961,7 +963,7 @@ create_crop_rotation_sankey <- function(data, min_area = 1,
   }
   
   # Get unique keys
-  unique_keys <- unique(rotation_data$key)
+  unique_keys <- unique(data$key)
   
   # Color generation function
   generate_random_color <- function() {
@@ -991,7 +993,7 @@ create_crop_rotation_sankey <- function(data, min_area = 1,
   }
   
   # Create plot
-  sankey_plot <- ggplot(rotation_data, 
+  sankey_plot <- ggplot(data, 
                         aes(x = year, y = Area, stratum = key, 
                             fill = key, alluvium = id, label = key)) +
     scale_fill_manual(values = color) +
@@ -999,7 +1001,7 @@ create_crop_rotation_sankey <- function(data, min_area = 1,
     geom_flow(show.legend = FALSE) +
     geom_text(stat = "stratum", size = 4, check_overlap = TRUE) +
     guides(fill = guide_legend(ncol = 8)) +
-    ylab("Area [ha]") +
+    ylab("Area [km²]") +
     theme_linedraw() +
     theme(
       axis.text = element_text(color = "black", size = 10),
@@ -1012,7 +1014,8 @@ create_crop_rotation_sankey <- function(data, min_area = 1,
       legend.box = "horizontal",
       legend.title = element_blank(),
       legend.text = element_text(size = 10)
-    )
+    ) +
+    scale_x_continuous(breaks = unique(data$year))
   
   # Adjust guides based on unique key count
   unique_key_count <- length(unique_keys)
@@ -1236,7 +1239,7 @@ create_multi_year_donut <- function(data, year_columns, title = "Crop Distributi
 #' @importFrom dplyr %>% mutate filter select if_any row_number rename
 #' @importFrom tidyr pivot_longer
 #' @importFrom forcats fct_reorder
-#' 
+#' @importFrom stringr str_remove
 #' @examples
 #' \dontrun{
 #' rotation_data <- transform_rotation_data(
@@ -1318,7 +1321,7 @@ transform_rotation_data <- function(All_rot_big, distribution_df, input_area_ran
           values_to = "key"
         ) %>%
         mutate(
-          year = as.numeric(gsub(value, "Aggregated_")),
+          year = as.numeric(str_remove(value, "Aggregated_")),
           key  = factor(key),
           key  = fct_reorder(key, -key)
         ) %>%
@@ -1333,7 +1336,7 @@ transform_rotation_data <- function(All_rot_big, distribution_df, input_area_ran
           values_to = "key"
         ) %>%
         mutate(
-          year = as.numeric(gsub(value, "Name_")),
+          year = as.numeric(str_remove(value, "Name_")),
           key  = factor(key),
           key  = fct_reorder(key, -key)
         ) %>%
@@ -1883,8 +1886,8 @@ diversity_mapping <- function(input, agg_cols, districts, EZGs = NA, AOIs = NA){
   
   return(Data)
 }
-
 #-------------------------------------------------------------------------------------------
+
 
 #' Calculate and Map Diversity Metrics with Error Handling 
 #'
@@ -2081,7 +2084,26 @@ diversity_mapper <- function(data, type){
 
 #-------------------------------------------------------------------------------------------
 
-# Function to generate a random hex color
+#' Function to Generate a Random Hex Color
+#
+# This function creates a random color by generating random values 
+# for red, green, and blue components using a uniform distribution.
+#'
+#' @return A hex color code representing a randomly generated color
+#' @examples
+#' Generate a single random color
+#' random_color <- generate_hex_color()
+#' print(random_color)
+#' 
+#' @examples
+#' Generate a single random color
+#' random_color <- generate_hex_color()
+#' print(random_color)
+#' 
+#' Generate multiple random colors
+#' multiple_colors <- replicate(5, generate_hex_color())
+#' print(multiple_colors)
+#' 
 generate_hex_color <- function() {
   rgb(
     red = runif(1, 0, 1),

@@ -319,7 +319,7 @@ viz_ui <- function(input_dir = NA){
                                   )
                            ),
                            column(1,
-                                  downloadButton("Save_sankey_specific_plot", label = "Save Plot as PNG"
+                                  downloadButton("Save_sankey_specific_plot", label = "Save Plot"
                                   )
                            )
                          ),
@@ -485,14 +485,14 @@ viz_ui <- function(input_dir = NA){
                            conditionalPanel(
                              condition = "input.district_or_ezg != 'River Basin'",
                              column(1,
-                                    downloadButton("Save_sankey_district_plot", label = "Save Plot as PNG"
+                                    downloadButton("Save_sankey_district_plot", label = "Save Plot"
                                     )
                              )
                            ),
                            conditionalPanel(
                              condition = "input.district_or_ezg == 'River Basin'",
                              column(1,
-                                    downloadButton("Save_sankey_basin_plot", label = "Save Plot as PNG"
+                                    downloadButton("Save_sankey_basin_plot", label = "Save Plot"
                                     )
                              )
                            )
@@ -1261,7 +1261,7 @@ viz_server <- function(input, output, session, app_data, input_dir) {
       
       # Add conditional legend rows
       if (input$Area_range_sec[1] < 1) {
-        base_plot <- base_plot + guides(fill = guide_legend(nrow = 8))
+        base_plot <- base_plot + guides(fill = guide_legend(nrow = 9))
       } else {
         base_plot <- base_plot + guides(fill = guide_legend(nrow = 5))
       }
@@ -1637,7 +1637,7 @@ viz_server <- function(input, output, session, app_data, input_dir) {
       unique_nodes <- unique(c(summarized_transitions$source, summarized_transitions$target))
       node_colors <- sapply(unique_nodes, function(name) {
         base_name <- gsub(" \\(before\\)| \\(after\\)", "", name)
-        crop_colors()[base_name] %||% "#808080"
+        if (is.null(crop_colors()[base_name])) "#808080" else crop_colors()[base_name]
       })
       
       # Create the Sankey plot
@@ -1801,6 +1801,7 @@ viz_server <- function(input, output, session, app_data, input_dir) {
     
     
     output$district_donut_plot <- renderPlotly({
+      req(crop_colors())
       data <- district_rotation_data()[[2]]
       
       if (any(grepl("Aggregated_", names(data)))) {
@@ -1818,7 +1819,9 @@ viz_server <- function(input, output, session, app_data, input_dir) {
     })
     
     output$basin_donut_plot <- renderPlotly({
+      req(crop_colors())
       data <- basin_rotation_data()[[2]]
+      
       if (any(grepl("Aggregated_", names(data)))) {
         prefix <- "Aggregated_"
       }else{

@@ -98,17 +98,17 @@ field_level_server <- function(input, output, session, app_data) {
                                             names(data))))
         
         # Update district selector choices
-        updateSelectInput(session, "district", 
-                          choices = unique(data$District), 
-                          selected = unique(data$District)[1])
+        updatePickerInput (session, "district", 
+                          choices = sort(unique(data$District)), 
+                          selected = sort(unique(data$District))[1])
         
       } else {
         # For non-shapefile formats (gpkg, fgb), read directly
         data <- st_read(input$vector_file$datapath[1], quiet = TRUE)
         # Update district selector choices
-        updateSelectInput(session, "district", 
-                          choices = unique(data$District), 
-                          selected = unique(data$District)[1])
+        updatePickerInput(session, "district", 
+                          choices = sort(unique(data$District)), 
+                          selected = sort(unique(data$District))[1])
       }
       
       vector_data(data)
@@ -280,7 +280,15 @@ field_level_ui <- function(app_data) {
                           accept = c(".shp", ".dbf", ".shx", ".prj", ".cpg", ".gpkg", ".fgb"),
                           multiple = TRUE)
              ),
-      column(4, selectInput("district", "Select District:", choices = NULL))
+      column(4, pickerInput("district", "Select District:", 
+                            choices = NULL,
+                            options = pickerOptions(
+                              actionsBox = TRUE, 
+                              size = 15,
+                              selectedTextFormat = "count > 3"
+                            ), 
+                            multiple = F)
+             )
     ),
     
     # Map and Chart Section
@@ -306,13 +314,41 @@ field_level_ui <- function(app_data) {
       )
     ),
     
-    # Footer
+    # Custom footer
     tags$footer(
-      style = "position: fixed; bottom: 0; width: 100%; background-color: #f5f5f5; padding: 10px; text-align: center;",
+      style = "position: fixed; 
+                           bottom: 0; 
+                           width: 100%; 
+                           background-color: #f5f5f5; 
+                           padding: 10px; 
+                           text-align: center;
+                           border-top: 1px solid #e7e7e7;
+                           left: 0;
+                           z-index: 2000;",  # Added z-index to ensure visibility
+      
       div(
         style = "display: inline-block;",
-        p(tags$span("Author: "), tags$a(href = "https://github.com/franz-geoeco/CropRotationViz", "Franz Schulze")),
-        p(tags$span("Institution: "), tags$a(href = "https://geooeko.geo.uni-halle.de/", "University of Halle-Wittenberg"))
+        p(
+          tags$span("Author: "),  # Using tags$span for text
+          tags$a(
+            href = "https://github.com/franz-geoeco/CropRotationViz", 
+            "Franz Schulze",
+            style = "color: #5d9bd9; text-decoration: underline;"
+          ),
+          style = "margin: 0; 
+                               display: inline-block; 
+                               margin-right: 20px;"
+        ),
+        p(
+          tags$span("Institution: "),  # Using tags$span for text
+          tags$a(
+            href = "https://geooeko.geo.uni-halle.de/",
+            "Department of Geoecology - Institute of Geosciences and Geography - University of Halle-Wittenberg",
+            style = "color: #5d9bd9; text-decoration: underline;"
+          ),
+          style = "margin: 0; 
+               display: inline-block;"
+        )
       )
     )
   )
