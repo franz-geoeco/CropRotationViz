@@ -88,7 +88,129 @@ processing_ui <- function(app_data, output_dir = NA, start_year = NA, vector_fil
   fluidPage(
     tags$head(
       tags$link(rel = "stylesheet", type = "text/css", href = "shinyBS/shinyBS.css"),
-      tags$script(src = "shinyBS/shinyBS.js")
+      tags$script(src = "shinyBS/shinyBS.js"),
+      
+      # Add loading indicator styles
+      tags$style(HTML("
+        /* Loading indicator styles */
+        .file-status {
+          padding: 5px 10px;
+          border-radius: 4px;
+          margin: 5px 0;
+          font-size: 14px;
+          color: white;
+          display: inline-block;
+        }
+        .status-loading {
+          background-color: #f0ad4e;
+        }
+        .status-success {
+          background-color: #5cb85c;
+        }
+        .status-error {
+          background-color: #d9534f;
+        }
+        
+        /* Progress bar styling */
+        .loading-progress {
+          height: 8px;
+          margin-top: 5px;
+          margin-bottom: 10px;
+          border-radius: 4px;
+          overflow: hidden;
+        }
+        .progress-inner {
+          height: 100%;
+          background-color: rgb(116, 150, 30);
+          width: 0%;
+          transition: width 0.3s ease;
+        }
+        
+        .crop-box {
+            border: 1px solid #ccc;
+            padding: 3px;
+            margin: 2px;
+            min-height: 45px;
+            width: 150px;
+            float: left;
+        }
+        .add-class-btn {
+            margin: 5px 0;
+            clear: both;
+            font-size: 11px;
+            padding: 2px 8px;
+        }
+        .rank-list-container {
+            min-height: 45px;
+            border: 1px dashed #ccc;
+            padding: 1px;
+            margin-bottom: 2px;
+            font-size: 11px;
+        }
+        .name-input input {
+            height: 20px;
+            font-size: 11px;
+            padding: 1px 1px;
+            color: white !important;
+            font-weight: bold;
+        }
+        .remove-btn {
+            padding: 0px 1px;
+            font-size: 10px;
+            margin-top: 3px;
+            float: right;
+        }
+        .aggregation-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            grid-auto-rows: min-content;
+            grid-gap: 10px;
+            width: 100%;
+            justify-content: start;
+            max-height: 600px; /* Set a maximum height */
+            overflow-y: auto; /* Enable vertical scrolling */
+            padding: 10px;
+            /* Smooth scrolling for better UX */
+            scroll-behavior: smooth;
+            /* Style the scrollbar for better visibility */
+            scrollbar-width: thin;
+            scrollbar-color: rgba(116, 150, 30, 0.6) transparent;
+        }
+        
+        /* Webkit scrollbar styling */
+        .aggregation-container::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        .aggregation-container::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        
+        .aggregation-container::-webkit-scrollbar-thumb {
+            background-color: rgba(116, 150, 30, 0.6);
+            border-radius: 4px;
+        }
+        .rank-list-item {
+            padding: 1px 3px !important;
+            margin: 1px 0 !important;
+            font-size: 10px !important;
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 2px;
+        }
+        .collapse-header {
+            cursor: pointer;
+            user-select: none;
+            padding: 7px;
+            margin-bottom: 5px;
+        }
+        .collapse-header:hover {
+            opacity: 0.8;
+        }
+        .section-content {
+            padding: 10px;
+        }
+      "))
     ),
     theme = shinytheme("cyborg"),
     #-------------------------------------------------------------------------------
@@ -194,6 +316,9 @@ processing_ui <- function(app_data, output_dir = NA, start_year = NA, vector_fil
         
         fluidRow(
           column(4,
+                 # File status UI
+                 uiOutput(sprintf("file_status_ui_%d", i)),
+                 # File path display
                  div(textOutput(sprintf("txt_file%d", i)), style = "color: white; font-size: 15px;")
           ),
           column(3,
@@ -434,94 +559,7 @@ processing_ui <- function(app_data, output_dir = NA, start_year = NA, vector_fil
         )
       )
     ), br(), 
-    tags$head(
-      tags$style(HTML("
-            .crop-box {
-                border: 1px solid #ccc;
-                padding: 3px;
-                margin: 2px;
-                min-height: 45px;
-                width: 150px;
-                float: left;
-            }
-            .add-class-btn {
-                margin: 5px 0;
-                clear: both;
-                font-size: 11px;
-                padding: 2px 8px;
-            }
-            .rank-list-container {
-                min-height: 45px;
-                border: 1px dashed #ccc;
-                padding: 1px;
-                margin-bottom: 2px;
-                font-size: 11px;
-            }
-            .name-input input {
-                height: 20px;
-                font-size: 11px;
-                padding: 1px 1px;
-                color: white !important;
-                font-weight: bold;
-            }
-            .remove-btn {
-                padding: 0px 1px;
-                font-size: 10px;
-                margin-top: 3px;
-                float: right;
-            }
-            .aggregation-container {
-                display: grid;
-                grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-                grid-auto-rows: min-content;
-                grid-gap: 10px;
-                width: 100%;
-                justify-content: start;
-                max-height: 600px; /* Set a maximum height */
-                overflow-y: auto; /* Enable vertical scrolling */
-                padding: 10px;
-                /* Smooth scrolling for better UX */
-                scroll-behavior: smooth;
-                /* Style the scrollbar for better visibility */
-                scrollbar-width: thin;
-                scrollbar-color: rgba(116, 150, 30, 0.6) transparent;
-            }
-            
-            /* Webkit scrollbar styling */
-            .aggregation-container::-webkit-scrollbar {
-                width: 8px;
-            }
-            
-            .aggregation-container::-webkit-scrollbar-track {
-                background: transparent;
-            }
-            
-            .aggregation-container::-webkit-scrollbar-thumb {
-                background-color: rgba(116, 150, 30, 0.6);
-                border-radius: 4px;
-            }
-            .rank-list-item {
-                padding: 1px 3px !important;
-                margin: 1px 0 !important;
-                font-size: 10px !important;
-                background-color: #f8f9fa;
-                border: 1px solid #dee2e6;
-                border-radius: 2px;
-            }
-            .collapse-header {
-                cursor: pointer;
-                user-select: none;
-                padding: 7px;
-                margin-bottom: 5px;
-            }
-            .collapse-header:hover {
-                opacity: 0.8;
-            }
-            .section-content {
-                padding: 10px;
-            }
-        "))
-    ),
+    
     # Step 5: Crop Code Aggregation Editor (appears after continue)
     conditionalPanel(
       condition = "input.btn_continue && input.aggregation == 'Yes'",
@@ -689,7 +727,7 @@ processing_ui <- function(app_data, output_dir = NA, start_year = NA, vector_fil
       )
     )
   )
-} 
+}
 
 #' @title Crop Sequence Builder Server Logic
 #' @description Implements the server-side logic for analyzing and managing agricultural crop rotation sequences.
@@ -848,6 +886,181 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
   display_names <- app_data$Input_App_data$display_names
   EZG           <- app_data$Input_App_data$EZG
   
+  
+  
+  
+  
+  # Add file loading state tracking
+  file_loading_states <- reactiveValues()
+  
+  # Initialize loading states
+  observe({
+    for(i in 1:10) {
+      if(is.null(file_loading_states[[paste0("file", i, "_loading")]])) {
+        file_loading_states[[paste0("file", i, "_loading")]] <- FALSE
+        file_loading_states[[paste0("file", i, "_progress")]] <- 0
+        file_loading_states[[paste0("file", i, "_status")]] <- ""
+      }
+    }
+  })
+  
+  # Create file status UI outputs
+  lapply(1:10, function(i) {
+    output[[sprintf("file_status_ui_%d", i)]] <- renderUI({
+      file_key <- paste0("file", i)
+      loading_key <- paste0("file", i, "_loading")
+      progress_key <- paste0("file", i, "_progress")
+      status_key <- paste0("file", i, "_status")
+      
+      if(file_loading_states[[loading_key]]) {
+        # Loading state
+        div(
+          div(class = "file-status status-loading", 
+              icon("spinner", class = "fa-spin"), " Loading file..."),
+          div(class = "loading-progress",
+              div(class = "progress-inner", 
+                  style = sprintf("width: %d%%;", file_loading_states[[progress_key]])))
+        )
+      } else if(file_reactives[[i]]$is_valid()) {
+        # Success state
+        div(class = "file-status status-success", icon("check"), " File loaded successfully")
+      } else if(!is.null(input[[sprintf("Btn_GetFile%d", i)]]) && 
+                !file_reactives[[i]]$is_valid() && 
+                !is.null(file_loading_states[[status_key]]) &&
+                file_loading_states[[status_key]] != "") {
+        # Error state
+        div(
+          div(class = "file-status status-error", 
+              icon("exclamation-triangle"), " Error loading file"),
+          span(file_loading_states[[status_key]], style = "color: #d9534f; font-size: 12px;")
+        )
+      } else {
+        # Empty state
+        NULL
+      }
+    })
+  })
+  
+  # Function to process shapefile selection
+  processShapefileSelection <- function(input_id, file_reactive, column_selector_id, common_column = NA) {
+    shinyFileChoose(input, input_id,
+                    roots = volumes,
+                    session = session,
+                    restrictions = system.file(package = "base"),
+                    filetypes = c("shp", "fgb", "gpkg", "sqlite", "geojson"))
+    
+    if(!is.null(input[[input_id]])) {
+      file_selected <- parseFilePaths(volumes, input[[input_id]])
+      
+      if(nrow(file_selected) > 0) {
+        file_ext <- tolower(tools::file_ext(file_selected$datapath))
+        
+        if(file_ext == "shp" | file_ext == "fgb"| file_ext == "gpkg"| file_ext == "sqlite"| file_ext == "geojson") {
+          file_reactive$selected_file(file_selected$datapath)
+          
+          tryCatch({
+            sf_obj <- st_read(file_selected$datapath, quiet = TRUE)
+            file_reactive$sf_data(sf_obj)
+            file_reactive$is_valid(TRUE)
+            
+            if(is.na(common_column)){
+              updateSelectInput(session, column_selector_id,
+                                choices = setdiff(names(sf_obj), 
+                                                  attr(sf_obj, "sf_column")))
+            }else{
+              updateSelectInput(session, column_selector_id,
+                                choices = setdiff(names(sf_obj), 
+                                                  attr(sf_obj, "sf_column")),
+                                selected = common_column)
+            }
+            
+            # Update bounding box if this is the first file
+            if (input_id == "Btn_GetFile1") {
+              bbox <- st_bbox(sf_obj)
+              first_layer_bbox(bbox)
+            }
+            
+          }, error = function(e) {
+            file_reactive$is_valid(FALSE)
+            file_reactive$sf_data(NULL)
+            showNotification(paste("Error reading file:", e$message), 
+                             type = "error")
+          })
+        } else {
+          file_reactive$selected_file(NULL)
+          file_reactive$sf_data(NULL)
+          file_reactive$is_valid(FALSE)
+        }
+      }
+    }
+  }
+  
+  # Create observers for all possible files
+  lapply(1:10, function(i) {
+    # Observer for file selection
+    observe({
+      processShapefileSelection(
+        sprintf("Btn_GetFile%d", i),
+        file_reactives[[i]],
+        sprintf("column_selector%d", i),
+        common_column
+      )
+    })
+    
+    # The rest of your observer code for each file remains unchanged
+    # Text output for file path
+    output[[sprintf("txt_file%d", i)]] <- renderText({
+      if(file_reactives[[i]]$is_valid()) {
+        paste(sprintf("File #%d:", i), 
+              file_reactives[[i]]$selected_file())
+      }
+    })
+    
+    # Validation message
+    output[[sprintf("validation_message%d", i)]] <- renderText({
+      if(!is.null(input[[sprintf("Btn_GetFile%d", i)]]) && 
+         !file_reactives[[i]]$is_valid()) {
+        "Please select a valid polygon-file (.shp, .geojson, .fgb, .gpkg or .sqlite)"
+      }
+    })
+    
+    # Observer for column and year selection
+    observeEvent(input[[sprintf("column_selector%d", i)]], {
+      req(file_reactives[[i]]$sf_data(), 
+          input[[sprintf("column_selector%d", i)]],
+          input[[sprintf("year_selector%d", i)]])
+      
+      if(input[[sprintf("column_selector%d", i)]] != "") {
+        file_reactives[[i]]$is_complete(TRUE)
+        file_reactives[[i]]$selected_year(input[[sprintf("year_selector%d", i)]])
+        
+        current_files <- processed_files()
+        current_files[[i]] <- list(
+          sf_object = file_reactives[[i]]$sf_data(),
+          selected_column = input[[sprintf("column_selector%d", i)]],
+          selected_year = input[[sprintf("year_selector%d", i)]],
+          filepath = file_reactives[[i]]$selected_file()
+        )
+        processed_files(current_files)
+        
+        if(i < 10) {
+          current_file_count(i + 1)
+        }
+      }
+    })
+    
+    # Additional observer for year changes
+    observeEvent(input[[sprintf("year_selector%d", i)]], {
+      req(file_reactives[[i]]$is_complete())
+      
+      current_files <- processed_files()
+      if(!is.null(current_files[[i]])) {
+        current_files[[i]]$selected_year <- input[[sprintf("year_selector%d", i)]]
+        processed_files(current_files)
+      }
+    })
+  })
+  
   # Helper function to get names from codes - defined once at the top
   get_names <- function(codes, codierung_all) {
     if(input$language == "English"){
@@ -917,13 +1130,19 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
   })
   outputOptions(output, "show_process_button", suspendWhenHidden = FALSE)
   
-  # Function to reset a file's reactive values
+  # Function to reset a file's reactive values - updated to include loading states
   resetFileReactives <- function(i) {
+    # Reset file reactives
     file_reactives[[i]]$selected_file(NULL)
     file_reactives[[i]]$sf_data(NULL)
     file_reactives[[i]]$is_valid(FALSE)
     file_reactives[[i]]$is_complete(FALSE)
     file_reactives[[i]]$selected_year(NULL)
+    
+    # Reset loading states
+    file_loading_states[[paste0("file", i, "_loading")]] <- FALSE
+    file_loading_states[[paste0("file", i, "_progress")]] <- 0
+    file_loading_states[[paste0("file", i, "_status")]] <- ""
     
     # Reset the corresponding UI elements
     updateSelectInput(session, sprintf("column_selector%d", i), choices = NULL)
@@ -953,58 +1172,58 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
   })
   
   # Function to process shapefile selection
-  processShapefileSelection <- function(input_id, file_reactive, column_selector_id, common_column = NA) {
-    shinyFileChoose(input, input_id,
-                    roots = volumes,
-                    session = session,
-                    restrictions = system.file(package = "base"),
-                    filetypes = c("shp", "fgb", "gpkg", "sqlite", "geojson"))
-    
-    if(!is.null(input[[input_id]])) {
-      file_selected <- parseFilePaths(volumes, input[[input_id]])
-      
-      if(nrow(file_selected) > 0) {
-        file_ext <- tolower(tools::file_ext(file_selected$datapath))
-        
-        if(file_ext == "shp" | file_ext == "fgb"| file_ext == "gpkg"| file_ext == "sqlite"| file_ext == "geojson") {
-          file_reactive$selected_file(file_selected$datapath)
-          
-          tryCatch({
-            sf_obj <- st_read(file_selected$datapath, quiet = TRUE)
-            file_reactive$sf_data(sf_obj)
-            file_reactive$is_valid(TRUE)
-            
-            if(is.na(common_column)){
-              updateSelectInput(session, column_selector_id,
-                                choices = setdiff(names(sf_obj), 
-                                                  attr(sf_obj, "sf_column")))
-            }else{
-              updateSelectInput(session, column_selector_id,
-                                choices = setdiff(names(sf_obj), 
-                                                  attr(sf_obj, "sf_column")),
-                                selected = common_column)
-            }
-            
-            # Update bounding box if this is the first file
-            if (input_id == "Btn_GetFile1") {
-              bbox <- st_bbox(sf_obj)
-              first_layer_bbox(bbox)
-            }
-            
-          }, error = function(e) {
-            file_reactive$is_valid(FALSE)
-            file_reactive$sf_data(NULL)
-            showNotification(paste("Error reading file:", e$message), 
-                             type = "error")
-          })
-        } else {
-          file_reactive$selected_file(NULL)
-          file_reactive$sf_data(NULL)
-          file_reactive$is_valid(FALSE)
-        }
-      }
-    }
-  }
+  # processShapefileSelection <- function(input_id, file_reactive, column_selector_id, common_column = NA) {
+  #   shinyFileChoose(input, input_id,
+  #                   roots = volumes,
+  #                   session = session,
+  #                   restrictions = system.file(package = "base"),
+  #                   filetypes = c("shp", "fgb", "gpkg", "sqlite", "geojson"))
+  #   
+  #   if(!is.null(input[[input_id]])) {
+  #     file_selected <- parseFilePaths(volumes, input[[input_id]])
+  #     
+  #     if(nrow(file_selected) > 0) {
+  #       file_ext <- tolower(tools::file_ext(file_selected$datapath))
+  #       
+  #       if(file_ext == "shp" | file_ext == "fgb"| file_ext == "gpkg"| file_ext == "sqlite"| file_ext == "geojson") {
+  #         file_reactive$selected_file(file_selected$datapath)
+  #         
+  #         tryCatch({
+  #           sf_obj <- st_read(file_selected$datapath, quiet = TRUE)
+  #           file_reactive$sf_data(sf_obj)
+  #           file_reactive$is_valid(TRUE)
+  #           
+  #           if(is.na(common_column)){
+  #             updateSelectInput(session, column_selector_id,
+  #                               choices = setdiff(names(sf_obj), 
+  #                                                 attr(sf_obj, "sf_column")))
+  #           }else{
+  #             updateSelectInput(session, column_selector_id,
+  #                               choices = setdiff(names(sf_obj), 
+  #                                                 attr(sf_obj, "sf_column")),
+  #                               selected = common_column)
+  #           }
+  #           
+  #           # Update bounding box if this is the first file
+  #           if (input_id == "Btn_GetFile1") {
+  #             bbox <- st_bbox(sf_obj)
+  #             first_layer_bbox(bbox)
+  #           }
+  #           
+  #         }, error = function(e) {
+  #           file_reactive$is_valid(FALSE)
+  #           file_reactive$sf_data(NULL)
+  #           showNotification(paste("Error reading file:", e$message), 
+  #                            type = "error")
+  #         })
+  #       } else {
+  #         file_reactive$selected_file(NULL)
+  #         file_reactive$sf_data(NULL)
+  #         file_reactive$is_valid(FALSE)
+  #       }
+  #     }
+  #   }
+  # }
   
   # Create observers for all possible files
   lapply(1:10, function(i) {

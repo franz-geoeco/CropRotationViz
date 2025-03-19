@@ -631,101 +631,31 @@ intersect_fields_simple <- function(fields_list, max_area = 20000 * 1e6) {
   fields_list <- lapply(fields_list, st_transform, crs = target_crs)
   
   # Initialize with first layer
-  intersected <- fields_list[[1]]
+  intersected <- sf::st_make_valid(fields_list[[1]])
   
-  # Check if tiling is needed
-  total_area <- as.numeric(sum(st_area(intersected)))
-  if (total_area > max_area) {
-    message(sprintf("Large area detected (%.2f km²). Using tiling approach...", 
-                    as.numeric(total_area)/1e6))
+
+  # Create progress bar for normal processing
+  pb <- txtProgressBar(min = 0, max = length(fields_list) - 1, style = 3)
+  
+  # Process normally if area is small enough
+  for (i in 2:length(fields_list)) {
     
-    # Create a grid of tiles based on the bounding box
-    bbox <- st_bbox(intersected)
-    # Calculate number of tiles needed (square root for roughly square tiles)
-    n_tiles <- ceiling(sqrt(total_area / (max_area/2)))
+    incProgress(0.005, detail = paste("intersecting", i, "from", length(fields_list)))
     
-    message(sprintf("Creating %d x %d grid...", n_tiles, n_tiles))
-    # Create grid
-    grid <- st_make_grid(intersected, n = n_tiles)
+    intersected <- st_intersection(intersected, sf::st_make_valid(fields_list[[i]]))
     
-    # Initialize list to store results
-    results <- list()
+    intersected <- intersected %>%
+      filter(st_geometry_type(geometry) %in% c("POLYGON", "MULTIPOLYGON")) %>%
+      st_make_valid() %>%
+      filter(st_area(.) >= units::set_units(1, "m^2"))
     
-    # Create progress bar for tiles
-    pb <- txtProgressBar(min = 0, max = length(grid), style = 3)
-    
-    # Process each tile
-    for (tile_idx in seq_along(grid)) {
-      tile <- grid[[tile_idx]]
-      # Clip first layer with tile
-      tile_intersect <- st_crop(intersected, tile)
-      
-      if (length(tile_intersect) > 0) {
-        # Process remaining layers
-        for (i in 2:length(fields_list)) {
-          # Clip current field to tile
-          field_clipped <- st_intersection(sf::st_make_valid(fields_list[[i]]),
-                                           sf::st_make_valid(tile))
-          
-          if (length(field_clipped) > 0) {
-            # Perform intersection
-            tile_intersect <- st_intersection(sf::st_make_valid(tile_intersect),
-                                              sf::st_make_valid(field_clipped))
-            
-            # Filter valid geometries
-            tile_intersect <- tile_intersect %>%
-              filter(st_geometry_type(geometry) %in% c("POLYGON", "MULTIPOLYGON")) %>%
-              st_make_valid() %>%
-              filter(st_area(.) >= units::set_units(1, "m^2"))
-          }
-        }
-        
-        # Add results from this tile
-        if (length(tile_intersect) > 0) {
-          results[[length(results) + 1]] <- tile_intersect
-        }
-      }
-      
-      # Update progress bar
-      setTxtProgressBar(pb, tile_idx)
-    }
-    
-    # Close progress bar
-    close(pb)
-    
-    message("\nCombining results from tiles...")
-    # Combine results
-    if (length(results) > 0) {
-      intersected <- do.call(rbind, results) %>%
-        st_make_valid()
-    } else {
-      intersected <- NULL
-    }
-    
-  } else {
-    message("Processing without tiling...")
-    # Create progress bar for normal processing
-    pb <- txtProgressBar(min = 0, max = length(fields_list) - 1, style = 3)
-    
-    # Process normally if area is small enough
-    for (i in 2:length(fields_list)) {
-      
-      incProgress(0.005, detail = paste("intersecting", i, "from", length(fields_list)))
-      
-      intersected <- st_intersection(intersected, sf::st_make_valid(fields_list[[i]]))
-      
-      intersected <- intersected %>%
-        filter(st_geometry_type(geometry) %in% c("POLYGON", "MULTIPOLYGON")) %>%
-        st_make_valid() %>%
-        filter(st_area(.) >= units::set_units(1, "m^2"))
-      
-      # Update progress bar
-      setTxtProgressBar(pb, i - 1)
-    }
-    
-    # Close progress bar
-    close(pb)
+    # Update progress bar
+    setTxtProgressBar(pb, i - 1)
   }
+  
+  # Close progress bar
+  close(pb)
+
   message("Intersection process completed!")
   return(intersected)
 }
