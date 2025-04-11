@@ -19,14 +19,16 @@ The package consists of three main components:
 - A full visualization application for detailed analysis
 - A fast visualization application for quick insights and area comparison
 
-
+### Example Sankey Chart
 <div align="center">
   <img src="images/example.png" alt="Descriptive Alt Text" width="100%">
 </div>
 
+### Grpahical Abstract
 <div align="center">
   <img src="images/graphical_abstract.png" alt="Descriptive Alt Text" width="100%">
 </div>
+
 
 ## Table of Contents
 - [Overview](#overview)
