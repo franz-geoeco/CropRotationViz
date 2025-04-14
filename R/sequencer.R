@@ -882,7 +882,7 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
   # Access the data from app_data
   codierung_all <- app_data$Input_App_data$codierung_all
   crop_codes    <- app_data$Input_App_data$crop_codes
-  countriesSP <- app_data$Input_App_data$countriesSP
+  countriesSP   <- app_data$Input_App_data$countriesSP
   display_names <- app_data$Input_App_data$display_names
   EZG           <- app_data$Input_App_data$EZG
   
@@ -2148,17 +2148,17 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
         
         # diversity map
         incProgress(0.05, detail = "preparing diversity map")
-        
-        # diversity mapping
-        diversity_data <- handle_diversity_mapping(
-          list_intersect_with_borders = list_intersect_with_borders,
-          CropRotViz_intersection = CropRotViz_intersection,
-          agg_cols = agg_cols,
-          Districts = Districts,
-          EZGs = EZGs,
-          AOIs = AOIs
-        )
-        
+
+        # check if there's enough data for diversity mapping
+        if(length(agg_cols) > 3 & length(unique(CropRotViz_intersection$District))>9){
+          # diversity mapping
+          diversity_data <- diversity_mapping(
+            CropRotViz_intersection, 
+            agg_cols, Districts, EZGs
+          )
+        }else{
+          diversity_data <- NULL
+        }
         #--------------------------------------------------------------
         incProgress(0.05, detail = "preparing the rest of the outputs")
         # Modified district processing section with error handling
@@ -2303,47 +2303,135 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
         }
         
         if(input$fastImages == "Yes"){
-          # create dir
+          # Create images directory
           dir.create(paste0(current_dir, "/images"))
           
-          # plot the districts 
-          for(name in names(district_CropRotViz_intersection)){
-            snipped <- district_CropRotViz_intersection[[name]]
-            sanitized_name <- gsub("/", "_", name)
-            if(sum(snipped$freq) > 1){
-              create_crop_rotation_sankey(snipped,
-                                          output_path = paste0(current_dir, "/images/", sanitized_name, ".png"),
-                                          min_area = 0, 
-                                          exclude_crops = c(),
-                                          color = color_palette)
-            }
-          }
+          # Setup parallel environment
+          n_cores <- 4
+          message(sprintf("Using %d cores for parallel image generation", n_cores))
           
-          # plot the EZGs
-          for(name in names(EZG_CropRotViz_intersection)){
-            snipped <- EZG_CropRotViz_intersection[[name]]
-            sanitized_name <- gsub("/", "_", name)
-            if(sum(snipped$freq) > 1){
-              create_crop_rotation_sankey(snipped,
-                                          output_path = paste0(current_dir, "/images/", sanitized_name, ".png"), 
-                                          min_area = 0,
-                                          exclude_crops = c(),
-                                          color = color_palette)
-            }
-          }
+          # Setup cluster
+          cl <- parallel::makeCluster(n_cores)
+          doParallel::registerDoParallel(cl)
           
-          # plot the AOIs
-          for(name in names(AOI_CropRotViz_intersection)){
-            snipped <- AOI_CropRotViz_intersection[[name]]
-            sanitized_name <- gsub("/", "_", name)
-            if(sum(snipped$freq) > 1){
-              create_crop_rotation_sankey(snipped,
-                                          output_path = paste0(current_dir, "/images/", sanitized_name, ".png"), 
-                                          min_area = 0,
-                                          exclude_crops = c(),
-                                          color = color_palette)
+          # Export necessary variables and functions to the cluster
+          parallel::clusterExport(cl, c("district_CropRotViz_intersection", "EZG_CropRotViz_intersection", 
+                                        "AOI_CropRotViz_intersection", "current_dir", "color_palette"), 
+                                  envir = environment())
+          
+          # Load required packages on each worker
+          parallel::clusterEvalQ(cl, {
+            library(ggplot2)
+            library(ggalluvial)
+            library(dplyr)
+            library(stringr)
+            library(forcats)
+          })
+          
+          # Process all image types in parallel
+          tryCatch({
+            # Create a list of all items to process
+            image_tasks <- list()
+            
+            # Add district tasks
+            for(name in names(district_CropRotViz_intersection)) {
+              snipped <- district_CropRotViz_intersection[[name]]
+              if(sum(snipped$freq) > 1) {
+                image_tasks[[length(image_tasks) + 1]] <- list(
+                  type = "district",
+                  name = name,
+                  data = snipped
+                )
+              }
             }
-          }
+            
+            # Add EZG tasks if they exist
+            if(!is.null(EZG_CropRotViz_intersection) && !identical(EZG_CropRotViz_intersection, NA)) {
+              for(name in names(EZG_CropRotViz_intersection)) {
+                snipped <- EZG_CropRotViz_intersection[[name]]
+                if(sum(snipped$freq) > 1) {
+                  image_tasks[[length(image_tasks) + 1]] <- list(
+                    type = "EZG",
+                    name = name,
+                    data = snipped
+                  )
+                }
+              }
+            }
+            
+            # Add AOI tasks if they exist
+            if(!is.null(AOI_CropRotViz_intersection) && !identical(AOI_CropRotViz_intersection, NA)) {
+              for(name in names(AOI_CropRotViz_intersection)) {
+                snipped <- AOI_CropRotViz_intersection[[name]]
+                if(sum(snipped$freq) > 1) {
+                  image_tasks[[length(image_tasks) + 1]] <- list(
+                    type = "AOI",
+                    name = name,
+                    data = snipped
+                  )
+                }
+              }
+            }
+            
+            message(sprintf("Generating %d images in parallel...", length(image_tasks)))
+            
+            # Process tasks in parallel using foreach
+            if(length(image_tasks) > 0) {
+              results <- foreach::foreach(task = image_tasks, .packages = c('ggplot2', 'ggalluvial', 'dplyr', 'stringr', 'forcats')) %dopar% {
+                tryCatch({
+                  # Sanitize name for file path
+                  sanitized_name <- gsub("/", "_", task$name)
+                  
+                  # Create the output path
+                  output_path <- paste0(current_dir, "/images/", sanitized_name, ".png")
+                  
+                  # Generate the Sankey diagram
+                  create_crop_rotation_sankey(
+                    data = task$data,
+                    output_path = output_path,
+                    min_area = 0,
+                    exclude_crops = c(),
+                    color = color_palette
+                  )
+                  
+                  # Return success information
+                  list(
+                    success = TRUE,
+                    type = task$type,
+                    name = task$name,
+                    path = output_path
+                  )
+                }, error = function(e) {
+                  # Return error information
+                  list(
+                    success = FALSE,
+                    type = task$type,
+                    name = task$name,
+                    error = e$message
+                  )
+                })
+              }
+              
+              # Log results
+              success_count <- sum(sapply(results, function(x) x$success))
+              message(sprintf("Successfully generated %d of %d images", success_count, length(image_tasks)))
+              
+              # Log any errors
+              for(result in results) {
+                if(!result$success) {
+                  warning(sprintf("Error generating image for %s '%s': %s", 
+                                  result$type, result$name, result$error))
+                }
+              }
+            } else {
+              message("No images to generate")
+            }
+          }, error = function(e) {
+            warning(sprintf("Error in parallel image generation: %s", e$message))
+          }, finally = {
+            # Always ensure the cluster is stopped
+            parallel::stopCluster(cl)
+          })
         }
         
         #--------------------------------------------------------------------------------------------

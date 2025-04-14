@@ -347,150 +347,40 @@ group_overlapping_polygons <- function(polygons_sf) {
 }
 
 #-------------------------------------------------------------------------------------------
-
-#' Check Spatial Intersections
-#' 
-#' @description Performs spatial intersection checking using a tiled approach for large datasets
-#' 
-#' @param input_list List of sf objects to check
-#' @param intersection sf object representing the intersection
-#' @return sf object with intersection results
-#' @importFrom sf st_bbox st_crop st_make_valid st_drop_geometry st_union
-#' @importFrom utils txtProgressBar setTxtProgressBar
-#' @importFrom dplyr %>% group_by summarize across select
-#' @importFrom rmapshaper ms_erase
-intersecting_check_spatial <- function(input_list, intersection) {
-  # Get the overall bounding box
-  bbox <- st_bbox(input_list[[1]])
-  
-  # Calculate number of tiles needed in each direction
-  x_tiles <- ceiling((bbox["xmax"] - bbox["xmin"]) / 10000)
-  y_tiles <- ceiling((bbox["ymax"] - bbox["ymin"]) / 10000)
-  
-  # Pre-allocate list to store results
-  results_list <- list()
-  counter <- 1
-  
-  # Initialize progress bar
-  total_tiles <- x_tiles * y_tiles
-  pb <- txtProgressBar(min = 0, max = total_tiles, style = 3)
-  
-  # Loop through tiles
-  for(x in 1:x_tiles) {
-    for(y in 1:y_tiles) {
-      setTxtProgressBar(pb, counter)
-      
-      incProgress(0.001, detail = paste("checking intersection", counter, "from", total_tiles))
-      
-      # Calculate tile bounds
-      tile_xmin <- bbox["xmin"] + (x-1) * 10000
-      tile_xmax <- bbox["xmin"] + x * 10000
-      tile_ymin <- bbox["ymin"] + (y-1) * 10000
-      tile_ymax <- bbox["ymin"] + y * 10000
-      
-      # Create tile polygon
-      tile <- c(xmin = tile_xmin, 
-                xmax = tile_xmax, 
-                ymin = tile_ymin, 
-                ymax = tile_ymax)
-      
-      names(tile) <- c("xmin", "xmax", "ymin", "ymax")
-      
-      counter2 <- 3
-      
-      intersection_subset <- sf::st_crop(intersection, tile)
-
-      for(i in 1:length(input_list)){
-        input <- input_list[[i]]
-        
-        # Find features that intersect with this tile
-        input_subset <- st_crop(input, tile)
-        
-        # Only process if we have features in both datasets
-        if(nrow(input_subset) > 0 && nrow(intersection_subset) > 0) {
-          tryCatch({
-            erase_result <- sf::st_make_valid(ms_erase(input_subset, intersection_subset))
-            erase_result <- clean_thin_polygons(erase_result, 2)
-
-            if(!is.null(erase_result) && nrow(erase_result) > 0) {
-              if(i == 1){
-                df_missing <- intersection[1:nrow(erase_result),]
-                df_missing[,-c((i),(i+1), ncol(df_missing))] <- "Not named"
-                df_missing[,c((i),(i+1))] <- st_drop_geometry(erase_result)
-                df_missing$geometry <- erase_result$geometry
-                
-                results_list[[counter]] <- df_missing
-  
-                # add an intersecting group id 
-                results_list[[counter]] <- results_list[[counter]]%>%
-                  group_overlapping_polygons()%>% # add intersecting id 
-                  group_by(group_id) %>%
-                  summarize(
-                    across(where(~!inherits(., "sfc")), ~na.omit(.)[1]),  # Take first non-NA value
-                    geometry = st_union(geometry),
-                    .groups = "drop"
-                  ) %>%
-                  select(-group_id)
-                
-              }else{
-                df_missing <- intersection[1:nrow(erase_result),]
-                df_missing[,-c((counter2),(counter2+1), ncol(df_missing))] <- "Not named"
-                df_missing[,c((counter2),(counter2+1))] <- st_drop_geometry(erase_result)
-                df_missing$geometry <- erase_result$geometry
-                
-                results_list[[counter]] <- rbind(results_list[[counter]], df_missing)
-                
-                counter2 <- counter2+2
-                
-                # add an intersecting group id 
-                results_list[[counter]] <- results_list[[counter]]%>%
-                  group_overlapping_polygons()%>% # add intersecting id 
-                  group_by(group_id) %>%
-                  summarize(
-                    across(where(~!inherits(., "sfc")), ~na.omit(.)[1]),  # Take first non-NA value
-                    geometry = st_union(geometry),
-                    .groups = "drop"
-                  ) %>%
-                  select(-group_id)
-              }
-            }
-          }, error = function(e) {
-            warning(paste("Error processing tile", x, y, ":", e$message))
-          })
-        }
-      }
-      counter <- counter + 1
-    }
-  }
-  
-  # Close progress bar
-  close(pb)
-  
-  # Combine results
-  erase <- do.call(rbind, results_list)
-  
-  return(erase)
-}
-
-#-------------------------------------------------------------------------------------------
-
-#' Intersect Multiple Field Layers
+#' Intersect Multiple Field Layers with Parallel Processing
 #' 
 #' @description Intersects multiple spatial layers while maintaining CRS consistency
+#' using parallel processing for improved performance.
 #' 
 #' @param fields_list List of sf objects to intersect
+#' @param max_area Numeric value specifying maximum area before tiling is used (in square meters)
+#' @param n_cores Number of cores to use for parallel processing. Default is 8, 
+#'        set to NA to use all available cores minus 1.
+#' @param progress_callback Optional callback function to report progress
+#' 
 #' @return sf object with intersected fields
-#' @importFrom sf st_crs st_transform st_intersection st_make_valid st_geometry_type st_area
+#' @importFrom sf st_crs st_transform st_intersection st_make_valid st_geometry_type st_area st_crop
 #' @importFrom dplyr %>% filter
 #' @importFrom units set_units
+#' @importFrom parallel detectCores makeCluster stopCluster parLapply clusterExport clusterEvalQ
+#' @importFrom doParallel registerDoParallel
+#' @importFrom foreach foreach %dopar%
 #' @export
-intersect_fields <- function(fields_list, max_area = 20000 * 1e6) {
+intersect_fields <- function(fields_list, max_area = 20000 * 1e6, n_cores = 8, progress_callback = NULL) {
   # Ensure at least two fields are provided
   if (length(fields_list) < 2) {
     stop("Please provide at least two spatial layers in fields_list.")
   }
   
   message("Starting intersection process...")
+  
+  # Setup parallel environment
+  if (is.na(n_cores)) {
+    n_cores <- max(1, parallel::detectCores() - 1)
+  } else {
+    n_cores <- min(n_cores, parallel::detectCores())
+  }
+  message(sprintf("Using %d cores for parallel processing", n_cores))
   
   # Get the CRS of the first layer to use for all transformations
   target_crs <- st_crs(fields_list[[1]])
@@ -505,7 +395,7 @@ intersect_fields <- function(fields_list, max_area = 20000 * 1e6) {
   # Check if tiling is needed
   total_area <- as.numeric(sum(st_area(intersected)))
   if (total_area > max_area) {
-    message(sprintf("Large area detected (%.2f km²). Using tiling approach...", 
+    message(sprintf("Large area detected (%.2f km²). Using tiling approach with parallel processing...", 
                     as.numeric(total_area)/1e6))
     
     # Create a grid of tiles based on the bounding box
@@ -516,15 +406,27 @@ intersect_fields <- function(fields_list, max_area = 20000 * 1e6) {
     message(sprintf("Creating %d x %d grid...", n_tiles, n_tiles))
     # Create grid
     grid <- st_make_grid(intersected, n = n_tiles)
-  
-    # Initialize list to store results
-    results <- list()
     
-    # Create progress bar for tiles
-    pb <- txtProgressBar(min = 0, max = length(grid), style = 3)
+    # Progress reporting
+    total_tiles <- length(grid)
+    progress_step <- ceiling(total_tiles / 20)  # Report every ~5%
     
-    # Process each tile
-    for (tile_idx in seq_along(grid)) {
+    # Setup parallel cluster
+    cl <- parallel::makeCluster(n_cores)
+    doParallel::registerDoParallel(cl)
+    
+    # Export necessary data and functions to the cluster
+    parallel::clusterExport(cl, c("fields_list", "intersected", "grid"), envir = environment())
+    
+    # Load required packages on each worker node
+    parallel::clusterEvalQ(cl, {
+      library(sf)
+      library(dplyr)
+      library(units)
+    })
+    
+    # Define function for processing a single tile
+    process_tile <- function(tile_idx) {
       tile <- grid[[tile_idx]]
       # Clip first layer with tile
       tile_intersect <- st_crop(intersected, tile)
@@ -546,30 +448,49 @@ intersect_fields <- function(fields_list, max_area = 20000 * 1e6) {
           }
         }
         
-        # Add results from this tile
-        if (length(tile_intersect) > 0) {
-          results[[length(results) + 1]] <- tile_intersect
-        }
+        return(tile_intersect)
       }
-      
-      # Update progress bar
-      setTxtProgressBar(pb, tile_idx)
+      return(NULL)
     }
     
-    # Close progress bar
-    close(pb)
+    # Process tiles in parallel
+    message("Processing tiles in parallel...")
+    
+    # use foreach for parallel execution with progress tracking
+    results <- foreach::foreach(tile_idx = seq_along(grid), .packages = c('sf', 'dplyr', 'units')) %dopar% {
+      result <- process_tile(tile_idx)
+      # No direct progress callback in parallel mode, but each worker returns its status
+      list(tile_idx = tile_idx, result = result)
+    }
+    
+    # Stop the cluster
+    parallel::stopCluster(cl)
+    
+    # Extract results and update progress
+    valid_results <- list()
+    for (i in seq_along(results)) {
+      if (!is.null(results[[i]]$result) && nrow(results[[i]]$result) > 0) {
+        valid_results[[length(valid_results) + 1]] <- results[[i]]$result
+      }
+      
+      # Update progress every progress_step tiles
+      if (!is.null(progress_callback) && i %% progress_step == 0) {
+        progress_callback(i / total_tiles, paste("Processed", i, "of", total_tiles, "tiles"))
+      }
+    }
     
     message("\nCombining results from tiles...")
     # Combine results
-    if (length(results) > 0) {
-      intersected <- do.call(rbind, results) %>%
+    if (length(valid_results) > 0) {
+      intersected <- do.call(rbind, valid_results) %>%
         st_make_valid()
     } else {
       intersected <- NULL
     }
     
   } else {
-    message("Processing Intersection without tiling...")
+    message("Processing intersection without tiling...")
+    
     # Create progress bar for normal processing
     pb <- txtProgressBar(min = 0, max = length(fields_list) - 1, style = 3)
     
@@ -577,7 +498,10 @@ intersect_fields <- function(fields_list, max_area = 20000 * 1e6) {
     for (i in 2:length(fields_list)) {
       intersected <- st_intersection(sf::st_make_valid(intersected), sf::st_make_valid(fields_list[[i]]))
       
-      incProgress(0.0005, detail = paste("intersecting", i, "from", length(fields_list)))
+      if (!is.null(progress_callback)) {
+        progress_callback((i-1) / (length(fields_list)-1), 
+                          paste("Intersecting layer", i, "of", length(fields_list)))
+      }
       
       intersected <- intersected %>%
         filter(st_geometry_type(geometry) %in% c("POLYGON", "MULTIPOLYGON")) %>%
@@ -595,33 +519,238 @@ intersect_fields <- function(fields_list, max_area = 20000 * 1e6) {
   message("\nChecking for non-intersecting polygons...")
   # bind the intersected with the non intersecting polygons
   if (!is.null(intersected)) {
-    intersected <- rbind(intersected, intersecting_check_spatial(fields_list, intersected))
+    non_intersecting <- intersecting_check_spatial(fields_list, intersected, n_cores = n_cores, 
+                                                   progress_callback = progress_callback)
+    if (!is.null(non_intersecting) && nrow(non_intersecting) > 0) {
+      intersected <- rbind(intersected, non_intersecting)
+    }
   }
   
   message("Intersection process completed!")
   return(intersected)
 }
 
-#-------------------------------------------------------------------------------------------
-
-#' Simple Field Intersection
+#' Check Spatial Intersections with Parallel Processing
 #' 
-#' @description Performs a simplified intersection of multiple spatial layers
+#' @description Performs spatial intersection checking using a tiled approach with parallel processing for large datasets
+#' 
+#' @param input_list List of sf objects to check
+#' @param intersection sf object representing the intersection
+#' @param n_cores Number of cores to use for parallel processing. Default is 8, 
+#'        set to NA to use all available cores minus 1.
+#' @param progress_callback Optional callback function to report progress
+#' @return sf object with intersection results
+#' @importFrom sf st_bbox st_crop st_make_valid st_drop_geometry st_union st_crs st_transform
+#' @importFrom parallel detectCores makeCluster stopCluster
+#' @importFrom doParallel registerDoParallel
+#' @importFrom foreach foreach %dopar%
+#' @importFrom dplyr %>% group_by summarize across select
+#' @importFrom rmapshaper ms_erase
+intersecting_check_spatial <- function(input_list, intersection, n_cores = 8, progress_callback = NULL) {
+  # Setup parallel environment
+  if (is.na(n_cores)) {
+    n_cores <- max(1, parallel::detectCores() - 1)
+  } else {
+    n_cores <- min(n_cores, parallel::detectCores())
+  }
+  message(sprintf("Using %d cores for non-intersecting polygon check", n_cores))
+  
+  # Get the overall bounding box
+  bbox <- st_bbox(input_list[[1]])
+  
+  # Calculate number of tiles needed in each direction
+  # Create more tiles for better parallelization
+  x_tiles <- max(n_cores, ceiling((bbox["xmax"] - bbox["xmin"]) / 10000))
+  y_tiles <- max(n_cores, ceiling((bbox["ymax"] - bbox["ymin"]) / 10000))
+  
+  # Create tile specifications
+  total_tiles <- x_tiles * y_tiles
+  tiles <- list()
+  for(x in 1:x_tiles) {
+    for(y in 1:y_tiles) {
+      # Calculate tile bounds
+      tile_xmin <- bbox["xmin"] + (x-1) * (bbox["xmax"] - bbox["xmin"]) / x_tiles
+      tile_xmax <- bbox["xmin"] + x * (bbox["xmax"] - bbox["xmin"]) / x_tiles
+      tile_ymin <- bbox["ymin"] + (y-1) * (bbox["ymax"] - bbox["ymin"]) / y_tiles
+      tile_ymax <- bbox["ymin"] + y * (bbox["ymax"] - bbox["ymin"]) / y_tiles
+      
+      # Create tile
+      tiles[[length(tiles) + 1]] <- c(xmin = tile_xmin, 
+                                      xmax = tile_xmax, 
+                                      ymin = tile_ymin, 
+                                      ymax = tile_ymax)
+    }
+  }
+  
+  # Setup parallel cluster
+  cl <- parallel::makeCluster(n_cores)
+  doParallel::registerDoParallel(cl)
+  
+  # Export necessary objects
+  parallel::clusterExport(cl, c("input_list", "intersection", "tiles", "clean_thin_polygons"), 
+                          envir = environment())
+  
+  # Load required packages on each worker
+  parallel::clusterEvalQ(cl, {
+    library(sf)
+    library(dplyr)
+    library(rmapshaper)
+    library(units)
+  })
+  
+  # Process tiles in parallel
+  message(sprintf("Processing %d tiles in parallel...", length(tiles)))
+  
+  process_tile <- function(tile_idx) {
+    tile <- tiles[[tile_idx]]
+    names(tile) <- c("xmin", "xmax", "ymin", "ymax")
+    
+    # Crop intersection to tile
+    tryCatch({
+      intersection_subset <- sf::st_crop(intersection, tile)
+      
+      if (nrow(intersection_subset) == 0) {
+        return(NULL)
+      }
+      
+      tile_results <- list()
+      
+      for(i in 1:length(input_list)) {
+        input <- input_list[[i]]
+        
+        # Crop input to tile
+        input_subset <- sf::st_crop(input, tile)
+        
+        # Only process if we have features
+        if(nrow(input_subset) > 0 && nrow(intersection_subset) > 0) {
+          tryCatch({
+            erase_result <- sf::st_make_valid(ms_erase(input_subset, intersection_subset))
+            erase_result <- clean_thin_polygons(erase_result, 2)
+            
+            if(!is.null(erase_result) && nrow(erase_result) > 0) {
+              if(i == 1){
+                df_missing <- intersection[1:nrow(erase_result),]
+                df_missing[,-c((i),(i+1), ncol(df_missing))] <- "Not named"
+                df_missing[,c((i),(i+1))] <- st_drop_geometry(erase_result)
+                df_missing$geometry <- erase_result$geometry
+                
+                tile_results[[length(tile_results) + 1]] <- df_missing
+                
+                # add an intersecting group id 
+                tile_results[[length(tile_results)]] <- tile_results[[length(tile_results)]]%>%
+                  group_overlapping_polygons()%>% # add intersecting id 
+                  group_by(group_id) %>%
+                  summarize(
+                    across(where(~!inherits(., "sfc")), ~na.omit(.)[1]),  # Take first non-NA value
+                    geometry = st_union(geometry),
+                    .groups = "drop"
+                  ) %>%
+                  select(-group_id)
+                
+              } else {
+                counter2 <- (i * 2) + 1
+                df_missing <- intersection[1:nrow(erase_result),]
+                df_missing[,-c((counter2),(counter2+1), ncol(df_missing))] <- "Not named"
+                df_missing[,c((counter2),(counter2+1))] <- st_drop_geometry(erase_result)
+                df_missing$geometry <- erase_result$geometry
+                
+                if (length(tile_results) > 0) {
+                  tile_results[[length(tile_results)]] <- rbind(tile_results[[length(tile_results)]], df_missing)
+                  
+                  # add an intersecting group id 
+                  tile_results[[length(tile_results)]] <- tile_results[[length(tile_results)]]%>%
+                    group_overlapping_polygons()%>% # add intersecting id 
+                    group_by(group_id) %>%
+                    summarize(
+                      across(where(~!inherits(., "sfc")), ~na.omit(.)[1]),  # Take first non-NA value
+                      geometry = st_union(geometry),
+                      .groups = "drop"
+                    ) %>%
+                    select(-group_id)
+                }
+              }
+            }
+          }, error = function(e) {
+            warning(paste("Error processing tile", tile_idx, "for layer", i, ":", e$message))
+          })
+        }
+      }
+      
+      if (length(tile_results) > 0) {
+        return(tile_results[[length(tile_results)]])
+      } else {
+        return(NULL)
+      }
+    }, error = function(e) {
+      warning(paste("Error processing tile", tile_idx, ":", e$message))
+      return(NULL)
+    })
+  }
+  
+  # Run parallel processing
+  results <- foreach::foreach(tile_idx = seq_along(tiles), 
+                              .packages = c('sf', 'dplyr', 'rmapshaper', 'units')) %dopar% {
+                                result <- process_tile(tile_idx)
+                                list(tile_idx = tile_idx, result = result)
+                              }
+  
+  # Stop the cluster
+  parallel::stopCluster(cl)
+  
+  # Combine results and report progress
+  valid_results <- list()
+  for (i in seq_along(results)) {
+    if (!is.null(results[[i]]$result) && nrow(results[[i]]$result) > 0) {
+      valid_results[[length(valid_results) + 1]] <- results[[i]]$result
+    }
+    
+    # Update progress
+    if (!is.null(progress_callback)) {
+      progress_callback(i / length(tiles), 
+                        paste("Processed", i, "of", length(tiles), "non-intersecting checks"))
+    }
+  }
+  
+  # Combine all results
+  if (length(valid_results) > 0) {
+    combined_results <- do.call(rbind, valid_results)
+    return(combined_results)
+  } else {
+    return(NULL)
+  }
+}
+
+#' Simple Field Intersection with Parallel Processing
+#' 
+#' @description Performs a simplified intersection of multiple spatial layers using parallel processing
 #' 
 #' @param fields_list List of sf objects to intersect
+#' @param max_area Maximum area threshold for determining chunking strategy
+#' @param n_cores Number of cores to use for parallel processing. Default is 8,
+#'        set to NA to use all available cores minus 1.
 #' @return sf object with intersected fields
-#' @importFrom sf st_crs st_transform st_intersection st_make_valid st_geometry_type st_area
+#' @importFrom sf st_crs st_transform st_intersection st_make_valid st_geometry_type st_area st_bbox st_make_grid
 #' @importFrom dplyr %>% filter
 #' @importFrom units set_units
+#' @importFrom parallel detectCores makeCluster stopCluster
+#' @importFrom doParallel registerDoParallel
+#' @importFrom foreach foreach %dopar%
 #' @export
-
-intersect_fields_simple <- function(fields_list, max_area = 20000 * 1e6) {
+intersect_fields_simple <- function(fields_list, max_area = 20000 * 1e6, n_cores = 8) {
   # Ensure at least two fields are provided
   if (length(fields_list) < 2) {
     stop("Please provide at least two spatial layers in fields_list.")
   }
   
-  message("Starting intersection process...")
+  message("Starting simple intersection process...")
+  
+  # Setup parallel environment
+  if (is.na(n_cores)) {
+    n_cores <- max(1, parallel::detectCores() - 1)
+  } else {
+    n_cores <- min(n_cores, parallel::detectCores())
+  }
+  message(sprintf("Using %d cores for parallel processing", n_cores))
   
   # Get the CRS of the first layer to use for all transformations
   target_crs <- st_crs(fields_list[[1]])
@@ -633,33 +762,112 @@ intersect_fields_simple <- function(fields_list, max_area = 20000 * 1e6) {
   # Initialize with first layer
   intersected <- sf::st_make_valid(fields_list[[1]])
   
-
-  # Create progress bar for normal processing
-  pb <- txtProgressBar(min = 0, max = length(fields_list) - 1, style = 3)
+  # Check if chunking is needed for large datasets
+  total_area <- as.numeric(sum(st_area(intersected)))
   
-  # Process normally if area is small enough
-  for (i in 2:length(fields_list)) {
+  if (total_area > max_area) {
+    message(sprintf("Large area detected (%.2f km²). Using chunking approach...", 
+                    as.numeric(total_area)/1e6))
     
-    incProgress(0.005, detail = paste("intersecting", i, "from", length(fields_list)))
+    # Create a grid of chunks based on the bounding box
+    bbox <- st_bbox(intersected)
+    # Calculate number of chunks (aim for approximately equal area chunks)
+    n_chunks <- ceiling(sqrt(total_area / (max_area/2)))
     
-    intersected <- st_intersection(intersected, sf::st_make_valid(fields_list[[i]]))
+    message(sprintf("Creating %d x %d grid for chunking...", n_chunks, n_chunks))
+    grid <- st_make_grid(intersected, n = n_chunks)
     
-    intersected <- intersected %>%
-      filter(st_geometry_type(geometry) %in% c("POLYGON", "MULTIPOLYGON")) %>%
-      st_make_valid() %>%
-      filter(st_area(.) >= units::set_units(1, "m^2"))
+    # Setup parallel cluster
+    cl <- parallel::makeCluster(n_cores)
+    doParallel::registerDoParallel(cl)
     
-    # Update progress bar
-    setTxtProgressBar(pb, i - 1)
+    # Load required packages on each worker
+    parallel::clusterEvalQ(cl, {
+      library(sf)
+      library(dplyr)
+      library(units)
+    })
+    
+    # Define function to process one chunk
+    process_chunk <- function(chunk_idx, fields_list, grid) {
+      chunk <- grid[[chunk_idx]]
+      
+      # Crop each layer to the chunk
+      chunk_fields <- lapply(fields_list, function(field) {
+        tryCatch({
+          st_crop(sf::st_make_valid(field), chunk)
+        }, error = function(e) {
+          NULL
+        })
+      })
+      
+      # Filter out empty chunks
+      chunk_fields <- chunk_fields[!sapply(chunk_fields, is.null)]
+      chunk_fields <- chunk_fields[sapply(chunk_fields, nrow) > 0]
+      
+      if (length(chunk_fields) < 2) {
+        return(NULL)
+      }
+      
+      # Perform intersection on this chunk
+      result <- chunk_fields[[1]]
+      for (i in 2:length(chunk_fields)) {
+        result <- st_intersection(result, sf::st_make_valid(chunk_fields[[i]]))
+        
+        result <- result %>%
+          filter(st_geometry_type(geometry) %in% c("POLYGON", "MULTIPOLYGON")) %>%
+          st_make_valid() %>%
+          filter(st_area(.) >= units::set_units(1, "m^2"))
+        
+        if (nrow(result) == 0) break
+      }
+      
+      return(result)
+    }
+    
+    # Export necessary objects
+    parallel::clusterExport(cl, c("fields_list", "grid"), envir = environment())
+    
+    # Process chunks in parallel
+    message("Processing chunks in parallel...")
+    results <- foreach::foreach(chunk_idx = seq_along(grid), 
+                                .packages = c('sf', 'dplyr', 'units')) %dopar% {
+                                  process_chunk(chunk_idx, fields_list, grid)
+                                }
+    
+    # Stop the cluster
+    parallel::stopCluster(cl)
+    
+    # Combine results
+    valid_results <- results[!sapply(results, is.null)]
+    valid_results <- valid_results[sapply(valid_results, nrow) > 0]
+    
+    if (length(valid_results) > 0) {
+      message("Combining results from chunks...")
+      intersected <- do.call(rbind, valid_results) %>%
+        st_make_valid()
+    } else {
+      warning("No valid intersections found.")
+      intersected <- NULL
+    }
+    
+  } else {
+    message("Area is small enough for simple sequential processing...")
+    # For small datasets, process sequentially
+    for (i in 2:length(fields_list)) {
+      message(sprintf("Intersecting layer %d of %d...", i, length(fields_list)))
+      intersected <- st_intersection(intersected, sf::st_make_valid(fields_list[[i]]))
+      
+      intersected <- intersected %>%
+        filter(st_geometry_type(geometry) %in% c("POLYGON", "MULTIPOLYGON")) %>%
+        st_make_valid() %>%
+        filter(st_area(.) >= units::set_units(1, "m^2"))
+    }
   }
   
-  # Close progress bar
-  close(pb)
-
-  message("Intersection process completed!")
+  message("Simple intersection process completed!")
   return(intersected)
 }
-
 #-------------------------------------------------------------------------------------------
 
 #' Intersect Geometries with Administrative Borders
@@ -1721,8 +1929,8 @@ diversity_mapping <- function(input, agg_cols, districts, EZGs = NA, AOIs = NA){
     group_by(District)%>%
     summarise(mean_unique = mean(unique_count),
               meant_transi = mean(transitions),
-              mean_unique_weight = weighted.mean(unique_count, area),
-              mean_transi_weight = weighted.mean(transitions, area)
+              mean_unique_weight = round(weighted.mean(unique_count, area),2),
+              mean_transi_weight = round(weighted.mean(transitions, area),2)
     )
   names(districts) <- c("District", "geometry")
   
@@ -1733,7 +1941,7 @@ diversity_mapping <- function(input, agg_cols, districts, EZGs = NA, AOIs = NA){
   BISCALE <- bi_class(BISCALE, x = mean_unique_weight, y = mean_transi_weight, style = "quantile", dim = 3)
   labels1 <- bi_class_breaks(BISCALE, x = mean_unique_weight, y = mean_transi_weight, 
                              style = "quantile", 
-                             dim = 3, dig_lab = c(2,2), 
+                             dim = 3, 
                              split = FALSE)
   
   BISCALE <- st_transform(BISCALE, crs = "EPSG:4326")
@@ -1779,7 +1987,7 @@ diversity_mapping <- function(input, agg_cols, districts, EZGs = NA, AOIs = NA){
     EZG_div_data <- list(BISCALE = BISCALE, color_pal = color_pal, labels1 = labels1)
   }
   
-  if(all(is.na(EZGs))) {  # Check if EZGs is entirely NA
+  if(all(is.na(AOIs))) {  # Check if AOIs is entirely NA
     AOI_div_data <- NA
   }else{
     AOI_names <- c("AOI", "area", "unique_count", "transitions")
@@ -1796,9 +2004,10 @@ diversity_mapping <- function(input, agg_cols, districts, EZGs = NA, AOIs = NA){
     BISCALE <- merge(EZGs, BISCALE)
     
     # create classes
-    BISCALE <- bi_class(BISCALE, x = mean_unique_weight, y = mean_transi_weight, style = "quantile", dim = 3)
-    labels1 <- bi_class_breaks(BISCALE, x = mean_unique_weight, y = mean_transi_weight, style = "quantile", 
-                               dim = 3, dig_lab = c(2,2), split = FALSE)
+    BISCALE <- bi_class(BISCALE, x = mean_unique_weight, y = mean_transi_weight,
+                               style = "quantile", dim = 3)
+    labels1 <- bi_class_breaks(BISCALE, x = mean_unique_weight, y = mean_transi_weight,
+                               style = "quantile", dim = 3, split = FALSE)
     
     BISCALE <- st_transform(BISCALE, crs = "EPSG:4326")
     
@@ -1815,118 +2024,6 @@ diversity_mapping <- function(input, agg_cols, districts, EZGs = NA, AOIs = NA){
   Data <- list(District_div_data, EZG_div_data, AOI_div_data) 
   
   return(Data)
-}
-#-------------------------------------------------------------------------------------------
-
-
-#' Calculate and Map Diversity Metrics with Error Handling 
-#'
-#' different administrative and ecological boundaries. It includes comprehensive error
-#' handling and data validation.
-#'
-#' @param list_intersect_with_borders List containing intersection data with different boundary types
-#'        Must contain either 'EZG_inter' or 'borders_inter' elements
-#' @param CropRotViz_intersection Data frame containing crop rotation visualization data
-#' @param agg_cols Character vector of column names to use for aggregation
-#' @param Districts sf object containing district boundaries
-#' @param EZGs sf object containing ecological zone boundaries (optional)
-#' @param AOIs sf object containing areas of interest boundaries (optional)
-#' @param min_rows Minimum number of rows required for sufficient data (default: 9)
-#' @param min_years Minimum number of years required for sufficient data (default: 3)
-#'
-#' @return Returns either:
-#'         - A spatial object with diversity metrics if successful
-#'         - NULL if warnings occurred during processing
-#'         - NA if errors occurred or insufficient data was available
-#'
-#' @examples
-#' \dontrun{
-#' # Basic usage with only Districts
-#' result <- handle_diversity_mapping(
-#'   list_intersect_with_borders = list(borders_inter = borders_data),
-#'   CropRotViz_intersection = crop_data,
-#'   agg_cols = c("year", "crop_type"),
-#'   Districts = district_sf
-#' )
-#'
-#' # Usage with all boundary types
-#' result_full <- handle_diversity_mapping(
-#'   list_intersect_with_borders = list(
-#'     EZG_inter = ezg_data,
-#'     borders_inter = borders_data
-#'   ),
-#'   CropRotViz_intersection = crop_data,
-#'   agg_cols = c("year", "crop_type"),
-#'   Districts = district_sf,
-#'   EZGs = ezg_sf,
-#'   AOIs = aoi_sf
-#' )
-#' }
-#'
-#' @export
-handle_diversity_mapping <- function(list_intersect_with_borders, CropRotViz_intersection, 
-                                     agg_cols, Districts, EZGs = NULL, AOIs = NULL) {
-  
-  # Function to check if there's enough data for diversity mapping
-  has_sufficient_data <- function(data_list, min_rows = 9, min_years = 3) {
-    return(dim(data_list)[1] > min_rows && length(years) > min_years)
-  }
-  
-  # Helper function to handle the actual mapping with error handling
-  safe_diversity_mapping <- function(...) {
-    tryCatch({
-      diversity_mapping(...)
-    }, error = function(e) {
-      warning(sprintf("Error in diversity mapping: %s", e$message))
-      return(NA)
-    }, warning = function(w) {
-      warning(sprintf("Warning in diversity mapping: %s", w$message))
-      return(NULL)
-    })
-  }
-  
-  # Helper function to log the mapping attempt
-  log_mapping_attempt <- function(mapping_type) {
-    message(sprintf("Attempting diversity mapping with %s", mapping_type))
-  }
-  
-  diversity_data <- try({
-    if (!is.null(EZGs)) {
-      log_mapping_attempt("EZG borders")
-      
-      if (has_sufficient_data(list_intersect_with_borders$EZG_inter)) {
-        if (!is.null(AOIs)) {
-          safe_diversity_mapping(CropRotViz_intersection, agg_cols, Districts, EZGs, AOIs)
-        } else {
-          safe_diversity_mapping(CropRotViz_intersection, agg_cols, Districts, EZGs)
-        }
-      } else {
-        warning("Insufficient data for EZG intersection")
-        NA
-      }
-    } else {
-      log_mapping_attempt("standard borders")
-      
-      if (has_sufficient_data(list_intersect_with_borders$borders_inter)) {
-        if (!is.null(AOIs)) {
-          safe_diversity_mapping(CropRotViz_intersection, agg_cols, Districts, AOIs)
-        } else {
-          safe_diversity_mapping(CropRotViz_intersection, agg_cols, Districts)
-        }
-      } else {
-        warning("Insufficient data for borders intersection")
-        NA
-      }
-    }
-  }, silent = TRUE)
-  
-  # Handle any errors that occurred during the entire process
-  if (inherits(diversity_data, "try-error")) {
-    warning(sprintf("Error in diversity mapping process: %s", attr(diversity_data, "condition")$message))
-    return(NA)
-  }
-  
-  return(diversity_data)
 }
 
 #-------------------------------------------------------------------------------------------
@@ -1985,12 +2082,12 @@ diversity_mapper <- function(data, type){
         "<div style='background-color: white; padding: 15px; border-radius: 5px; position: relative; min-width: 150px;'>",
         # Left side labels (Transitions)
         "<div style='position: absolute; left: -78px; top: 5%; transform: rotate(-90deg) translateY(-50%); transform-origin: right; font-size: 12px; white-space: nowrap;'> More Transitions →</div>",
-        sprintf("<div style='position: absolute; left: 30px; top: 100px; font-size: 11px;'>%s</div>", data[[3]]$bi_y[1]),
-        sprintf("<div style='position: absolute; left: 30px; top: 62px; font-size: 11px;'>%s</div>", data[[3]]$bi_y[2]),
-        sprintf("<div style='position: absolute; left: 30px; top: 25px; font-size: 11px;'>%s</div>", data[[3]]$bi_y[3]),
+        sprintf("<div style='position: absolute; left: 30px; top: 100px; font-size: 10px;'>%s</div>", data[[3]]$bi_y[1]),
+        sprintf("<div style='position: absolute; left: 30px; top: 62px; font-size: 10px;'>%s</div>", data[[3]]$bi_y[2]),
+        sprintf("<div style='position: absolute; left: 30px; top: 25px; font-size: 10px;'>%s</div>", data[[3]]$bi_y[3]),
         
         # Color grid
-        "<div style='margin-left: 60px; margin-right: -30px;'>",
+        "<div style='margin-left: 70px; margin-right: -10px;'>",
         "<div style='display: grid; grid-template-columns: repeat(3, 35px); gap: 0;'>",
         paste(sprintf(
           "<div style='width: 35px; height: 35px; background-color: %s; border: 0.5px solid rgba(0,0,0,0.1);'></div>",
@@ -1999,7 +2096,7 @@ diversity_mapper <- function(data, type){
         "</div>",
         
         # Bottom labels (Unique crops)
-        "<div style='margin-left: -1px; display: flex; justify-content: space-between; margin-top: 2px; font-size: 11px;width: 108px;'>",
+        "<div style='margin-left: -1px; display: flex; justify-content: space-between; margin-top: 2px; font-size: 10px;width: 108px;'>",
         sprintf("<span>%s</span>", data[[3]]$bi_x[1]),
         sprintf("<span>%s</span>", data[[3]]$bi_x[2]),
         sprintf("<span>%s</span>", data[[3]]$bi_x[3]),

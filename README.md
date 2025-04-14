@@ -103,6 +103,9 @@ run_visualization_app()
 
 # Launch the Shiny fast visualization application
 run_fast_visualization_app()
+
+# Launch the Shiny field level visualization application
+run_field_level_app()
 ```
 
 ### Step-by-Step Guide

@@ -130,7 +130,7 @@ fast_viz_ui <- function(input_dir = NA){
                            )
                          )
                 ),
-                if (!is.na(diversity_data)) {
+                if (exists("diversity_data") && is.list(diversity_data) && length(diversity_data) > 0) {
                   tabPanel("Plot Diversity",
                            titlePanel("Interactive District/River Catchment Crop Diversity Map"),
                            fluidRow(column(3,
