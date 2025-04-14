@@ -24,7 +24,7 @@ The package consists of three main components:
   <img src="images/example.png" alt="Descriptive Alt Text" width="100%">
 </div>
 
-### Grpahical Abstract
+### Graphical Abstract
 <div align="center">
   <img src="images/graphical_abstract.png" alt="Descriptive Alt Text" width="100%">
 </div>
