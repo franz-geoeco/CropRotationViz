@@ -885,6 +885,15 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
   countriesSP   <- app_data$Input_App_data$countriesSP
   display_names <- app_data$Input_App_data$display_names
   EZG           <- app_data$Input_App_data$EZG
+  BS <- NULL
+  if(!is.null(app_data$Input_App_data$BS)) {
+    tryCatch({
+      BS <- terra::unwrap(app_data$Input_App_data$BS)
+    }, error = function(e) {
+      warning("Failed to unwrap BS raster: ", e$message)
+      BS <- NULL
+    })
+  }
   
   
   
@@ -2106,6 +2115,7 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
         #--------------------------------------------------------------
         # intersect with attributes
         incProgress(0.05, detail = "intersecting with areas")
+        message("intersecting with areas")
         list_intersect_with_borders <- intersect_with_borders(CropRotViz_intersection, 3, countriesSP,
                                                               EZG, aoi_data)
         
@@ -2126,6 +2136,7 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
         }
         
         incProgress(0.05, detail = "writing vector file")
+        message("writing vector file")
         if(vector_file){
           if(input$filetype == "Shapefile"){
             sf::st_write(sf::st_make_valid(CropRotViz_intersection), paste0(current_dir, "/CropRotViz_intersection.shp"), quiet = TRUE, driver = "ESRI Shapefile", append = F, delete_layer = TRUE)
@@ -2146,25 +2157,57 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
           agg_cols <- grep("^Name_", names(CropRotViz_intersection), value = TRUE)
         }
         
+
         # diversity map
         incProgress(0.05, detail = "preparing diversity map")
-
-        # check if there's enough data for diversity mapping
-        if(length(agg_cols) > 3 & length(unique(CropRotViz_intersection$District))>9){
-          # diversity mapping
-          diversity_data <- diversity_mapping(
-            CropRotViz_intersection, 
-            agg_cols, Districts, EZGs
-          )
-        }else{
+        message("preparing diversity map")
+        
+        # FIXED: Better condition and error handling
+        diversity_data <- NULL
+        tryCatch({
+          # Check if there's enough data for diversity mapping
+          if(length(agg_cols) >= 2 & length(unique(CropRotViz_intersection$District)) > 1){
+            
+            # Handle BS unwrapping safely
+            BS_raster <- NULL
+            if(!is.null(app_data$Input_App_data$BS)) {
+              tryCatch({
+                BS_raster <- terra::unwrap(app_data$Input_App_data$BS)
+              }, error = function(e) {
+                warning("Failed to unwrap BS raster: ", e$message)
+                BS_raster <- NULL
+              })
+            }
+            
+            # Add AOIs parameter and handle potential AOI data
+            aoi_for_diversity <- if(exists("aoi_data") && !is.null(aoi_data())) aoi_data() else NA
+            
+            # diversity mapping with proper error handling
+            diversity_data <- diversity_mapping(
+              input = CropRotViz_intersection, 
+              agg_cols = agg_cols, 
+              districts = Districts, 
+              EZGs = if(exists("EZGs") && !is.null(EZGs)) EZGs else NA,
+              AOIs = aoi_for_diversity,
+              BS = BS_raster
+            )
+            
+            message("Diversity mapping completed successfully")
+          } else {
+            message("Insufficient data for diversity mapping - skipping")
+            diversity_data <- NULL
+          }
+        }, error = function(e) {
+          warning("Error in diversity mapping: ", e$message)
+          message("Continuing without diversity mapping...")
           diversity_data <- NULL
-        }
+        })
         #--------------------------------------------------------------
         incProgress(0.05, detail = "preparing the rest of the outputs")
-        # Modified district processing section with error handling
+        
+        # processing section 
         district_CropRotViz_intersection <- list()
         
-        # district processing section with error handling
         for (i in 1:nrow(Districts)) {
           tryCatch({
             district <- sf::st_drop_geometry(Districts)[i,1]

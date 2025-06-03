@@ -16,31 +16,25 @@ BugReports: https://github.com/franz-geoeco/CropRotationViz/issues
 Depends:
     R (>= 3.5.0)
 Imports:
-    biscale,
-    config,
+     biscale,
     data.table,
     DT,
     doParallel,
     dplyr (>= 1.0.0),
-    foreach,
     forcats,
     geodata,
     ggalluvial,
     ggplot2 (>= 3.3.0),
-    ggridges,
-    gridExtra,
     htmltools,
     leaflet (>= 2.1.2),
-    leaflet.extras,
     leaflet.minicharts,
-    lubridate,
     parallel,
     purrr,
+    rlang,
     plotly (>= 4.10.1),
     plyr,
     progress (>= 1.2.2),
     rmapshaper,
-    scales,
     sf (>= 1.0.12),
     shiny (>= 1.6.0),
     shinyBS,
@@ -52,9 +46,9 @@ Imports:
     sortable,
     sp,
     stringr,
+    terra,
     tidyr,
-    units,
-    viridis
+    units
 Suggests: 
     testthat (>= 3.0.0)
 Encoding: UTF-8

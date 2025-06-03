@@ -2,18 +2,28 @@
 % Please edit documentation in R/functions.R
 \name{intersecting_check_spatial}
 \alias{intersecting_check_spatial}
-\title{Check Spatial Intersections}
+\title{Check Spatial Intersections with Parallel Processing}
 \usage{
-intersecting_check_spatial(input_list, intersection)
+intersecting_check_spatial(
+  input_list,
+  intersection,
+  n_cores = 5,
+  progress_callback = NULL
+)
 }
 \arguments{
 \item{input_list}{List of sf objects to check}
 
 \item{intersection}{sf object representing the intersection}
+
+\item{n_cores}{Number of cores to use for parallel processing. Default is 8,
+set to NA to use all available cores minus 1.}
+
+\item{progress_callback}{Optional callback function to report progress}
 }
 \value{
 sf object with intersection results
 }
 \description{
-Performs spatial intersection checking using a tiled approach for large datasets
+Performs spatial intersection checking using a tiled approach with parallel processing for large datasets
 }

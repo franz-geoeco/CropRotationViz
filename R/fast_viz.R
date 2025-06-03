@@ -146,7 +146,12 @@ fast_viz_ui <- function(input_dir = NA){
                            fluidRow(column(1),
                                     column(10,
                                            leafletOutput("diversity", height = "650px")
-                                    )),
+                                    )), br(), br(),
+                           fluidRow(column(1),
+                                    column(10,
+                                           plotlyOutput("diversity_soil", height = "650px" )
+                                     )),
+                                   br(), br(),br(), br(),
                            
                   )
                 },
@@ -689,8 +694,6 @@ fast_viz_server <- function(input, output, session, app_data, input_dir) {
       }
     })
     
-    
-    
     # plot diversity maps
     output$diversity <- renderLeaflet(
       if(input$AreaType == "districts"){
@@ -699,5 +702,13 @@ fast_viz_server <- function(input, output, session, app_data, input_dir) {
         diversity_mapper(data = diversity_data[[2]], type = "EZG")
       }
     )
+    
+    output$diversity_soil <- renderPlotly({
+      if(input$AreaType == "districts"){
+        diversity_soil_plotter(data = diversity_data[[1]], type = "District")
+      }else{
+        diversity_soil_plotter(data = diversity_data[[2]], type = "EZG")
+      }
+    })
   })
 }

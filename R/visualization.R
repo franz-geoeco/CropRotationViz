@@ -68,6 +68,15 @@ viz_ui <- function(input_dir = NA){
     system.file("www", package = "shinyBS")
   )
   
+  # Extract years and create span string outside the fluidRow
+  year_span <- paste0(
+    min(as.numeric(gsub(".*?(\\d+).*", "\\1", 
+                        names(district_CropRotViz_intersection[[1]])[grepl("\\d", names(district_CropRotViz_intersection[[1]]))]))),
+    "-",
+    max(as.numeric(gsub(".*?(\\d+).*", "\\1", 
+                        names(district_CropRotViz_intersection[[1]])[grepl("\\d", names(district_CropRotViz_intersection[[1]]))])))
+  )
+  
   fluidPage(
     Crop_choices <- "",
     District_choices <- "",
@@ -243,7 +252,7 @@ viz_ui <- function(input_dir = NA){
                                     plotlyOutput("sankey_plotly")
                                   )
                            )
-                         )
+                         ),br(), br(), br(),br(), br()
                 ),
                 tabPanel("Plot Crop Specific Sequence",
                          br(),
@@ -369,7 +378,7 @@ viz_ui <- function(input_dir = NA){
                            column(10,
                                   shinycssloaders::withSpinner(
                                     plotlyOutput("sankey_plotly_specific")
-                                  )
+                                  ), br(), br(), br(),br(), br()
                                   ),
                            )
                          
@@ -544,6 +553,31 @@ viz_ui <- function(input_dir = NA){
                            )
                          )
                 ),
+                if (exists("diversity_data") && is.list(diversity_data) && length(diversity_data) > 0) {
+                  tabPanel("Plot Diversity",
+                           titlePanel("Interactive District/River Catchment Crop Diversity Map"),
+                           fluidRow(column(3,
+                                           radioButtons("AreaType", 
+                                                        "Select Map Type:", inline = TRUE,
+                                                        choices = c("Districts" = "districts",
+                                                                    "Catchment" = "ezg"))),
+                                    column(5,
+                                           h4(paste0("The Structural Diversity is defined by the number of transitions and unique crops over the period ", 
+                                                     year_span, 
+                                                     ". The map shows the area weighted mean value per area."))
+                                    )),
+                           fluidRow(column(1),
+                                    column(10,
+                                           leafletOutput("diversity", height = "650px")
+                                    )), br(), br(),
+                           fluidRow(column(1),
+                                    column(10,
+                                           plotlyOutput("diversity_soil", height = "650px" )
+                                    )),
+                           br(), br(),br(), br(),
+                           
+                  )
+                },
                 div(style = "padding-bottom: 100px;"), # Add padding for footer
                 
                 
@@ -940,6 +974,9 @@ viz_server <- function(input, output, session, app_data, input_dir) {
       }else if(input$tabs== "Plot Sequence per Area"){
         text_1 <- "Plot Sequence per Area"
         text_2 <- "Here you can create district specific rotation pattern plots."
+      }else if(input$tabs == "Plot Diversity"){
+        text_1 <- "Plot Crop Diversity Map"
+        text_2 <- "Here you can plot and inspect the structural crop diversity per catchment or district. The diversity coloring is defined by the number of transition and the number of unique crops per area."
       }
       shinyalert(text_1, text_2, type = "info", confirmButtonCol = "#5d9bd9")
     })
@@ -1835,6 +1872,24 @@ viz_server <- function(input, output, session, app_data, input_dir) {
                                             colors = crop_colors()
       )
       
+    })
+    
+    
+    # plot diversity maps
+    output$diversity <- renderLeaflet(
+      if(input$AreaType == "districts"){
+        diversity_mapper(data = diversity_data[[1]], type = "District")
+      }else{
+        diversity_mapper(data = diversity_data[[2]], type = "EZG")
+      }
+    )
+    
+    output$diversity_soil <- renderPlotly({
+      if(input$AreaType == "districts"){
+        diversity_soil_plotter(data = diversity_data[[1]], type = "District")
+      }else{
+        diversity_soil_plotter(data = diversity_data[[2]], type = "EZG")
+      }
     })
     
   })

@@ -2,16 +2,29 @@
 % Please edit documentation in R/functions.R
 \name{intersect_fields}
 \alias{intersect_fields}
-\title{Intersect Multiple Field Layers}
+\title{Intersect Multiple Field Layers with Parallel Processing}
 \usage{
-intersect_fields(fields_list, max_area = 20000 * 1e+06)
+intersect_fields(
+  fields_list,
+  max_area = 2e+07 * 1e+06,
+  n_cores = 4,
+  progress_callback = NULL
+)
 }
 \arguments{
 \item{fields_list}{List of sf objects to intersect}
+
+\item{max_area}{Numeric value specifying maximum area before tiling is used (in square meters)}
+
+\item{n_cores}{Number of cores to use for parallel processing. Default is 8,
+set to NA to use all available cores minus 1.}
+
+\item{progress_callback}{Optional callback function to report progress}
 }
 \value{
 sf object with intersected fields
 }
 \description{
 Intersects multiple spatial layers while maintaining CRS consistency
+using parallel processing for improved performance.
 }

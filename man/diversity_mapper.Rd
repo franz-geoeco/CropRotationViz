@@ -2,14 +2,14 @@
 % Please edit documentation in R/functions.R
 \name{diversity_mapper}
 \alias{diversity_mapper}
-\title{Create a Bivariate Choropleth Map for Agricultural Diversity}
+\title{Create an Interactive Agricultural Diversity Map}
 \usage{
 diversity_mapper(data, type)
 }
 \arguments{
 \item{data}{A list containing the following elements:
 \itemize{
-\item BISCALE: Spatial data frame with diversity metrics
+\item BISCALE: Spatial data frame with diversity metrics and optionally BS (soil potential)
 \item color_pal: Color palette function for bivariate mapping
 \item labels1: List with bi_x and bi_y labels for the legend
 }}
@@ -19,20 +19,27 @@ diversity_mapper(data, type)
 \value{
 A leaflet map object with:
 \itemize{
-\item Choropleth layer showing bivariate relationships
-\item Custom legend displaying the bivariate color scheme
-\item Popups with detailed information for each geographic unit
+\item Primary choropleth layer showing bivariate crop diversity relationships
+\item Optional soil potential layer (if BS data is available)
+\item Layer controls for switching between different views
+\item Custom legends for each available layer
+\item Interactive popups with detailed information for each geographic unit
 }
 }
 \description{
 This function generates an interactive leaflet map visualizing agricultural diversity patterns
-using a bivariate color scheme. It displays the relationship between unique crops and
-crop transitions across different geographical units (Districts or River Basins).
+with multiple layers. The primary layer displays crop diversity using a bivariate color scheme
+showing the relationship between unique crops and crop transitions. If soil potential data (BS)
+is available, an additional layer is created to visualize soil conditions across different
+geographical units (Districts or River Basins).
 }
 \examples{
 \dontrun{
-diversity_mapper(processed_data, type = "District")
-diversity_mapper(processed_data, type = "River Basin")
+# With soil potential data
+diversity_mapper(processed_data_with_soil, type = "District")
+
+# Without soil potential data
+diversity_mapper(processed_data_basic, type = "River Basin")
 }
 
 }

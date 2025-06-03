@@ -366,7 +366,7 @@ group_overlapping_polygons <- function(polygons_sf) {
 #' @importFrom doParallel registerDoParallel
 #' @importFrom foreach foreach %dopar%
 #' @export
-intersect_fields <- function(fields_list, max_area = 20000 * 1e6, n_cores = 8, progress_callback = NULL) {
+intersect_fields <- function(fields_list, max_area = 20000000 * 1e6, n_cores = 4, progress_callback = NULL) {
   # Ensure at least two fields are provided
   if (length(fields_list) < 2) {
     stop("Please provide at least two spatial layers in fields_list.")
@@ -376,7 +376,7 @@ intersect_fields <- function(fields_list, max_area = 20000 * 1e6, n_cores = 8, p
   
   # Setup parallel environment
   if (is.na(n_cores)) {
-    n_cores <- max(1, parallel::detectCores() - 1)
+    n_cores <- max(1, parallel::detectCores() - 3)
   } else {
     n_cores <- min(n_cores, parallel::detectCores())
   }
@@ -386,7 +386,6 @@ intersect_fields <- function(fields_list, max_area = 20000 * 1e6, n_cores = 8, p
   target_crs <- st_crs(fields_list[[1]])
   
   # Transform all fields to the CRS of the first layer
-  message("Transforming CRS...")
   fields_list <- lapply(fields_list, st_transform, crs = target_crs)
   
   # Initialize with first layer
@@ -517,6 +516,7 @@ intersect_fields <- function(fields_list, max_area = 20000 * 1e6, n_cores = 8, p
   }
   
   message("\nChecking for non-intersecting polygons...")
+  incProgress(0.05, detail = "Checking for non-intersecting polygons...")
   # bind the intersected with the non intersecting polygons
   if (!is.null(intersected)) {
     non_intersecting <- intersecting_check_spatial(fields_list, intersected, n_cores = n_cores, 
@@ -546,7 +546,7 @@ intersect_fields <- function(fields_list, max_area = 20000 * 1e6, n_cores = 8, p
 #' @importFrom foreach foreach %dopar%
 #' @importFrom dplyr %>% group_by summarize across select
 #' @importFrom rmapshaper ms_erase
-intersecting_check_spatial <- function(input_list, intersection, n_cores = 8, progress_callback = NULL) {
+intersecting_check_spatial <- function(input_list, intersection, n_cores = 5, progress_callback = NULL) {
   # Setup parallel environment
   if (is.na(n_cores)) {
     n_cores <- max(1, parallel::detectCores() - 1)
@@ -736,7 +736,7 @@ intersecting_check_spatial <- function(input_list, intersection, n_cores = 8, pr
 #' @importFrom doParallel registerDoParallel
 #' @importFrom foreach foreach %dopar%
 #' @export
-intersect_fields_simple <- function(fields_list, max_area = 20000 * 1e6, n_cores = 8) {
+intersect_fields_simple <- function(fields_list, max_area = 20000 * 1e6, n_cores = 5) {
   # Ensure at least two fields are provided
   if (length(fields_list) < 2) {
     stop("Please provide at least two spatial layers in fields_list.")
@@ -746,7 +746,7 @@ intersect_fields_simple <- function(fields_list, max_area = 20000 * 1e6, n_cores
   
   # Setup parallel environment
   if (is.na(n_cores)) {
-    n_cores <- max(1, parallel::detectCores() - 1)
+    n_cores <- max(1, parallel::detectCores() - 3)
   } else {
     n_cores <- min(n_cores, parallel::detectCores())
   }
@@ -1869,11 +1869,14 @@ dummy_field_creator <- function(output_dir,
 #' @param agg_cols Character vector specifying the column names containing crop information for each year
 #' @param districts sf object containing district-level polygons with at least "District" and "geometry" columns
 #' @param EZGs Optional sf object containing river basin (EZG) polygons. Default NA
+#' @param AOIs Optional sf object containing areas of interest (AOI) polygons. Default NA
+#' @param BS A terra raster object for additional analysis. Default NULL
 #' 
-#' @return List containing two leaflet map objects:
+#' @return List containing three elements:
 #'   \itemize{
-#'     \item District_Map: Bivariate choropleth map at district level
-#'     \item EZG_Map: Bivariate choropleth map at river basin level (if EZGs provided)
+#'     \item District_div_data: Bivariate data for districts
+#'     \item EZG_div_data: Bivariate data for river basins (if EZGs provided)
+#'     \item AOI_div_data: Bivariate data for areas of interest (if AOIs provided)
 #'   }
 #' 
 #' @details 
@@ -1888,8 +1891,9 @@ dummy_field_creator <- function(output_dir,
 #' 
 #' @importFrom sf st_drop_geometry st_transform
 #' @importFrom dplyr group_by summarise
-#' @importFrom leaflet leaflet addProviderTiles addPolygons addControl colorFactor
+#' @importFrom leaflet colorFactor
 #' @importFrom biscale bi_class bi_class_breaks
+#' @importFrom terra extract
 #' 
 #' @examples
 #' \dontrun{
@@ -1910,32 +1914,54 @@ dummy_field_creator <- function(output_dir,
 #' }
 #' 
 #' @export
-diversity_mapping <- function(input, agg_cols, districts, EZGs = NA, AOIs = NA){
+diversity_mapping <- function(input, agg_cols, districts, EZGs = NA, AOIs = NA, BS = NULL){
+  
+  # Input validation
+  if (!inherits(input, "sf")) {
+    stop("input must be an sf object")
+  }
+  
+  if (!all(agg_cols %in% names(input))) {
+    stop("Not all agg_cols found in input data")
+  }
+  
+  if (!"District" %in% names(input)) {
+    stop("'District' column not found in input data")
+  }
+  
+  if (!"area" %in% names(input)) {
+    stop("'area' column not found in input data")
+  }
   
   invekos_df <- st_drop_geometry(input)
   
   # Add a new column with the count of unique values
-  invekos_df$unique_count <- apply(invekos_df[, agg_cols], 1, function(x) length(unique(x)))
+  invekos_df$unique_count <- apply(invekos_df[, agg_cols, drop = FALSE], 1, function(x) length(unique(x)))
   
   # count transitions per field
-  invekos_df$transitions <- apply(invekos_df[, agg_cols], 1, function(row) {
+  invekos_df$transitions <- apply(invekos_df[, agg_cols, drop = FALSE], 1, function(row) {
+    if (length(row) < 2) return(0)
     sum(row[-length(row)] != row[-1])
   })
   
+  # Process Districts
   district_names <- c("District", "area", "unique_count", "transitions")
-  BISCALE <- invekos_df[,district_names]
+  BISCALE <- invekos_df[, district_names]
   
-  BISCALE <- BISCALE%>%
-    group_by(District)%>%
-    summarise(mean_unique = mean(unique_count),
-              meant_transi = mean(transitions),
-              mean_unique_weight = round(weighted.mean(unique_count, area),2),
-              mean_transi_weight = round(weighted.mean(transitions, area),2)
+  BISCALE <- BISCALE %>%
+    group_by(District) %>%
+    summarise(
+      mean_unique = mean(unique_count, na.rm = TRUE),
+      meant_transi = mean(transitions, na.rm = TRUE),
+      mean_unique_weight = round(weighted.mean(unique_count, area, na.rm = TRUE), 2),
+      mean_transi_weight = round(weighted.mean(transitions, area, na.rm = TRUE), 2),
+      .groups = "drop"
     )
+  
+  # Ensure districts has correct column names
   names(districts) <- c("District", "geometry")
   
-  BISCALE <- merge(districts, BISCALE)
-  
+  BISCALE <- merge(districts, BISCALE, by = "District")
   
   # create classes
   BISCALE <- bi_class(BISCALE, x = mean_unique_weight, y = mean_transi_weight, style = "quantile", dim = 3)
@@ -1945,6 +1971,20 @@ diversity_mapping <- function(input, agg_cols, districts, EZGs = NA, AOIs = NA){
                              split = FALSE)
   
   BISCALE <- st_transform(BISCALE, crs = "EPSG:4326")
+  
+  # Extract BS data if provided
+  if (!is.null(BS)) {
+    tryCatch({
+      BS_extract <- terra::extract(BS, BISCALE, mean, na.rm = TRUE)[, 2]
+      BISCALE$BS_mean <- BS_extract
+    }, error = function(e) {
+      warning("Failed to extract BS data: ", e$message)
+      BISCALE$BS_mean <- NA
+    })
+  } else {
+    BISCALE$BS_mean <- NA
+  }
+  
   palette <- c("#e8e8e8", "#e4acac", "#c85a5a", "#b0d5df", "#ad9ea5", "#985356", 
                "#64acbe", "#627f8c", "#574249")
   
@@ -1953,90 +1993,134 @@ diversity_mapping <- function(input, agg_cols, districts, EZGs = NA, AOIs = NA){
     palette = palette,
     domain = BISCALE$bi_class
   )
-  District_div_data <- list(BISCALE, color_pal, labels1)
+  District_div_data <- list(BISCALE = BISCALE, color_pal = color_pal, labels1 = labels1)
   
-  if(all(is.na(EZGs))) {  # Check if EZGs is entirely NA
+  # Process EZGs if provided
+  if (!all(is.na(EZGs)) && inherits(EZGs, "sf")) {
+    if (!"EZG" %in% names(invekos_df)) {
+      warning("'EZG' column not found in input data, skipping EZG processing")
+      EZG_div_data <- NA
+    } else {
+      EZG_names <- c("EZG", "area", "unique_count", "transitions")
+      BISCALE_EZG <- invekos_df[, EZG_names]
+      
+      BISCALE_EZG <- BISCALE_EZG %>%
+        group_by(EZG) %>%
+        summarise(
+          mean_unique = mean(unique_count, na.rm = TRUE),
+          meant_transi = mean(transitions, na.rm = TRUE),
+          mean_unique_weight = weighted.mean(unique_count, area, na.rm = TRUE),
+          mean_transi_weight = weighted.mean(transitions, area, na.rm = TRUE),
+          .groups = "drop"
+        )
+      
+      BISCALE_EZG <- merge(EZGs, BISCALE_EZG, by = "EZG")
+      
+      # create classes
+      BISCALE_EZG <- bi_class(BISCALE_EZG, x = mean_unique_weight, y = mean_transi_weight, style = "quantile", dim = 3)
+      labels1_EZG <- bi_class_breaks(BISCALE_EZG, x = mean_unique_weight, y = mean_transi_weight, style = "quantile", 
+                                     dim = 3, dig_lab = c(2,2), split = FALSE)
+      
+      BISCALE_EZG <- st_transform(BISCALE_EZG, crs = "EPSG:4326")
+      
+      # Extract BS data if provided
+      if (!is.null(BS)) {
+        tryCatch({
+          BS_extract_EZG <- terra::extract(BS, BISCALE_EZG, mean, na.rm = TRUE)[, 2]
+          BISCALE_EZG$BS_mean <- BS_extract_EZG
+        }, error = function(e) {
+          warning("Failed to extract BS data for EZGs: ", e$message)
+          BISCALE_EZG$BS_mean <- NA
+        })
+      } else {
+        BISCALE_EZG$BS_mean <- NA
+      }
+      
+      # Create a color palette based on the bi_class
+      color_pal_EZG <- colorFactor(
+        palette = palette,
+        domain = BISCALE_EZG$bi_class
+      )
+      
+      EZG_div_data <- list(BISCALE = BISCALE_EZG, color_pal = color_pal_EZG, labels1 = labels1_EZG)
+    }
+  } else {
     EZG_div_data <- NA
-  }else{
-    EZG_names <- c("EZG", "area", "unique_count", "transitions")
-    BISCALE <- invekos_df[,EZG_names]
-    
-    BISCALE <- BISCALE%>%
-      group_by(EZG)%>%
-      summarise(mean_unique = mean(unique_count),
-                meant_transi = mean(transitions),
-                mean_unique_weight = weighted.mean(unique_count, area),
-                mean_transi_weight = weighted.mean(transitions, area)
-      )
-    
-    BISCALE <- merge(EZGs, BISCALE)
-    
-    # create classes
-    BISCALE <- bi_class(BISCALE, x = mean_unique_weight, y = mean_transi_weight, style = "quantile", dim = 3)
-    labels1 <- bi_class_breaks(BISCALE, x = mean_unique_weight, y = mean_transi_weight, style = "quantile", 
-                               dim = 3, dig_lab = c(2,2), split = FALSE)
-    
-    BISCALE <- st_transform(BISCALE, crs = "EPSG:4326")
-    
-    # Create a color palette based on the bi_class
-    color_pal <- colorFactor(
-      palette = palette,
-      domain = BISCALE$bi_class
-    )
-    
-    EZG_div_data <- list(BISCALE = BISCALE, color_pal = color_pal, labels1 = labels1)
   }
   
-  if(all(is.na(AOIs))) {  # Check if AOIs is entirely NA
+  # Process AOIs if provided
+  if (!all(is.na(AOIs)) && inherits(AOIs, "sf")) {
+    if (!"AOI" %in% names(invekos_df)) {
+      warning("'AOI' column not found in input data, skipping AOI processing")
+      AOI_div_data <- NA
+    } else {
+      AOI_names <- c("AOI", "area", "unique_count", "transitions")
+      BISCALE_AOI <- invekos_df[, AOI_names]
+      
+      BISCALE_AOI <- BISCALE_AOI %>%
+        group_by(AOI) %>%
+        summarise(
+          mean_unique = mean(unique_count, na.rm = TRUE),
+          meant_transi = mean(transitions, na.rm = TRUE),
+          mean_unique_weight = weighted.mean(unique_count, area, na.rm = TRUE),
+          mean_transi_weight = weighted.mean(transitions, area, na.rm = TRUE),
+          .groups = "drop"
+        )
+      
+      BISCALE_AOI <- merge(AOIs, BISCALE_AOI, by = "AOI")  # Fixed: was using EZGs instead of AOIs
+      
+      # create classes
+      BISCALE_AOI <- bi_class(BISCALE_AOI, x = mean_unique_weight, y = mean_transi_weight,
+                              style = "quantile", dim = 3)
+      labels1_AOI <- bi_class_breaks(BISCALE_AOI, x = mean_unique_weight, y = mean_transi_weight,
+                                     style = "quantile", dim = 3, split = FALSE)
+      
+      BISCALE_AOI <- st_transform(BISCALE_AOI, crs = "EPSG:4326")
+      
+      # Extract BS data if provided
+      if (!is.null(BS)) {
+        tryCatch({
+          BS_extract_AOI <- terra::extract(BS, BISCALE_AOI, mean, na.rm = TRUE)[, 2]
+          BISCALE_AOI$BS_mean <- BS_extract_AOI
+        }, error = function(e) {
+          warning("Failed to extract BS data for AOIs: ", e$message)
+          BISCALE_AOI$BS_mean <- NA
+        })
+      } else {
+        BISCALE_AOI$BS_mean <- NA
+      }
+      
+      # Create a color palette based on the bi_class
+      color_pal_AOI <- colorFactor(
+        palette = palette,
+        domain = BISCALE_AOI$bi_class
+      )
+      
+      AOI_div_data <- list(BISCALE = BISCALE_AOI, color_pal = color_pal_AOI, labels1 = labels1_AOI)
+    }
+  } else {
     AOI_div_data <- NA
-  }else{
-    AOI_names <- c("AOI", "area", "unique_count", "transitions")
-    BISCALE <- invekos_df[,AOI_names]
-    
-    BISCALE <- BISCALE%>%
-      group_by(AOI)%>%
-      summarise(mean_unique = mean(unique_count),
-                meant_transi = mean(transitions),
-                mean_unique_weight = weighted.mean(unique_count, area),
-                mean_transi_weight = weighted.mean(transitions, area)
-      )
-    
-    BISCALE <- merge(EZGs, BISCALE)
-    
-    # create classes
-    BISCALE <- bi_class(BISCALE, x = mean_unique_weight, y = mean_transi_weight,
-                               style = "quantile", dim = 3)
-    labels1 <- bi_class_breaks(BISCALE, x = mean_unique_weight, y = mean_transi_weight,
-                               style = "quantile", dim = 3, split = FALSE)
-    
-    BISCALE <- st_transform(BISCALE, crs = "EPSG:4326")
-    
-    # Create a color palette based on the bi_class
-    color_pal <- colorFactor(
-      palette = palette,
-      domain = BISCALE$bi_class
-    )
-    
-    AOI_div_data <- list(BISCALE = BISCALE, color_pal = color_pal, labels1 = labels1)
   }
   
-  # list the maps
+  # Return the maps data
   Data <- list(District_div_data, EZG_div_data, AOI_div_data) 
   
   return(Data)
 }
 
 #-------------------------------------------------------------------------------------------
-#' Create a Bivariate Choropleth Map for Agricultural Diversity
+#' Create an Interactive Agricultural Diversity Map
 #'
 #' @description
 #' This function generates an interactive leaflet map visualizing agricultural diversity patterns
-#' using a bivariate color scheme. It displays the relationship between unique crops and
-#' crop transitions across different geographical units (Districts or River Basins).
+#' with multiple layers. The primary layer displays crop diversity using a bivariate color scheme
+#' showing the relationship between unique crops and crop transitions. If soil potential data (BS)
+#' is available, an additional layer is created to visualize soil conditions across different 
+#' geographical units (Districts or River Basins).
 #'
 #' @param data A list containing the following elements:
 #'   \itemize{
-#'     \item BISCALE: Spatial data frame with diversity metrics
+#'     \item BISCALE: Spatial data frame with diversity metrics and optionally BS (soil potential)
 #'     \item color_pal: Color palette function for bivariate mapping
 #'     \item labels1: List with bi_x and bi_y labels for the legend
 #'   }
@@ -2044,54 +2128,196 @@ diversity_mapping <- function(input, agg_cols, districts, EZGs = NA, AOIs = NA){
 #'
 #' @return A leaflet map object with:
 #'   \itemize{
-#'     \item Choropleth layer showing bivariate relationships
-#'     \item Custom legend displaying the bivariate color scheme
-#'     \item Popups with detailed information for each geographic unit
+#'     \item Primary choropleth layer showing bivariate crop diversity relationships
+#'     \item Optional soil potential layer (if BS data is available)
+#'     \item Layer controls for switching between different views
+#'     \item Custom legends for each available layer
+#'     \item Interactive popups with detailed information for each geographic unit
 #'   }
 #'
 #' @examples
 #' \dontrun{
-#' diversity_mapper(processed_data, type = "District")
-#' diversity_mapper(processed_data, type = "River Basin")
+#' # With soil potential data
+#' diversity_mapper(processed_data_with_soil, type = "District")
+#' 
+#' # Without soil potential data
+#' diversity_mapper(processed_data_basic, type = "River Basin")
 #' }
 #'
 #' @import leaflet
 #' @export
 diversity_mapper <- function(data, type){
-  color_pal <- data[[2]]
-  label <- ifelse(type == "District", "District", "River Basin")
-  palette <- c("#e8e8e8", "#e4acac", "#c85a5a", "#b0d5df", "#ad9ea5", "#985356", 
-               "#64acbe", "#627f8c", "#574249")
+  # Diversity palette (existing)
+  diversity_palette <- c("#e8e8e8", "#b0d5df", "#64acbe", "#e4acac", "#ad9ea5", "#627f8c", 
+                         "#c85a5a", "#985356", "#574249")
   
-  # Create the leaflet map
+  # Check if BS column exists
+  has_BS <- "BS_mean" %in% names(data[[1]])
+  
+  # BS (Soil Potential) palette - only create if BS data exists
+  if(has_BS) {
+    BS_palette <- colorNumeric(
+      palette = c(low = "#ffffcc", high = "#800026"),
+      domain = data[[1]]$BS_mean,
+      na.color = "transparent"
+    )
+  }
+  
+  diversity_color_pal <- colorFactor(palette = diversity_palette, 
+                                     domain = c("1-1", "1-2", "1-3", "2-1", "2-2", "2-3", "3-1", "3-2", "3-3"))
+  
+  # Create enhanced popup text with conditional BS information
+  data[[1]]$popup_text <- if(type == "District") {
+    if(has_BS) {
+      paste0(
+        "<div style='font-family: Arial, sans-serif; font-size: 14px; line-height: 1.4; min-width: 200px;'>",
+        "<strong style='color: #2c3e50; font-size: 16px;'>", data[[1]]$District, "</strong><br>",
+        "<hr style='margin: 8px 0; border: none; border-top: 1px solid #bdc3c7;'>",
+        "<div style='margin: 5px 0;'>",
+        "<span style='color: #34495e;'><strong>Unique Crops:</strong></span> ",
+        "<span style='color: #34495e; font-weight: bold;'>", round(data[[1]]$mean_unique_weight, 2), "</span>",
+        "</div>",
+        "<div style='margin: 5px 0;'>",
+        "<span style='color: #34495e;'><strong>Transitions:</strong></span> ",
+        "<span style='color: #34495e; font-weight: bold;'>", round(data[[1]]$mean_transi_weight, 2), "</span>",
+        "</div>",
+        "<div style='margin: 5px 0;'>",
+        "<span style='color: #34495e;'><strong>Soil Potential:</strong></span> ",
+        "<span style='color: #34495e; font-weight: bold;'>", round(data[[1]]$BS_mean, 2), "</span>",
+        "</div>",
+        "</div>"
+      )
+    } else {
+      paste0(
+        "<div style='font-family: Arial, sans-serif; font-size: 14px; line-height: 1.4; min-width: 200px;'>",
+        "<strong style='color: #2c3e50; font-size: 16px;'>", data[[1]]$District, "</strong><br>",
+        "<hr style='margin: 8px 0; border: none; border-top: 1px solid #bdc3c7;'>",
+        "<div style='margin: 5px 0;'>",
+        "<span style='color: #34495e;'><strong>Unique Crops:</strong></span> ",
+        "<span style='color: #34495e; font-weight: bold;'>", round(data[[1]]$mean_unique_weight, 2), "</span>",
+        "</div>",
+        "<div style='margin: 5px 0;'>",
+        "<span style='color: #34495e;'><strong>Transitions:</strong></span> ",
+        "<span style='color: #34495e; font-weight: bold;'>", round(data[[1]]$mean_transi_weight, 2), "</span>",
+        "</div>",
+        "</div>"
+      )
+    }
+  } else {
+    if(has_BS) {
+      paste0(
+        "<div style='font-family: Arial, sans-serif; font-size: 14px; line-height: 1.4; min-width: 200px;'>",
+        "<strong style='color: #2c3e50; font-size: 16px;'>", data[[1]]$EZG, "</strong><br>",
+        "<hr style='margin: 8px 0; border: none; border-top: 1px solid #bdc3c7;'>",
+        "<div style='margin: 5px 0;'>",
+        "<span style='color: #34495e;'><strong>Unique Crops:</strong></span> ",
+        "<span style='color: #34495e; font-weight: bold;'>", round(data[[1]]$mean_unique_weight, 2), "</span>",
+        "</div>",
+        "<div style='margin: 5px 0;'>",
+        "<span style='color: #34495e;'><strong>Transitions:</strong></span> ",
+        "<span style='color: #34495e; font-weight: bold;'>", round(data[[1]]$mean_transi_weight, 2), "</span>",
+        "</div>",
+        "<div style='margin: 5px 0;'>",
+        "<span style='color: #34495e;'><strong>Soil Potential:</strong></span> ",
+        "<span style='color: #34495e; font-weight: bold;'>", round(data[[1]]$BS_mean, 2), "</span>",
+        "</div>",
+        "</div>"
+      )
+    } else {
+      paste0(
+        "<div style='font-family: Arial, sans-serif; font-size: 14px; line-height: 1.4; min-width: 200px;'>",
+        "<strong style='color: #2c3e50; font-size: 16px;'>", data[[1]]$EZG, "</strong><br>",
+        "<hr style='margin: 8px 0; border: none; border-top: 1px solid #bdc3c7;'>",
+        "<div style='margin: 5px 0;'>",
+        "<span style='color: #34495e;'><strong>Unique Crops:</strong></span> ",
+        "<span style='color: #34495e; font-weight: bold;'>", round(data[[1]]$mean_unique_weight, 2), "</span>",
+        "</div>",
+        "<div style='margin: 5px 0;'>",
+        "<span style='color: #34495e;'><strong>Transitions:</strong></span> ",
+        "<span style='color: #34495e; font-weight: bold;'>", round(data[[1]]$mean_transi_weight, 2), "</span>",
+        "</div>",
+        "</div>"
+      )
+    }
+  }
+  
+  # Start building the leaflet map
   Diversity_Map <- leaflet(data[[1]]) %>%
-    addProviderTiles("CartoDB.Positron") %>%  # Add a light basemap
+    addProviderTiles("CartoDB.Positron") %>%
+    
+    # Diversity Layer (bi_class) - always present
     addPolygons(
-      fillColor = ~color_pal(bi_class),
+      fillColor = ~diversity_color_pal(bi_class),
       fillOpacity = 0.9,
       weight = 0.1,
       color = "black",
-      popup = ~paste(
-        "<strong>District:</strong>", label, "<br>",
-        "<strong>Unique Crops:</strong>", round(mean_unique_weight, 2), "<br>",
-        "<strong>Transitions:</strong>", round(mean_transi_weight, 2)
+      popup = ~popup_text,
+      group = "Crop Diversity",
+      highlightOptions = highlightOptions(
+        weight = 2,
+        color = "#666666",
+        fillOpacity = 1,
+        bringToFront = TRUE
+      ),
+      popupOptions = popupOptions(
+        closeButton = TRUE,
+        autoClose = TRUE,
+        keepInView = TRUE
       )
-    ) %>%
+    )
+  
+  # Conditionally add Soil Potential Layer if BS data exists
+  if(has_BS) {
+    Diversity_Map <- Diversity_Map %>%
+      addPolygons(
+        fillColor = ~BS_palette(BS_mean),
+        fillOpacity = 0.9,
+        weight = 0.1,
+        color = "black",
+        popup = ~popup_text,
+        group = "Soil Potential",
+        highlightOptions = highlightOptions(
+          weight = 2,
+          color = "#666666",
+          fillOpacity = 1,
+          bringToFront = TRUE
+        ),
+        popupOptions = popupOptions(
+          closeButton = TRUE,
+          autoClose = TRUE,
+          keepInView = TRUE
+        )
+      )
+  }
+  
+  # Add layer controls - conditional based on BS availability
+  if(has_BS) {
+    Diversity_Map <- Diversity_Map %>%
+      addLayersControl(
+        overlayGroups = c("Crop Diversity", "Soil Potential"),
+        options = layersControlOptions(collapsed = FALSE),
+        position = "topleft"
+      )
+  }
+  
+  # Add diversity legend (always present)
+  Diversity_Map <- Diversity_Map %>%
     addControl(
       html = paste(
-        "<div style='background-color: white; padding: 15px; border-radius: 5px; position: relative; min-width: 150px;'>",
+        "<div id='diversity-legend' style='background-color: white; padding: 15px; border-radius: 5px; position: relative; min-width: 150px;'>",
+        "<div style='font-size: 14px; font-weight: bold; margin-bottom: 10px; text-align: center;'>Crop Diversity</div>",
         # Left side labels (Transitions)
-        "<div style='position: absolute; left: -78px; top: 5%; transform: rotate(-90deg) translateY(-50%); transform-origin: right; font-size: 12px; white-space: nowrap;'> More Transitions →</div>",
-        sprintf("<div style='position: absolute; left: 30px; top: 100px; font-size: 10px;'>%s</div>", data[[3]]$bi_y[1]),
-        sprintf("<div style='position: absolute; left: 30px; top: 62px; font-size: 10px;'>%s</div>", data[[3]]$bi_y[2]),
-        sprintf("<div style='position: absolute; left: 30px; top: 25px; font-size: 10px;'>%s</div>", data[[3]]$bi_y[3]),
+        "<div style='position: absolute; left: -78px; top: 15%; transform: rotate(-90deg) translateY(-50%); transform-origin: right; font-size: 12px; white-space: nowrap;'> More Transitions →</div>",
+        sprintf("<div style='position: absolute; left: 30px; top: 110px; font-size: 10px;'>%s</div>", data[[3]]$bi_y[1]),
+        sprintf("<div style='position: absolute; left: 30px; top: 72px; font-size: 10px;'>%s</div>", data[[3]]$bi_y[2]),
+        sprintf("<div style='position: absolute; left: 30px; top: 35px; font-size: 10px;'>%s</div>", data[[3]]$bi_y[3]),
         
         # Color grid
-        "<div style='margin-left: 70px; margin-right: -10px;'>",
+        "<div style='margin-left: 70px; margin-right: -10px; margin-top: 10px;'>",
         "<div style='display: grid; grid-template-columns: repeat(3, 35px); gap: 0;'>",
         paste(sprintf(
           "<div style='width: 35px; height: 35px; background-color: %s; border: 0.5px solid rgba(0,0,0,0.1);'></div>",
-          palette[c(7,8,9,4,5,6,1,2,3)]
+          diversity_palette[c(3,6,9,2,5,8,1,4,7)]
         ), collapse = ""),
         "</div>",
         
@@ -2102,13 +2328,136 @@ diversity_mapper <- function(data, type){
         sprintf("<span>%s</span>", data[[3]]$bi_x[3]),
         "</div>",
         "<div style='margin-left: -30px; margin-top: 5px; text-align: center; font-size: 12px;'>More unique crops →</div>",
+        "</div>",
         "</div>"
       ),
       position = "topright"
-    )
+    )%>% 
+    
+    htmlwidgets::onRender("
+    function(el, x) {
+      var map = this;
+      
+      // Function to toggle legend visibility
+      map.on('overlayadd', function(e) {
+        if (e.name === 'Crop Diversity') {
+          $('.crop-diversity-legend').show();
+        }
+      });
+      
+      map.on('overlayremove', function(e) {
+        if (e.name === 'Crop Diversity') {
+          $('.crop-diversity-legend').hide();
+        }
+      });
+    }
+  ")
+  
+  # Conditionally add Soil Potential legend if BS data exists
+  if(has_BS) {
+    Diversity_Map <- Diversity_Map %>%
+      addLegend(
+        "bottomright",
+        pal = BS_palette,
+        values = ~BS_mean,
+        title = "Soil Potential",
+        opacity = 0.9,
+        group = "Soil Potential"
+      )
+  }
+  
   return(Diversity_Map)
 }
 
+#-------------------------------------------------------------------------------------------
+#' Create a Boxplot Visualization of Soil Potential by Agricultural Diversity Categories
+#'
+#' @description
+#' This function generates a static boxplot visualization showing the distribution of soil
+#' potential (BS values) across different bivariate agricultural diversity categories. 
+#' The plot uses the same color scheme as the diversity mapper to maintain visual consistency,
+#' allowing users to explore the relationship between crop diversity patterns and underlying
+#' soil conditions. Each box represents the distribution of soil potential values within
+#' a specific combination of unique crops and crop transitions.
+#'
+#' @param data A list containing the following elements:
+#'   \itemize{
+#'     \item BISCALE: Spatial data frame with diversity metrics and BS (soil potential) values
+#'     \item color_pal: Color palette function for bivariate mapping (not used in this function)
+#'     \item labels1: List with bi_x and bi_y labels for creating category labels
+#'   }
+#' @param type Character string indicating the geographic unit type ("District" or "River Basin")
+#'        Note: Currently not used in the function but maintained for consistency with other functions
+#'
+#' @return A ggplot object displaying:
+#'   \itemize{
+#'     \item Boxplots for each bivariate diversity category (bi_class)
+#'     \item Color-coded boxes matching the diversity mapper color scheme
+#'     \item X-axis labels showing both unique crops and transitions values
+#'     \item Y-axis showing soil potential distribution
+#'     \item Outliers highlighted with white-filled points
+#'   }
+#'
+#' @details
+#' The function creates a comprehensive view of how soil potential varies across the nine
+#' possible combinations of crop diversity categories (3x3 grid from low to high unique crops
+#' and low to high transitions). This visualization complements the spatial mapping by
+#' providing statistical summaries of the soil-diversity relationship.
+#'
+#' @examples
+#' \dontrun{
+#' # Create boxplot for district-level analysis
+#' soil_plot <- diversity_soil_plotter(processed_data, type = "District")
+#' print(soil_plot)
+#' 
+#' # Create boxplot for river basin analysis
+#' soil_plot <- diversity_soil_plotter(processed_data, type = "River Basin")
+#' print(soil_plot)
+#' }
+#'
+#' @import ggplot2
+#' @import plotly
+#' @export
+diversity_soil_plotter <- function(data, type){
+  
+  palette <- c("1-1" = "#e8e8e8", "1-2" = "#b0d5df", "1-3" = "#64acbe", 
+               "2-1" = "#e4acac", "2-2" = "#ad9ea5", "2-3" = "#627f8c", 
+               "3-1" = "#c85a5a", "3-2" = "#985356", "3-3" = "#574249")
+  
+  # Verbesserte Labels mit konsistenter Formatierung
+  labels <- c(
+    paste0(data[[3]]$bi_x[1], " /\n", data[[3]]$bi_y[1]),
+    paste0(data[[3]]$bi_x[1], " /\n", data[[3]]$bi_y[2]),
+    paste0(data[[3]]$bi_x[1], " /\n", data[[3]]$bi_y[3]),
+    paste0(data[[3]]$bi_x[2], " /\n", data[[3]]$bi_y[1]),
+    paste0(data[[3]]$bi_x[2], " /\n", data[[3]]$bi_y[2]),
+    paste0(data[[3]]$bi_x[2], " /\n", data[[3]]$bi_y[3]),
+    paste0(data[[3]]$bi_x[3], " /\n", data[[3]]$bi_y[1]),
+    paste0(data[[3]]$bi_x[3], " /\n", data[[3]]$bi_y[2]),
+    paste0(data[[3]]$bi_x[3], " /\n", data[[3]]$bi_y[3])
+  )
+  
+  plot <- ggplot(data[[1]], aes(x = bi_class, y = BS_mean, fill = bi_class)) +
+    geom_boxplot(alpha = 0.8, outlier.shape = 21, outlier.fill = "white", 
+                 outlier.stroke = 0.8, linewidth = 0.6) +
+    scale_fill_manual(values = palette) +
+    scale_x_discrete(labels = labels) +
+    labs(x = "Unique Crops /\nTransitions", 
+         y = paste("Mean Soil Potential by", type),
+         title = paste("Distribution of Mean Soil Potential by Diversity Category and", type)) +
+    theme_minimal() +
+    theme(
+      legend.position = "none",
+      panel.grid.major.x = element_blank(),
+      panel.grid.minor = element_blank(),
+      axis.text = element_text(size = 11),
+      axis.title = element_text(size = 12, face = "bold"),
+      plot.title = element_text(size = 14, face = "bold", hjust = 0.5),
+      axis.text.x = element_text(hjust = 0.5, vjust = 0.5, lineheight = 0.9)
+    )
+  
+  return(ggplotly(plot))
+}
 #-------------------------------------------------------------------------------------------
 
 #' Function to Generate a Random Hex Color

@@ -2,16 +2,21 @@
 % Please edit documentation in R/functions.R
 \name{intersect_fields_simple}
 \alias{intersect_fields_simple}
-\title{Simple Field Intersection}
+\title{Simple Field Intersection with Parallel Processing}
 \usage{
-intersect_fields_simple(fields_list, max_area = 20000 * 1e+06)
+intersect_fields_simple(fields_list, max_area = 20000 * 1e+06, n_cores = 5)
 }
 \arguments{
 \item{fields_list}{List of sf objects to intersect}
+
+\item{max_area}{Maximum area threshold for determining chunking strategy}
+
+\item{n_cores}{Number of cores to use for parallel processing. Default is 8,
+set to NA to use all available cores minus 1.}
 }
 \value{
 sf object with intersected fields
 }
 \description{
-Performs a simplified intersection of multiple spatial layers
+Performs a simplified intersection of multiple spatial layers using parallel processing
 }

@@ -4,7 +4,7 @@
 \alias{diversity_mapping}
 \title{Create Bivariate Maps for Agricultural Diversity Analysis}
 \usage{
-diversity_mapping(input, agg_cols, districts, EZGs = NA, AOIs = NA)
+diversity_mapping(input, agg_cols, districts, EZGs = NA, AOIs = NA, BS = NULL)
 }
 \arguments{
 \item{input}{An sf object containing agricultural field data with crop information over multiple years}
@@ -14,12 +14,17 @@ diversity_mapping(input, agg_cols, districts, EZGs = NA, AOIs = NA)
 \item{districts}{sf object containing district-level polygons with at least "District" and "geometry" columns}
 
 \item{EZGs}{Optional sf object containing river basin (EZG) polygons. Default NA}
+
+\item{AOIs}{Optional sf object containing areas of interest (AOI) polygons. Default NA}
+
+\item{BS}{A terra raster object for additional analysis. Default NULL}
 }
 \value{
-List containing two leaflet map objects:
+List containing three elements:
 \itemize{
-\item District_Map: Bivariate choropleth map at district level
-\item EZG_Map: Bivariate choropleth map at river basin level (if EZGs provided)
+\item District_div_data: Bivariate data for districts
+\item EZG_div_data: Bivariate data for river basins (if EZGs provided)
+\item AOI_div_data: Bivariate data for areas of interest (if AOIs provided)
 }
 }
 \description{

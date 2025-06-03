@@ -6,6 +6,7 @@
 # CropRotationViz  🌾 :corn:
 
 <!-- badges: start -->
+[![R-check-dev](https://github.com/franz-geoeco/CropRotationViz/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/franz-geoeco/CropRotationViz/actions/workflows/R-CMD-check.yaml)
 [![codecov](https://codecov.io/gh/franz-geoeco/repo/branch/main/graph/badge.svg)](https://codecov.io/gh/franz-geoeco/CropRotationViz)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 <!-- badges: end -->
@@ -19,14 +20,9 @@ The package consists of three main components:
 - A full visualization application for detailed analysis
 - A fast visualization application for quick insights and area comparison
 
-### Example Sankey Chart
+
 <div align="center">
   <img src="images/example.png" alt="Descriptive Alt Text" width="100%">
-</div>
-
-### Graphical Abstract
-<div align="center">
-  <img src="images/graphical_abstract.png" alt="Descriptive Alt Text" width="100%">
 </div>
 
 
@@ -103,9 +99,6 @@ run_visualization_app()
 
 # Launch the Shiny fast visualization application
 run_fast_visualization_app()
-
-# Launch the Shiny field level visualization application
-run_field_level_app()
 ```
 
 ### Step-by-Step Guide
@@ -165,19 +158,6 @@ If you do not have field data at hand or just want to test the functionality of 
 3. **View Results**
    - Examine the interactive map
    - Review processed data statistics
-
-#### Field Visualization
-1. **Launch the Field Visualization Application**
-   - Run `CropRotationViz::run_field_level_app()`
-   - the application will open your default web browser
-
-2. **Load Data**
-   - Click "Browser" or drag and drop the .shp/.fgb/.gpkg File from the processing output
-     
-3. **View Results**
-   - wait for file loading
-   - select region of interest
-   - click on fields of interest
      
 ## Data Requirements
 
@@ -256,26 +236,15 @@ Fast Intersection: Only includes fields that are consistently present across all
 - **Fast Intersection Mode**
   - Only retains fields that appear consistently across all years Reduces processing overhead Results in a smaller, more consistent dataset Activated by setting `intersection_type = "Fast"`
 
-### Description
-#### Processing interface structure:
+### Example
+Consider a dataset spanning two years with varying fields:
+
 <div align="center">
   <img src="images/Flow_chart.png" alt="Descriptive Alt Text" width="100%">
 </div>
-
-#### Intesection description example with a dataset spanning two years with varying fields:
 <div align="center">
   <img src="images/intersection.png" alt="Descriptive Alt Text" width="100%">
 </div>
-
-#### Visualization Interface structure:
-<div align="center">
-  <img src="images/Flow_chart_Module_2.png" alt="Descriptive Alt Text" width="50%">
-</div>
-
-
-## User Manual
-To get a more detailed description about the specific functionalities, look into the detailed [user manual](/docs/User_Manual.pdf).
-
 
 ## Contributing
 
