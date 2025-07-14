@@ -71,17 +71,39 @@ The package consists of three main components:
   - Temporal change analysis
   - Support for different coding systems (NC codes and crop names)
 
+
 ## Installation
 
-You can install the development version of CropRotationViz from GitHub:
+CropRotationViz can be installed in two ways depending on your needs and system setup:
+
+### Option 1: Standalone Application (Recommended for Windows users)
+
+For users who don't have R installed or prefer a ready-to-use application:
+
+- **Requirements**: Windows PC only
+- **Installation**: Download and run the installer from `installer/CropRotationViz_v1.0.0_Setup.exe`
+- **Advantages**: No need to install R or manage dependencies
+- **Usage**: Launch directly from your desktop or start menu after installation
+
+### Option 2: R Package Installation
+
+For R users who want to integrate CropRotationViz into their existing R workflow:
+
+**Prerequisites**: R (version 4.0 or higher recommended)
 
 ```r
-# Install devtools if you haven't already
+# Install remotes if you haven't already
 install.packages("remotes")
 
-# Install CropRotationViz
+# Install CropRotationViz from GitHub
 remotes::install_github("franz-geoeco/CropRotationViz")
 ```
+
+**Advantages**: 
+- Full integration with R environment
+- Access to all package functions
+- Ability to modify and extend functionality
+- Works on all operating systems (Windows, macOS, Linux)
 
 ## Usage
 
