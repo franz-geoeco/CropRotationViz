@@ -81,7 +81,7 @@ CropRotationViz can be installed in two ways depending on your needs and system 
 For users who don't have R installed or prefer a ready-to-use application:
 
 - **Requirements**: Windows PC only
-- **Installation**: Download and run the installer from `installer/CropRotationViz_v1.0.0_Setup.exe`
+- **Installation**: Download and run the installer from [Zenodo](https://zenodo.org/records/15877507)
 - **Advantages**: No need to install R or manage dependencies
 - **Usage**: Launch directly from your desktop or start menu after installation
 
