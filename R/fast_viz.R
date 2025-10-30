@@ -196,11 +196,10 @@ fast_viz_ui <- function(input_dir = NA){
     )
   )
 }
-
 #' Main Application UI with Data Loader
 #' 
 #' @description Creates the main application UI with a dynamic loader interface that
-#' switches to the visualization UI once data is loaded. Provides a file upload
+#' switches to the visualization UI once data is loaded. Provides a folder selection
 #' interface for loading RData files containing crop rotation data.
 #'
 #' @param app_data List containing application data including:
@@ -212,8 +211,8 @@ fast_viz_ui <- function(input_dir = NA){
 #'   \itemize{
 #'     \item Initial loader interface:
 #'       \itemize{
-#'         \item RData file upload
-#'         \item Variable validation
+#'         \item Folder path input for data directory
+#'         \item Automatic data loading and validation
 #'         \item Progress indication
 #'       }
 #'     \item Main visualization interface:
@@ -227,8 +226,8 @@ fast_viz_ui <- function(input_dir = NA){
 #' @return A Shiny UI object with dynamic loading capabilities
 #' 
 #' @importFrom shiny fluidPage tabsetPanel tabPanel fluidRow column
-#'   plotOutput uiOutput renderUI verbatimTextOutput fileInput
-#'   actionButton wellPanel
+#'   plotOutput uiOutput renderUI verbatimTextOutput
+#'   actionButton wellPanel textInput
 #'   
 #' @examples
 #' \dontrun{
@@ -256,7 +255,8 @@ fast_ui <- function(app_data) {
 #'   \itemize{
 #'     \item Data Loading Interface:
 #'       \itemize{
-#'         \item RData file upload capability
+#'         \item Folder path input for data directory
+#'         \item Automatic RData file discovery and loading
 #'         \item Validation of required variables
 #'         \item Dynamic UI transitions based on data state
 #'     }
@@ -312,6 +312,7 @@ fast_viz_server <- function(input, output, session, app_data, input_dir) {
   
   # Reactive value to track if data is loaded
   data_loaded <- reactiveVal(FALSE)
+  current_input_dir <- reactiveVal(input_dir)
   
   loaded_env <- app_data$Input_App_data$loaded_env
   
@@ -332,106 +333,155 @@ fast_viz_server <- function(input, output, session, app_data, input_dir) {
   # Render dynamic UI based on whether data is loaded
   output$fast_dynamic_ui <- renderUI({
     if (!data_loaded() & is.na(input_dir)) {
-      # Show loader interface
+      # Show loader interface with folder selection
       fluidPage(
         br(),
         fluidRow(
-          column(width = 4, 
-                 offset = 4,
+          column(width = 6, 
+                 offset = 3,
                  wellPanel(
                    style = "background-color: #164f8c; color: white;",
-                   h3("Load Environment Data", align = "center"),
-                   fileInput("file", "Choose .RData File",
-                             accept = c(".RData"),
-                             multiple = FALSE),
-                   verbatimTextOutput("loaded_vars"),
-                   actionButton("proceed", "Proceed to App", 
-                                style = "color: #fff; background-color: #28a745; border-color: #28a745; width: 100%;",
-                                class = "btn-lg")
+                   h3("Select Data Folder", align = "center"),
+                   
+                   # Folder path input
+                   div(
+                     p("Enter the path to your data folder (same as input_dir parameter):"),
+                     textInput("folderPath", "Data Folder Path:", 
+                               placeholder = "e.g., C:/Output_Folder",
+                               width = "100%"),
+                     p("The folder should contain your RData file and images subfolder.", 
+                       style = "font-size: 12px; color: #cccccc;"),
+                     actionButton("loadFromPath", "Load Data", 
+                                  style = "color: #fff; background-color: #28a745; border-color: #28a745; width: 100%; margin-top: 10px;",
+                                  class = "btn-lg")
+                   ),
+                   
+                   # Status display
+                   br(),
+                   verbatimTextOutput("folder_status")
                  )
           )
         )
       )
-    } else if (!is.na(input_dir)){
-      tryCatch({
-        # Load the RData file into the container environment
-        load(list.files(input_dir, pattern = ".*intersection\\.RData$", full.names = TRUE)[1], envir = loaded_env)
-        
-        # Copy required objects to the global environment
-        list2env(as.list(loaded_env), .GlobalEnv)
-        
-        # Show success message
-        showNotification("Data loaded successfully!", type = "message")
-        
-      }, error = function(e) {
-        showNotification(paste("Error loading file:", e$message), type = "error")
-      })
-      
-      # Check if required variables are loaded
-      required_vars <- c("district_CropRotViz_intersection", "cropping_area", "Crop_choices", "Districts")
-      
-      missing_vars <- required_vars[!required_vars %in% ls(loaded_env)]
-      
-      if (length(missing_vars) > 0) {
-        showNotification(
-          paste("Missing required variables:", 
-                paste(missing_vars, collapse = ", ")), 
-          type = "error"
-        )
-      } else {
-        data_loaded(TRUE)
-      }
-      # Show main app UI
-      fast_viz_ui(input_dir)
+    } else if (!is.na(current_input_dir())) {
+      # Data is loaded or input_dir was provided, show main app UI
+      fast_viz_ui(current_input_dir())
     } else {
       fast_viz_ui()
     }
   })
   
   #--------------------------------------------------------------------------------------------
-  # Handle file upload
-  observeEvent(input$file, {
-    req(input$file)
+  # Handle folder loading from manual path
+  observeEvent(input$loadFromPath, {
+    req(input$folderPath)
+    
+    folder_path <- normalizePath(input$folderPath, mustWork = FALSE)
+    
+    loadDataFromFolder(folder_path)
+  })
+  
+  # Function to load data from folder
+  loadDataFromFolder <- function(folder_path) {
+    # Validate folder exists
+    if (!dir.exists(folder_path)) {
+      output$folder_status <- renderText({
+        paste("Error: Folder does not exist -", folder_path)
+      })
+      return()
+    }
+    
     tryCatch({
+      # Find RData file in the directory
+      rdata_files <- list.files(folder_path, pattern = ".*intersection\\.RData$", full.names = TRUE)
+      
+      if (length(rdata_files) == 0) {
+        output$folder_status <- renderText({
+          "Error: No RData files with 'intersection' found in the folder!"
+        })
+        return()
+      }
+      
+      # Check for images folder
+      images_path <- file.path(folder_path, "images")
+      if (!dir.exists(images_path)) {
+        output$folder_status <- renderText({
+          "Warning: No 'images' subfolder found. Some features may not work."
+        })
+      }
+      
       # Load the RData file into the container environment
-      load(input$file$datapath, envir = loaded_env)
+      load(rdata_files[1], envir = loaded_env)
       
       # Copy required objects to the global environment
       list2env(as.list(loaded_env), .GlobalEnv)
       
-      # Show success message
-      showNotification("Data loaded successfully!", type = "message")
+      # Store the folder path
+      current_input_dir(folder_path)
+      
+      # Check if required variables are loaded
+      required_vars <- c("district_CropRotViz_intersection", "cropping_area", "Crop_choices", "Districts")
+      missing_vars <- required_vars[!required_vars %in% ls(loaded_env)]
+      
+      if (length(missing_vars) > 0) {
+        output$folder_status <- renderText({
+          paste("Error: Missing required variables:", paste(missing_vars, collapse = ", "))
+        })
+        return()
+      }
+      
+      # Success - set data as loaded
+      data_loaded(TRUE)
+      
+      output$folder_status <- renderText({
+        paste("Success: Data loaded from", folder_path)
+      })
+      
+      showNotification("Data loaded successfully! Redirecting to visualization...", type = "message")
       
     }, error = function(e) {
-      showNotification(paste("Error loading file:", e$message), type = "error")
+      output$folder_status <- renderText({
+        paste("Error loading data:", e$message)
+      })
     })
-  })
+  }
   
-  # Display loaded variables
-  output$loaded_vars <- renderPrint({
-    if (!is.null(input$file)) {
-      cat("Loaded variables:\n")
-      ls(loaded_env)
-    }
-  })
-  
-  # Handle proceed button
-  observeEvent(input$proceed, {
-    req(input$file)
-    
-    # Check if required variables are loaded
-    required_vars <- c("district_CropRotViz_intersection", "cropping_area", "Crop_choices", "Districts")
-    
-    missing_vars <- required_vars[!required_vars %in% ls(loaded_env)]
-    
-    if (length(missing_vars) > 0) {
-      showNotification(
-        paste("Missing required variables:", 
-              paste(missing_vars, collapse = ", ")), 
-        type = "error"
-      )
-    } else {
-      data_loaded(TRUE)
+  # Handle case where input_dir was provided initially
+  observe({
+    if (!is.na(input_dir) && !data_loaded()) {
+      tryCatch({
+        # Find RData file in the directory
+        rdata_files <- list.files(input_dir, pattern = ".*intersection\\.RData$", full.names = TRUE)
+        
+        if (length(rdata_files) == 0) {
+          showNotification("No RData files found in the specified directory!", type = "error")
+          return()
+        }
+        
+        # Load the RData file into the container environment
+        load(rdata_files[1], envir = loaded_env)
+        
+        # Copy required objects to the global environment
+        list2env(as.list(loaded_env), .GlobalEnv)
+        
+        # Check if required variables are loaded
+        required_vars <- c("district_CropRotViz_intersection", "cropping_area", "Crop_choices", "Districts")
+        missing_vars <- required_vars[!required_vars %in% ls(loaded_env)]
+        
+        if (length(missing_vars) > 0) {
+          showNotification(
+            paste("Missing required variables:", 
+                  paste(missing_vars, collapse = ", ")), 
+            type = "error"
+          )
+        } else {
+          data_loaded(TRUE)
+          showNotification("Data loaded successfully!", type = "message")
+        }
+        
+      }, error = function(e) {
+        showNotification(paste("Error loading file:", e$message), type = "error")
+      })
     }
   })
   
@@ -475,7 +525,7 @@ fast_viz_server <- function(input, output, session, app_data, input_dir) {
       names(data) <- c("name", "geometry")
       
       # Get existing image files
-      image_files <- gsub("\\.png$", "", list.files(paste0(input_dir, "/images"), pattern = "\\.png$"))
+      image_files <- gsub("\\.png$", "", list.files(paste0(current_input_dir(), "/images"), pattern = "\\.png$"))
       
       # Case-insensitive matching
       data <- data[sapply(data$name, function(x) {
@@ -527,7 +577,7 @@ fast_viz_server <- function(input, output, session, app_data, input_dir) {
         data <- spatial_data()
         names(data) <- c("name", "geometry")
         
-        image_files <- gsub("\\.png$", "", list.files(paste0(input_dir, "/images"), pattern = "\\.png$"))
+        image_files <- gsub("\\.png$", "", list.files(paste0(current_input_dir(), "/images"), pattern = "\\.png$"))
         
         # Case-insensitive matching
         data <- data[sapply(data$name, function(x) {
@@ -568,7 +618,7 @@ fast_viz_server <- function(input, output, session, app_data, input_dir) {
       req(firstSelection())
       print(firstSelection())
       sanitized_name <- gsub("/", "_", firstSelection())
-      filename <- normalizePath(paste0(input_dir, '/images/', sanitized_name, '.png'))
+      filename <- normalizePath(paste0(current_input_dir(), '/images/', sanitized_name, '.png'))
       print(filename)
       list(
         src = filename,
@@ -582,7 +632,7 @@ fast_viz_server <- function(input, output, session, app_data, input_dir) {
     output$secondImage <- renderImage({
       req(secondSelection())
       sanitized_name <- gsub("/", "_", secondSelection())
-      filename <- normalizePath(paste0(input_dir, '/images/', sanitized_name, '.png'))
+      filename <- normalizePath(paste0(current_input_dir(), '/images/', sanitized_name, '.png'))
       list(
         src = filename,
         width = "100%",    # This makes it take full width of container

@@ -92,7 +92,7 @@
 #'   vector_file = T
 #' )
 #' }
-run_processing_app <- function(output_dir = NA, common_column = NA, start_year = NA, intersection_type = NA, preview = TRUE, vector_file = T) {
+run_processing_app <- function(output_dir = NA, common_column = NA, start_year = NA, intersection_type = NA, preview = TRUE, vector_file = T, ncores = 4) {
   # Load the package data
   utils::data("Input_App_data", package = "CropRotationViz", envir = environment())
   
@@ -115,7 +115,7 @@ run_processing_app <- function(output_dir = NA, common_column = NA, start_year =
   shiny::shinyApp(
     ui = processing_ui(app_data, output_dir, start_year, vector_file), 
     server = function(input, output, session) {
-      processing_server(input, output, session, app_data, output_dir, common_column, preview, vector_file)
+      processing_server(input, output, session, app_data, output_dir, common_column, preview, vector_file, ncores)
     }
   )
 }

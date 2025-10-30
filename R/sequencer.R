@@ -752,6 +752,7 @@ processing_ui <- function(app_data, output_dir = NA, start_year = NA, vector_fil
 #' @param common_column Character string specifying a default column for crop identification across files. Default: NA
 #' @param preview logical. If True (default) you get a snapshot as png from your processed data as sankey chart in PNG format.
 #' @param vector_file logical. If True (default) you will get a vector file as an additional output with all intersected and aggregated field data.
+#' @param ncores integer. How many cores should be used in parallel?
 #' 
 #' @details The server component implements several key functionalities:
 #'   \itemize{
@@ -848,7 +849,7 @@ processing_ui <- function(app_data, output_dir = NA, start_year = NA, vector_fil
 #' }
 #' 
 #' @keywords internal
-processing_server <- function(input, output, session, app_data, output_dir = NA, common_column = NA, preview = TRUE, vector_file = TRUE) {
+processing_server <- function(input, output, session, app_data, output_dir = NA, common_column = NA, preview = TRUE, vector_file = TRUE, ncores = 4) {
   library(ggalluvial)
   
   # Start timing
@@ -2082,9 +2083,9 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
         # start intersection
         incProgress(0.05, detail = "Intersecting")
         if(input$radio_process == "complete"){
-          CropRotViz_intersection <- intersect_fields(all_files)
+          CropRotViz_intersection <- intersect_fields(all_files, n_cores = ncores)
         }else{
-          CropRotViz_intersection <- intersect_fields_simple(all_files)
+          CropRotViz_intersection <- intersect_fields_simple(all_files, n_cores = ncores)
         }
         
         mem_checkpoints$after_intersection <- gc(reset = TRUE)
@@ -2350,11 +2351,10 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
           dir.create(paste0(current_dir, "/images"))
           
           # Setup parallel environment
-          n_cores <- 4
-          message(sprintf("Using %d cores for parallel image generation", n_cores))
+          message(sprintf("Using %d cores for parallel image generation", ncores))
           
           # Setup cluster
-          cl <- parallel::makeCluster(n_cores)
+          cl <- parallel::makeCluster(ncores)
           doParallel::registerDoParallel(cl)
           
           # Export necessary variables and functions to the cluster

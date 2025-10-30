@@ -30,7 +30,8 @@ The server functionality includes:
 \itemize{
 \item Data Loading Interface:
 \itemize{
-\item RData file upload capability
+\item Folder path input for data directory
+\item Automatic RData file discovery and loading
 \item Validation of required variables
 \item Dynamic UI transitions based on data state
 }

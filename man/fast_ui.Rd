@@ -17,7 +17,7 @@ A Shiny UI object with dynamic loading capabilities
 }
 \description{
 Creates the main application UI with a dynamic loader interface that
-switches to the visualization UI once data is loaded. Provides a file upload
+switches to the visualization UI once data is loaded. Provides a folder selection
 interface for loading RData files containing crop rotation data.
 }
 \details{
@@ -25,8 +25,8 @@ The UI transitions through two stages:
 \itemize{
 \item Initial loader interface:
 \itemize{
-\item RData file upload
-\item Variable validation
+\item Folder path input for data directory
+\item Automatic data loading and validation
 \item Progress indication
 }
 \item Main visualization interface:

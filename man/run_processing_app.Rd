@@ -10,7 +10,8 @@ run_processing_app(
   start_year = NA,
   intersection_type = NA,
   preview = TRUE,
-  vector_file = T
+  vector_file = T,
+  ncores = 4
 )
 }
 \arguments{

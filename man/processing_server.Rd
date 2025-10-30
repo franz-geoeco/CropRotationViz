@@ -12,7 +12,8 @@ processing_server(
   output_dir = NA,
   common_column = NA,
   preview = TRUE,
-  vector_file = TRUE
+  vector_file = TRUE,
+  ncores = 4
 )
 }
 \arguments{
@@ -41,6 +42,8 @@ processing_server(
 \item{preview}{logical. If True (default) you get a snapshot as png from your processed data as sankey chart in PNG format.}
 
 \item{vector_file}{logical. If True (default) you will get a vector file as an additional output with all intersected and aggregated field data.}
+
+\item{ncores}{integer. How many cores should be used in parallel?}
 }
 \value{
 Reactive expression containing a list of processed files with their metadata:
