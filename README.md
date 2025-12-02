@@ -72,7 +72,7 @@ The package consists of three main components:
   - Support for different coding systems (NC codes and crop names)
 
 ## Video
-[![Video Title](https://img.youtube.com/vi/v=Sfk5lLFhBio/0.jpg)](https://www.youtube.com/watch?v=Sfk5lLFhBio)
+[![CropRotationViz Tutorial](https://img.youtube.com/vi/Sfk5lLFhBio/0.jpg)](https://www.youtube.com/watch?v=Sfk5lLFhBio)
 
 ## Installation
 
