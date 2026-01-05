@@ -2,27 +2,31 @@
 % Please edit documentation in R/functions.R
 \name{generate_hex_color}
 \alias{generate_hex_color}
-\title{Function to Generate a Random Hex Color}
+\title{Function to Generate a Deterministic Hex Color}
 \usage{
-generate_hex_color()
+generate_hex_color(index = NULL)
+}
+\arguments{
+\item{index}{Integer or character. If integer, used as seed directly.
+If character, converted to a hash value for color generation.}
 }
 \value{
-A hex color code representing a randomly generated color
+A hex color code representing a deterministically generated color
 }
 \description{
-Function to Generate a Random Hex Color
+Function to Generate a Deterministic Hex Color
 }
 \examples{
-Generate a single random color
-random_color <- generate_hex_color()
-print(random_color)
+Generate a single deterministic color
+color1 <- generate_hex_color(1)
+print(color1)
 
-Generate a single random color
-random_color <- generate_hex_color()
-print(random_color)
+Generate a deterministic color from a name
+color2 <- generate_hex_color("wheat")
+print(color2)
 
-Generate multiple random colors
-multiple_colors <- replicate(5, generate_hex_color())
+Generate multiple deterministic colors
+multiple_colors <- sapply(1:5, generate_hex_color)
 print(multiple_colors)
 
 }

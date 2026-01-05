@@ -4,32 +4,43 @@
 \alias{get_all_crops}
 \title{Extract Unique Crop Names from Spatial Files}
 \usage{
-get_all_crops(processed_files, codierung_all, language)
+get_all_crops(processed_files, codierung_all, language, id_or_name = "Code")
 }
 \arguments{
 \item{processed_files}{List of processed spatial files, where each file contains:
 \itemize{
 \item sf_object: Simple features object containing the spatial data
-\item selected_column: Character string indicating the column containing crop codes
+\item selected_column: Character string indicating the column containing crop codes/names
 }}
 
 \item{codierung_all}{Data frame mapping between numeric crop codes (NC) and clear text
-names (english_names)}
+names (english_names and german_names)}
+
+\item{language}{Character string indicating language ("English" or "German")}
+
+\item{id_or_name}{Character string indicating processing mode ("Code" or "Name").
+Defaults to "Code".}
 }
 \value{
-Character vector of unique crop names present in the processed files, with
-NA values and invalid codes removed.
+Character/numeric vector of unique crop values present in the processed files, with
+NA values removed. In Code mode, returns crop names. In Name mode, returns raw values.
 }
 \description{
-Extracts all unique crop names from a collection of processed spatial files by
-converting numeric codes to their corresponding clear text names.
+Extracts all unique crop values from a collection of processed spatial files.
+Behavior depends on the id_or_name parameter:
+\itemize{
+\item In "Code" mode: Converts numeric codes to their corresponding clear text names
+\item In "Name" mode: Keeps values as-is (e.g., raster numbers stay as numbers)
+}
 }
 \examples{
 \dontrun{
-# Get all unique crops from processed files
+# Get all unique crops from processed files in Code mode
 unique_crops <- get_all_crops(
   processed_files = my_processed_files,
-  codierung_all = crop_codes_df
+  codierung_all = crop_codes_df,
+  language = "English",
+  id_or_name = "Code"
 )
 }
 

@@ -1,7 +1,74 @@
+#' Parse Crop Translation File
+#'
+#' @description
+#' Parses a user-uploaded crop translation file with mappings from numeric codes
+#' to crop names. The file should be tab-separated with two columns: class and crop_type.
+#'
+#' @param file_path Character string with the path to the translation file
+#'
+#' @return Named character vector where names are numeric codes and values are crop names,
+#'   or NULL if parsing fails
+#'
+#' @details
+#' The function expects a tab-separated file format with columns:
+#' - First column: numeric crop code (class)
+#' - Second column: crop name (crop_type)
+#'
+#' The first row is treated as a header and is skipped.
+#' Empty rows and rows with missing values are removed.
+#'
+#' @examples
+#' \dontrun{
+#' translation <- parse_crop_translation("path/to/translation.txt")
+#' # Returns: c("11" = "winter wheat", "12" = "winter barley", ...)
+#' }
+#'
+#' @keywords internal
+parse_crop_translation <- function(file_path) {
+  tryCatch({
+    # Try to read the file
+    # Support tab, comma, or semicolon separated files
+    translation_data <- read.table(
+      file_path,
+      header = TRUE,
+      sep = "\t",
+      stringsAsFactors = FALSE,
+      fill = TRUE,
+      na.strings = c("", "NA"),
+      strip.white = TRUE,
+      comment.char = ""
+    )
+
+    # Check if we have at least 2 columns
+    if(ncol(translation_data) < 2) {
+      warning("Translation file must have at least 2 columns")
+      return(NULL)
+    }
+
+    # Use first two columns regardless of names
+    codes <- translation_data[[1]]
+    names_col <- translation_data[[2]]
+
+    # Remove rows with missing values
+    valid_rows <- !is.na(codes) & !is.na(names_col) & codes != "" & names_col != ""
+    codes <- codes[valid_rows]
+    names_col <- names_col[valid_rows]
+
+    # Create named vector (code -> name mapping)
+    translation_table <- setNames(as.character(names_col), as.character(codes))
+
+    return(translation_table)
+
+  }, error = function(e) {
+    warning(paste("Error parsing crop translation file:", e$message))
+    return(NULL)
+  })
+}
+
 #' Filter Crop Classification Based on Available Codes
-#' 
-#' @description 
-#' Takes a list of initial crop classifications and filters them based on the codes 
+#'
+#' @description
+#' Takes a list of initial crop classifications and filters them based on the codes
 #' actually present in the processed spatial files. This ensures that only relevant
 #' crop classes are maintained in the classification system.
 #' 
@@ -90,33 +157,40 @@ filter_initial_classes <- function(initial_classes, processed_files, codierung_a
 #-------------------------------------------------------------------------------------------
 
 #' Extract Unique Crop Names from Spatial Files
-#' 
-#' @description 
-#' Extracts all unique crop names from a collection of processed spatial files by 
-#' converting numeric codes to their corresponding clear text names.
-#' 
+#'
+#' @description
+#' Extracts all unique crop values from a collection of processed spatial files.
+#' Behavior depends on the id_or_name parameter:
+#' - In "Code" mode: Converts numeric codes to their corresponding clear text names
+#' - In "Name" mode: Keeps values as-is (e.g., raster numbers stay as numbers)
+#'
 #' @param processed_files List of processed spatial files, where each file contains:
 #'   \itemize{
 #'     \item sf_object: Simple features object containing the spatial data
-#'     \item selected_column: Character string indicating the column containing crop codes
+#'     \item selected_column: Character string indicating the column containing crop codes/names
 #'   }
 #' @param codierung_all Data frame mapping between numeric crop codes (NC) and clear text
-#'   names (english_names)
-#' 
-#' @return Character vector of unique crop names present in the processed files, with
-#'   NA values and invalid codes removed.
-#' 
+#'   names (english_names and german_names)
+#' @param language Character string indicating language ("English" or "German")
+#' @param id_or_name Character string indicating processing mode ("Code" or "Name").
+#'   Defaults to "Code".
+#'
+#' @return Character/numeric vector of unique crop values present in the processed files, with
+#'   NA values removed. In Code mode, returns crop names. In Name mode, returns raw values.
+#'
 #' @examples
 #' \dontrun{
-#' # Get all unique crops from processed files
+#' # Get all unique crops from processed files in Code mode
 #' unique_crops <- get_all_crops(
 #'   processed_files = my_processed_files,
-#'   codierung_all = crop_codes_df
+#'   codierung_all = crop_codes_df,
+#'   language = "English",
+#'   id_or_name = "Code"
 #' )
 #' }
-#' 
+#'
 #' @keywords internal
-get_all_crops <- function(processed_files, codierung_all, language) {
+get_all_crops <- function(processed_files, codierung_all, language, id_or_name = "Code") {
   # Get all unique values from files
   all_values <- unique(unlist(lapply(processed_files, function(file) {
     if (!is.null(file)) {
@@ -125,14 +199,14 @@ get_all_crops <- function(processed_files, codierung_all, language) {
     }
     return(NULL)
   })))
-  
+
   all_values <- all_values[!is.na(all_values)]
-  
+
   # Check if we're dealing with codes or names
   is_numeric <- all(suppressWarnings(!is.na(as.numeric(all_values))))
-  
-  if (is_numeric) {
-    # Convert numeric codes to names
+
+  if (is_numeric && id_or_name == "Code") {
+    # Convert numeric codes to names ONLY in Code mode
     all_values <- as.numeric(all_values)
     if(language == "English"){
       crop_names <- codierung_all$english_names[match(all_values, codierung_all$NC)]
@@ -141,9 +215,9 @@ get_all_crops <- function(processed_files, codierung_all, language) {
     }
     return(crop_names[!is.na(crop_names)])
   } else {
-    # If we're dealing with names
-    existing_names <- all_values
-    return(existing_names)
+    # If we're dealing with names OR in Name mode, keep values as-is
+    # In Name mode with raster data (numbers), they stay as numbers
+    return(all_values)
   }
 }
 
@@ -373,9 +447,9 @@ intersect_fields <- function(fields_list, max_area = 20000000 * 1e6, n_cores = 4
   }
   
   message("Starting intersection process...")
-  
+
   # Setup parallel environment
-  if (is.na(n_cores)) {
+  if (is.null(n_cores) || is.na(n_cores)) {
     n_cores <- max(1, parallel::detectCores() - 3)
   } else {
     n_cores <- min(n_cores, parallel::detectCores())
@@ -435,18 +509,57 @@ intersect_fields <- function(fields_list, max_area = 20000000 * 1e6, n_cores = 4
           # Clip current field to tile
           field_clipped <- st_crop(st_make_valid(fields_list[[i]]), tile)
           if (length(field_clipped) > 0) {
-            # Perform intersection
-            tile_intersect <- st_intersection(sf::st_make_valid(tile_intersect),
-                                              sf::st_make_valid(field_clipped))
-            
-            # Filter valid geometries
-            tile_intersect <- tile_intersect %>%
-              filter(st_geometry_type(geometry) %in% c("POLYGON", "MULTIPOLYGON")) %>%
-              st_make_valid() %>%
-              filter(st_area(.) >= units::set_units(1, "m^2"))
+            # PERFORMANCE OPTIMIZATION: Use spatial indexing before intersection
+            # Try spatial indexing, fall back to direct intersection if it fails
+            use_spatial_index <- TRUE
+            intersects_matrix <- tryCatch({
+              st_intersects(tile_intersect, field_clipped)
+            }, error = function(e) {
+              use_spatial_index <<- FALSE
+              NULL
+            })
+
+            if(use_spatial_index && !is.null(intersects_matrix)) {
+              has_candidates <- lengths(intersects_matrix) > 0
+
+              if(sum(has_candidates) > 0) {
+                # Only process features with potential intersections
+                features_with_candidates <- tile_intersect[has_candidates, ]
+
+                # Perform intersection on filtered candidates
+                tile_intersect <- st_intersection(sf::st_make_valid(features_with_candidates),
+                                                  sf::st_make_valid(field_clipped))
+
+                # Filter valid geometries
+                tile_intersect <- tile_intersect %>%
+                  filter(st_geometry_type(geometry) %in% c("POLYGON", "MULTIPOLYGON")) %>%
+                  st_make_valid() %>%
+                  filter(st_area(.) >= units::set_units(1, "m^2"))
+              } else {
+                # No candidates found - fall back to direct intersection
+                tile_intersect <- st_intersection(sf::st_make_valid(tile_intersect),
+                                                  sf::st_make_valid(field_clipped))
+
+                # Filter valid geometries
+                tile_intersect <- tile_intersect %>%
+                  filter(st_geometry_type(geometry) %in% c("POLYGON", "MULTIPOLYGON")) %>%
+                  st_make_valid() %>%
+                  filter(st_area(.) >= units::set_units(1, "m^2"))
+              }
+            } else {
+              # Fall back to direct intersection
+              tile_intersect <- st_intersection(sf::st_make_valid(tile_intersect),
+                                                sf::st_make_valid(field_clipped))
+
+              # Filter valid geometries
+              tile_intersect <- tile_intersect %>%
+                filter(st_geometry_type(geometry) %in% c("POLYGON", "MULTIPOLYGON")) %>%
+                st_make_valid() %>%
+                filter(st_area(.) >= units::set_units(1, "m^2"))
+            }
           }
         }
-        
+
         return(tile_intersect)
       }
       return(NULL)
@@ -489,28 +602,75 @@ intersect_fields <- function(fields_list, max_area = 20000000 * 1e6, n_cores = 4
     
   } else {
     message("Processing intersection without tiling...")
-    
+
     # Create progress bar for normal processing
     pb <- txtProgressBar(min = 0, max = length(fields_list) - 1, style = 3)
-    
+
     # Process normally if area is small enough
     for (i in 2:length(fields_list)) {
-      intersected <- st_intersection(sf::st_make_valid(intersected), sf::st_make_valid(fields_list[[i]]))
-      
+      # PERFORMANCE OPTIMIZATION: Use spatial indexing to pre-filter candidates
+      # This reduces O(n²) intersection tests to O(n*log(n))
+
+      current_layer <- sf::st_make_valid(fields_list[[i]])
+
+      # Try to use spatial indexing, fall back to direct intersection if it fails
+      use_spatial_index <- TRUE
+      intersects_matrix <- tryCatch({
+        # Build spatial index and filter candidates using st_intersects
+        # This creates a sparse matrix indicating which features potentially overlap
+        st_intersects(intersected, current_layer)
+      }, error = function(e) {
+        message(sprintf("Spatial indexing failed for layer %d (likely NA/NaN geometries), using direct intersection: %s", i, e$message))
+        use_spatial_index <<- FALSE
+        NULL
+      })
+
+      if(use_spatial_index && !is.null(intersects_matrix)) {
+        # Identify features from intersected that have at least one intersection candidate
+        has_candidates <- lengths(intersects_matrix) > 0
+
+        if(sum(has_candidates) > 0) {
+          # Only process features that have potential intersections
+          features_with_candidates <- intersected[has_candidates, ]
+
+          # Perform expensive st_intersection only on filtered candidates
+          intersected_result <- st_intersection(features_with_candidates, current_layer)
+
+          # Filter valid geometries
+          intersected <- intersected_result %>%
+            filter(st_geometry_type(geometry) %in% c("POLYGON", "MULTIPOLYGON")) %>%
+            st_make_valid() %>%
+            filter(st_area(.) >= units::set_units(1, "m^2"))
+        } else {
+          # No candidates found by spatial index - fall back to direct intersection
+          # This handles edge cases where st_intersects is too conservative
+          message(sprintf("Spatial index found no candidates for layer %d, trying direct intersection...", i))
+          intersected <- st_intersection(sf::st_make_valid(intersected), current_layer)
+
+          intersected <- intersected %>%
+            filter(st_geometry_type(geometry) %in% c("POLYGON", "MULTIPOLYGON")) %>%
+            st_make_valid() %>%
+            filter(st_area(.) >= units::set_units(1, "m^2"))
+        }
+      } else {
+        # Fall back to original method without spatial indexing
+        intersected <- st_intersection(sf::st_make_valid(intersected), current_layer)
+
+        intersected <- intersected %>%
+          filter(st_geometry_type(geometry) %in% c("POLYGON", "MULTIPOLYGON")) %>%
+          st_make_valid() %>%
+          filter(st_area(.) >= units::set_units(1, "m^2"))
+      }
+
       if (!is.null(progress_callback)) {
-        progress_callback((i-1) / (length(fields_list)-1), 
+        progress_callback((i-1) / (length(fields_list)-1),
                           paste("Intersecting layer", i, "of", length(fields_list)))
       }
-      
-      intersected <- intersected %>%
-        filter(st_geometry_type(geometry) %in% c("POLYGON", "MULTIPOLYGON")) %>%
-        st_make_valid() %>%
-        filter(st_area(.) >= units::set_units(1, "m^2"))
-      
+
       # Update progress bar
       setTxtProgressBar(pb, i - 1)
     }
-    
+
     # Close progress bar
     close(pb)
   }
@@ -548,7 +708,7 @@ intersect_fields <- function(fields_list, max_area = 20000000 * 1e6, n_cores = 4
 #' @importFrom rmapshaper ms_erase
 intersecting_check_spatial <- function(input_list, intersection, n_cores = 5, progress_callback = NULL) {
   # Setup parallel environment
-  if (is.na(n_cores)) {
+  if (is.null(n_cores) || is.na(n_cores)) {
     n_cores <- max(1, parallel::detectCores() - 1)
   } else {
     n_cores <- min(n_cores, parallel::detectCores())
@@ -743,9 +903,9 @@ intersect_fields_simple <- function(fields_list, max_area = 20000 * 1e6, n_cores
   }
   
   message("Starting simple intersection process...")
-  
+
   # Setup parallel environment
-  if (is.na(n_cores)) {
+  if (is.null(n_cores) || is.na(n_cores)) {
     n_cores <- max(1, parallel::detectCores() - 3)
   } else {
     n_cores <- min(n_cores, parallel::detectCores())
@@ -812,13 +972,51 @@ intersect_fields_simple <- function(fields_list, max_area = 20000 * 1e6, n_cores
       # Perform intersection on this chunk
       result <- chunk_fields[[1]]
       for (i in 2:length(chunk_fields)) {
-        result <- st_intersection(result, sf::st_make_valid(chunk_fields[[i]]))
-        
-        result <- result %>%
-          filter(st_geometry_type(geometry) %in% c("POLYGON", "MULTIPOLYGON")) %>%
-          st_make_valid() %>%
-          filter(st_area(.) >= units::set_units(1, "m^2"))
-        
+        # PERFORMANCE OPTIMIZATION: Use spatial indexing before intersection
+        current_field <- sf::st_make_valid(chunk_fields[[i]])
+
+        # Try spatial indexing, fall back to direct intersection if it fails
+        use_spatial_index <- TRUE
+        intersects_matrix <- tryCatch({
+          st_intersects(result, current_field)
+        }, error = function(e) {
+          use_spatial_index <<- FALSE
+          NULL
+        })
+
+        if(use_spatial_index && !is.null(intersects_matrix)) {
+          has_candidates <- lengths(intersects_matrix) > 0
+
+          if(sum(has_candidates) > 0) {
+            # Only process features with potential intersections
+            features_with_candidates <- result[has_candidates, ]
+
+            # Perform intersection on filtered candidates
+            result <- st_intersection(features_with_candidates, current_field)
+
+            result <- result %>%
+              filter(st_geometry_type(geometry) %in% c("POLYGON", "MULTIPOLYGON")) %>%
+              st_make_valid() %>%
+              filter(st_area(.) >= units::set_units(1, "m^2"))
+          } else {
+            # No candidates found - fall back to direct intersection
+            result <- st_intersection(result, current_field)
+
+            result <- result %>%
+              filter(st_geometry_type(geometry) %in% c("POLYGON", "MULTIPOLYGON")) %>%
+              st_make_valid() %>%
+              filter(st_area(.) >= units::set_units(1, "m^2"))
+          }
+        } else {
+          # Fall back to direct intersection
+          result <- st_intersection(result, current_field)
+
+          result <- result %>%
+            filter(st_geometry_type(geometry) %in% c("POLYGON", "MULTIPOLYGON")) %>%
+            st_make_valid() %>%
+            filter(st_area(.) >= units::set_units(1, "m^2"))
+        }
+
         if (nrow(result) == 0) break
       }
       
@@ -856,12 +1054,53 @@ intersect_fields_simple <- function(fields_list, max_area = 20000 * 1e6, n_cores
     # For small datasets, process sequentially
     for (i in 2:length(fields_list)) {
       message(sprintf("Intersecting layer %d of %d...", i, length(fields_list)))
-      intersected <- st_intersection(intersected, sf::st_make_valid(fields_list[[i]]))
-      
-      intersected <- intersected %>%
-        filter(st_geometry_type(geometry) %in% c("POLYGON", "MULTIPOLYGON")) %>%
-        st_make_valid() %>%
-        filter(st_area(.) >= units::set_units(1, "m^2"))
+
+      # PERFORMANCE OPTIMIZATION: Use spatial indexing before intersection
+      current_layer <- sf::st_make_valid(fields_list[[i]])
+
+      # Try spatial indexing, fall back to direct intersection if it fails
+      use_spatial_index <- TRUE
+      intersects_matrix <- tryCatch({
+        st_intersects(intersected, current_layer)
+      }, error = function(e) {
+        message(sprintf("Spatial indexing failed for layer %d (likely NA/NaN geometries), using direct intersection: %s", i, e$message))
+        use_spatial_index <<- FALSE
+        NULL
+      })
+
+      if(use_spatial_index && !is.null(intersects_matrix)) {
+        has_candidates <- lengths(intersects_matrix) > 0
+
+        if(sum(has_candidates) > 0) {
+          # Only process features with potential intersections
+          features_with_candidates <- intersected[has_candidates, ]
+
+          # Perform intersection on filtered candidates
+          intersected <- st_intersection(features_with_candidates, current_layer)
+
+          intersected <- intersected %>%
+            filter(st_geometry_type(geometry) %in% c("POLYGON", "MULTIPOLYGON")) %>%
+            st_make_valid() %>%
+            filter(st_area(.) >= units::set_units(1, "m^2"))
+        } else {
+          # No candidates found - fall back to direct intersection
+          message(sprintf("Spatial index found no candidates for layer %d, trying direct intersection...", i))
+          intersected <- st_intersection(intersected, current_layer)
+
+          intersected <- intersected %>%
+            filter(st_geometry_type(geometry) %in% c("POLYGON", "MULTIPOLYGON")) %>%
+            st_make_valid() %>%
+            filter(st_area(.) >= units::set_units(1, "m^2"))
+        }
+      } else {
+        # Fall back to direct intersection
+        intersected <- st_intersection(intersected, current_layer)
+
+        intersected <- intersected %>%
+          filter(st_geometry_type(geometry) %in% c("POLYGON", "MULTIPOLYGON")) %>%
+          st_make_valid() %>%
+          filter(st_area(.) >= units::set_units(1, "m^2"))
+      }
     }
   }
   
@@ -925,8 +1164,8 @@ intersect_with_borders <- function(input, level, countriesSP, EZG, aoi) {
   # Get country code and borders
   cc <- subset(geodata::country_codes(), NAME == as.character(indices$ADMIN))
   borders <- geodata::gadm(country = cc$ISO2, level = level, path = tempdir(), resolution = 2)
-  
   borders <- borders[paste0("NAME_", level)]
+
   borders <- sf::st_as_sf(borders)
   borders <- sf::st_transform(borders, crs = sf::st_crs(input))  
   borders_inter <- borders[apply(st_intersects(borders, input, sparse = FALSE), 1, any), ]
@@ -963,12 +1202,28 @@ intersect_with_borders <- function(input, level, countriesSP, EZG, aoi) {
     message("No intersection found between German river basins and intersected features")
   }
   
-  if(!is.null(aoi)){
-    names(aoi) <- c("AOI", "geometry")
-    intersected <- sf::st_intersection(intersected, sf::st_transform(aoi, crs = sf::st_crs(input)))
+  # If AOI data is provided, intersect and create AOI_inter layer like EZG_inter
+  if(!is.null(aoi) && nrow(aoi) > 0){
+    # The AOI should already have a column named "AOI_name" from the UI processing
+    # Transform AOI to match input CRS
+    aoi_transformed <- sf::st_transform(aoi, crs = sf::st_crs(input))
+
+    # Intersect input data with AOI boundaries
+    intersected <- sf::st_intersection(intersected, aoi_transformed)
+
+    # Create AOI_inter layer similar to how EZG_inter is created
+    # This provides a clean spatial division layer for AOI regions
+    AOI_inter <- subset(aoi_transformed, AOI_name %in% unique(st_drop_geometry(intersected)$AOI_name))
+    AOI_inter <- sf::st_intersection(AOI_inter, borders_inter)
+    AOI_inter <- AOI_inter %>%
+      group_by(AOI_name) %>%
+      summarise(
+        geometry = st_union(geometry)
+      )
+
+    # Update output list
     out_list$intersected <- intersected
-    # Prepare the output list with aoi
-    out_list <- c(out_list,  list(AOI_inter = intersected))
+    out_list$AOI_inter <- AOI_inter
   }
   return(out_list)
 }
@@ -986,33 +1241,69 @@ intersect_with_borders <- function(input, level, countriesSP, EZG, aoi) {
 #' @return sf object with added aggregated columns
 #' @export
 aggregator <- function(intersected, years, crop_codes, type = "NC"){
+  # PERFORMANCE OPTIMIZATION: Create vectorized lookup table instead of nested loops
+  # This improves performance from O(n*m*k) to O(n+m) where:
+  # n = number of rows, m = number of crop codes, k = number of classes
+
+  # Build a flat lookup table: crop_code/name -> class_name
+  lookup_table <- data.frame(
+    value = character(),
+    class = character(),
+    stringsAsFactors = FALSE
+  )
+
+  for(class_name in names(crop_codes)) {
+    class_values <- data.frame(
+      value = as.character(crop_codes[[class_name]]),
+      class = class_name,
+      stringsAsFactors = FALSE
+    )
+    lookup_table <- rbind(lookup_table, class_values)
+  }
+
+  # Process each year using vectorized matching
   for(year in years) {
     nc_col <- paste0("NC_", year)
     name_col <- paste0("Name_", year)
     agg_col <- paste0("Aggregated_", year)
-    
+
     if(type == "NC"){
-      intersected[[agg_col]] <- sapply(intersected[[nc_col]], function(x) {
-        if(x == "Not named") return("Not named")
-        for(class_name in names(crop_codes)) {
-          if(x %in% crop_codes[[class_name]]) return(class_name)
-        }
-        # Debug message for NA
-        print(paste("No aggregation found for NC", x, year))
-        return("Unclassified")
-      })
-    }else{
-      intersected[[agg_col]] <- sapply(intersected[[name_col]], function(x) {
-        if(x == "Not named") return("Not named")
-        for(class_name in names(crop_codes)) {
-          if(x %in% crop_codes[[class_name]]) return(class_name)
-        }
-        # Debug message for NA
-        print(paste("No aggregation found for crop name", x, year))
-        return("Unclassified")
-      })
+      source_col <- nc_col
+    } else {
+      source_col <- name_col
     }
+
+    # Get source values and convert to character for matching
+    source_values <- as.character(intersected[[source_col]])
+
+    # Vectorized lookup using match() - much faster than sapply with loops
+    matched_indices <- match(source_values, lookup_table$value)
+
+    # Get the corresponding class names
+    aggregated_values <- lookup_table$class[matched_indices]
+
+    # Handle special cases and NAs
+    aggregated_values[source_values == "Not named"] <- "Not named"
+
+    # Find unclassified items (NA from match)
+    unclassified <- is.na(aggregated_values) & source_values != "Not named"
+    if(any(unclassified)) {
+      # Debug messages for unclassified items
+      unclassified_values <- unique(source_values[unclassified])
+      for(val in unclassified_values) {
+        if(type == "NC") {
+          print(paste("No aggregation found for NC", val, year))
+        } else {
+          print(paste("No aggregation found for crop name", val, year))
+        }
+      }
+      aggregated_values[unclassified] <- "Unclassified"
+    }
+
+    # Assign to the intersected data
+    intersected[[agg_col]] <- aggregated_values
   }
+
   return(intersected)
 }
 
@@ -1102,32 +1393,44 @@ create_crop_rotation_sankey <- function(data, min_area = 1,
   
   # Get unique keys
   unique_keys <- unique(data$key)
-  
-  # Color generation function
-  generate_random_color <- function() {
-    rgb(runif(1), runif(1), runif(1))
+
+  # Deterministic color generation function using hash-based approach
+  generate_deterministic_color <- function(key_name, seed_base = 12345) {
+    # Create a deterministic hash from the key name
+    hash_value <- sum(utf8ToInt(as.character(key_name))) + seed_base
+    set.seed(hash_value)
+    color <- rgb(runif(1), runif(1), runif(1))
+    set.seed(NULL)  # Reset seed
+    return(color)
   }
-  
+
   # Handle color parameter
   if (is.null(color)) {
-    # No colors provided, generate for all unique keys
-    color <- setNames(sapply(1:length(unique_keys), function(x) generate_random_color()), 
-                      unique_keys)
+    # No colors provided, generate deterministic colors for all unique keys
+    color <- setNames(
+      sapply(unique_keys, function(x) generate_deterministic_color(x)),
+      unique_keys
+    )
   } else {
     # If color is a named vector, ensure all keys have a color
     missing_keys <- setdiff(unique_keys, names(color))
-    
+
     if (length(missing_keys) > 0) {
-      # Generate colors for missing keys
+      # Generate deterministic colors for missing keys
       additional_colors <- setNames(
-        sapply(1:length(missing_keys), function(x) generate_random_color()), 
+        sapply(missing_keys, function(x) generate_deterministic_color(x)),
         missing_keys
       )
       color <- c(color, additional_colors)
     }
-    
+
     # Ensure color names match unique keys exactly
     color <- color[as.character(unique_keys)]
+  }
+
+  # CRITICAL: Always set "Not named" to white color
+  if ("Not named" %in% names(color)) {
+    color["Not named"] <- "#FFFFFF"
   }
   
   # Create plot
@@ -1260,10 +1563,40 @@ create_multi_year_donut <- function(data, year_columns, title = "Crop Distributi
     stop("highlight_year must be NULL or one of the year_columns")
   }
   
-  # Validate colors
+  # Validate and handle colors
   all_categories <- unique(unlist(data[year_columns]))
-  if (!all(all_categories %in% names(colors))) {
-    stop("colors must be provided for all unique categories in the data")
+  all_categories <- all_categories[!is.na(all_categories)]
+
+  # Deterministic color generation function using hash-based approach
+  generate_deterministic_color <- function(key_name, seed_base = 12345) {
+    # Create a deterministic hash from the key name
+    hash_value <- sum(utf8ToInt(as.character(key_name))) + seed_base
+    set.seed(hash_value)
+    color <- rgb(runif(1), runif(1), runif(1))
+    set.seed(NULL)  # Reset seed
+    return(color)
+  }
+
+  # Check if any categories are missing colors
+  missing_categories <- all_categories[!all_categories %in% names(colors)]
+
+  if (length(missing_categories) > 0) {
+    # Generate deterministic colors for missing categories (instead of rainbow)
+    default_colors <- setNames(
+      sapply(missing_categories, function(x) generate_deterministic_color(x)),
+      missing_categories
+    )
+
+    # Merge with existing colors
+    colors <- c(colors, default_colors)
+
+    warning(paste("Some categories were missing colors and assigned defaults:",
+                  paste(missing_categories, collapse = ", ")))
+  }
+
+  # CRITICAL: Always set "Not named" to white color
+  if ("Not named" %in% names(colors)) {
+    colors["Not named"] <- "#FFFFFF"
   }
   
   # Define constants for equal ring widths and increased gaps
@@ -2151,16 +2484,24 @@ diversity_mapper <- function(data, type){
   diversity_palette <- c("#e8e8e8", "#b0d5df", "#64acbe", "#e4acac", "#ad9ea5", "#627f8c", 
                          "#c85a5a", "#985356", "#574249")
   
-  # Check if BS column exists
+  # Check if BS column exists and has valid data
   has_BS <- "BS_mean" %in% names(data[[1]])
-  
-  # BS (Soil Potential) palette - only create if BS data exists
+
+  # BS (Soil Potential) palette - only create if BS data exists and is valid
   if(has_BS) {
-    BS_palette <- colorNumeric(
-      palette = c(low = "#ffffcc", high = "#800026"),
-      domain = data[[1]]$BS_mean,
-      na.color = "transparent"
-    )
+    # Additional validation: check for valid numeric range
+    bs_values <- data[[1]]$BS_mean[!is.na(data[[1]]$BS_mean)]
+
+    if(length(bs_values) > 0 && length(unique(bs_values)) > 1) {
+      BS_palette <- colorNumeric(
+        palette = c(low = "#ffffcc", high = "#800026"),
+        domain = data[[1]]$BS_mean,
+        na.color = "transparent"
+      )
+    } else {
+      # Not enough valid data for BS palette - disable BS layer
+      has_BS <- FALSE
+    }
   }
   
   diversity_color_pal <- colorFactor(palette = diversity_palette, 
@@ -2419,11 +2760,25 @@ diversity_mapper <- function(data, type){
 #' @import plotly
 #' @export
 diversity_soil_plotter <- function(data, type){
-  
-  palette <- c("1-1" = "#e8e8e8", "1-2" = "#b0d5df", "1-3" = "#64acbe", 
-               "2-1" = "#e4acac", "2-2" = "#ad9ea5", "2-3" = "#627f8c", 
+
+  # Validate BS_mean data exists and has valid values
+  if(!"BS_mean" %in% names(data[[1]])) {
+    stop("BS_mean column not found in data. Soil potential plotting requires BS_mean data.")
+  }
+
+  bs_values <- data[[1]]$BS_mean[!is.na(data[[1]]$BS_mean)]
+  if(length(bs_values) == 0) {
+    stop("No valid BS_mean values found. Cannot create soil potential plot.")
+  }
+
+  if(length(unique(bs_values)) == 1) {
+    warning("All BS_mean values are identical. Plot may not show meaningful variation.")
+  }
+
+  palette <- c("1-1" = "#e8e8e8", "1-2" = "#b0d5df", "1-3" = "#64acbe",
+               "2-1" = "#e4acac", "2-2" = "#ad9ea5", "2-3" = "#627f8c",
                "3-1" = "#c85a5a", "3-2" = "#985356", "3-3" = "#574249")
-  
+
   # Verbesserte Labels mit konsistenter Formatierung
   labels <- c(
     paste0(data[[3]]$bi_x[1], " /\n", data[[3]]$bi_y[1]),
@@ -2436,7 +2791,7 @@ diversity_soil_plotter <- function(data, type){
     paste0(data[[3]]$bi_x[3], " /\n", data[[3]]$bi_y[2]),
     paste0(data[[3]]$bi_x[3], " /\n", data[[3]]$bi_y[3])
   )
-  
+
   plot <- ggplot(data[[1]], aes(x = bi_class, y = BS_mean, fill = bi_class)) +
     geom_boxplot(alpha = 0.8, outlier.shape = 21, outlier.fill = "white", 
                  outlier.stroke = 0.8, linewidth = 0.6) +
@@ -2460,32 +2815,66 @@ diversity_soil_plotter <- function(data, type){
 }
 #-------------------------------------------------------------------------------------------
 
-#' Function to Generate a Random Hex Color
+#' Function to Generate a Deterministic Hex Color
 #
-# This function creates a random color by generating random values 
-# for red, green, and blue components using a uniform distribution.
+# This function creates a deterministic color by generating values
+# for red, green, and blue components based on an index or key name.
+# Using the same index/key will always produce the same color.
 #'
-#' @return A hex color code representing a randomly generated color
+#' @param index Integer or character. If integer, used as seed directly.
+#'   If character, converted to a hash value for color generation.
+#' @return A hex color code representing a deterministically generated color
 #' @examples
-#' Generate a single random color
-#' random_color <- generate_hex_color()
-#' print(random_color)
-#' 
-#' @examples
-#' Generate a single random color
-#' random_color <- generate_hex_color()
-#' print(random_color)
-#' 
-#' Generate multiple random colors
-#' multiple_colors <- replicate(5, generate_hex_color())
+#' Generate a single deterministic color
+#' color1 <- generate_hex_color(1)
+#' print(color1)
+#'
+#' Generate a deterministic color from a name
+#' color2 <- generate_hex_color("wheat")
+#' print(color2)
+#'
+#' Generate multiple deterministic colors
+#' multiple_colors <- sapply(1:5, generate_hex_color)
 #' print(multiple_colors)
-#' 
-generate_hex_color <- function() {
-  rgb(
+#'
+generate_hex_color <- function(index = NULL) {
+  if (is.null(index)) {
+    # Fallback to random if no index provided (backward compatibility)
+    warning("generate_hex_color() called without index. Using random color. Consider providing an index for consistency.")
+    return(rgb(
+      red = runif(1, 0, 1),
+      green = runif(1, 0, 1),
+      blue = runif(1, 0, 1),
+      maxColorValue = 1
+    ))
+  }
+
+  # Convert character keys to numeric hash
+  if (is.character(index)) {
+    seed_value <- sum(utf8ToInt(index)) + 12345
+  } else {
+    seed_value <- as.integer(index) + 12345
+  }
+
+  # Generate deterministic color
+  set.seed(seed_value)
+  color <- rgb(
     red = runif(1, 0, 1),
     green = runif(1, 0, 1),
     blue = runif(1, 0, 1),
     maxColorValue = 1
   )
+  set.seed(NULL)  # Reset seed
+
+  return(color)
 }
 
+
+
+
+# Helper function to check if file is raster
+is_raster_file <- function(file_path) {
+  if(is.null(file_path)) return(FALSE)
+  ext <- tolower(tools::file_ext(file_path))
+  return(ext %in% c("tif", "tiff"))
+}

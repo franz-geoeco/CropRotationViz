@@ -37,9 +37,12 @@ The interface provides a comprehensive set of tools for crop rotation analysis:
 \itemize{
 \item{Data Input}{
 \itemize{
-\item Support for multiple spatial file formats (.shp, .geojson, .fgb, .gpkg, .sqlite)
+\item Support for multiple spatial file formats (.shp, .geojson, .fgb, .gpkg, .sqlite, .tif, .tiff)
 \item Upload capability for up to 10 years of spatial data
+\item Batch upload option: Select multiple files at once (automatically sorted by filename)
+\item Individual file selection: Choose files one by one for each year
 \item Dynamic column selection for crop identification
+\item Support for both vector and raster data
 }
 }
 \item{Processing Options}{

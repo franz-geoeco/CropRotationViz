@@ -99,7 +99,11 @@ fast_viz_ui <- function(input_dir = NA){
                            column(5,
                                   conditionalPanel(
                                     condition = "output.hasFirstSelection",
-                                    imageOutput("firstImage", inline = T)
+                                    shinycssloaders::withSpinner(
+                                      imageOutput("firstImage", inline = T),
+                                      type = 5,
+                                      color = "#dc3545"
+                                    )
                                   )
                            ),
                            # Center map panel
@@ -110,7 +114,11 @@ fast_viz_ui <- function(input_dir = NA){
                            column(5,
                                   conditionalPanel(
                                     condition = "output.hasSecondSelection",
-                                    imageOutput("secondImage", inline = T)
+                                    shinycssloaders::withSpinner(
+                                      imageOutput("secondImage", inline = T),
+                                      type = 5,
+                                      color = "#fd7e14"
+                                    )
                                   )
                            )
                          ),
@@ -332,7 +340,7 @@ fast_viz_server <- function(input, output, session, app_data, input_dir) {
   #--------------------------------------------------------------------------------------------
   # Render dynamic UI based on whether data is loaded
   output$fast_dynamic_ui <- renderUI({
-    if (!data_loaded() & is.na(input_dir)) {
+    if (!data_loaded() & (is.null(input_dir) || is.na(input_dir))) {
       # Show loader interface with folder selection
       fluidPage(
         br(),
@@ -448,7 +456,7 @@ fast_viz_server <- function(input, output, session, app_data, input_dir) {
   
   # Handle case where input_dir was provided initially
   observe({
-    if (!is.na(input_dir) && !data_loaded()) {
+    if (!is.null(input_dir) && !is.na(input_dir) && !data_loaded()) {
       tryCatch({
         # Find RData file in the directory
         rdata_files <- list.files(input_dir, pattern = ".*intersection\\.RData$", full.names = TRUE)
@@ -458,15 +466,12 @@ fast_viz_server <- function(input, output, session, app_data, input_dir) {
           return()
         }
         
-        # Load the RData file into the container environment
-        load(rdata_files[1], envir = loaded_env)
-        
-        # Copy required objects to the global environment
-        list2env(as.list(loaded_env), .GlobalEnv)
-        
+        # Load the RData file directly into global environment (optimized - no copying)
+        load(rdata_files[1], envir = .GlobalEnv)
+
         # Check if required variables are loaded
         required_vars <- c("district_CropRotViz_intersection", "cropping_area", "Crop_choices", "Districts")
-        missing_vars <- required_vars[!required_vars %in% ls(loaded_env)]
+        missing_vars <- required_vars[!required_vars %in% ls(.GlobalEnv)]
         
         if (length(missing_vars) > 0) {
           showNotification(
@@ -508,31 +513,39 @@ fast_viz_server <- function(input, output, session, app_data, input_dir) {
     outputOptions(output, "hasFirstSelection", suspendWhenHidden = FALSE)
     outputOptions(output, "hasSecondSelection", suspendWhenHidden = FALSE)
     outputOptions(output, "hasSelection", suspendWhenHidden = FALSE)
-    
+
+    # Pre-transform spatial data once at startup for performance (OPTIMIZATION)
+    Districts_transformed <- st_transform(Districts, crs = "EPSG:4326")
+    EZGs_transformed <- if(!is.null(EZGs)) st_transform(EZGs[,1], crs = "EPSG:4326") else NULL
+
+    # Cache image file list to avoid repeated filesystem scans (OPTIMIZATION)
+    image_files_cached <- reactive({
+      gsub("\\.png$", "", list.files(paste0(current_input_dir(), "/images"), pattern = "\\.png$"))
+    }) %>% bindCache(current_input_dir())
+
     # Load the appropriate spatial data based on selection
     spatial_data <- reactive({
       if(input$mapType == "districts") {
-        Districts
+        Districts_transformed
       } else {
-        EZGs[,1]
+        EZGs_transformed
       }
     })
-    
-    # Create the map
+
+    # Create the map (OPTIMIZED - using pre-transformed data and cached image files)
     output$map <- renderLeaflet({
       data <- spatial_data()
-      data <- st_transform(data, crs = "EPSG:4326")
       names(data) <- c("name", "geometry")
-      
-      # Get existing image files
-      image_files <- gsub("\\.png$", "", list.files(paste0(current_input_dir(), "/images"), pattern = "\\.png$"))
-      
+
+      # Get cached image files (no repeated filesystem scans)
+      image_files <- image_files_cached()
+
       # Case-insensitive matching
       data <- data[sapply(data$name, function(x) {
         # Normalize both name and image files
         normalized_x <- tolower(gsub("[/_ ]", "", x))
         normalized_image_files <- tolower(gsub("[/_ ]", "", image_files))
-        
+
         # Check for exact matches after normalization
         any(normalized_x == normalized_image_files)
       }), ]
@@ -571,20 +584,22 @@ fast_viz_server <- function(input, output, session, app_data, input_dir) {
     
     #--------------------------------------------------------------------------------------------
     # Handle clicks on the map
+    # Handle clicks on the map (OPTIMIZED - using cached image files)
     observeEvent(input$map_shape_click, {
       click <- input$map_shape_click
       if (!is.null(click$id)) {
         data <- spatial_data()
         names(data) <- c("name", "geometry")
-        
-        image_files <- gsub("\\.png$", "", list.files(paste0(current_input_dir(), "/images"), pattern = "\\.png$"))
-        
+
+        # Get cached image files (no repeated filesystem scans)
+        image_files <- image_files_cached()
+
         # Case-insensitive matching
         data <- data[sapply(data$name, function(x) {
           # Normalize both name and image files
           normalized_x <- tolower(gsub("[/_ ]", "", x))
           normalized_image_files <- tolower(gsub("[/_ ]", "", image_files))
-          
+
           # Check for exact matches after normalization
           any(normalized_x == normalized_image_files)
         }), ]
@@ -754,11 +769,33 @@ fast_viz_server <- function(input, output, session, app_data, input_dir) {
     )
     
     output$diversity_soil <- renderPlotly({
-      if(input$AreaType == "districts"){
-        diversity_soil_plotter(data = diversity_data[[1]], type = "District")
-      }else{
-        diversity_soil_plotter(data = diversity_data[[2]], type = "EZG")
-      }
+      tryCatch({
+        if(input$AreaType == "districts"){
+          diversity_soil_plotter(data = diversity_data[[1]], type = "District")
+        }else{
+          diversity_soil_plotter(data = diversity_data[[2]], type = "EZG")
+        }
+      }, error = function(e) {
+        # Return an empty plotly with error message if BS data is invalid
+        plotly::plot_ly() %>%
+          plotly::layout(
+            title = list(text = "Soil Potential Data Unavailable",
+                        font = list(size = 16, color = "#d9534f")),
+            xaxis = list(visible = FALSE),
+            yaxis = list(visible = FALSE),
+            annotations = list(
+              text = paste("Error:", e$message, "\n\nThis usually means soil potential data is missing or invalid."),
+              xref = "paper",
+              yref = "paper",
+              x = 0.5,
+              y = 0.5,
+              xanchor = "center",
+              yanchor = "middle",
+              showarrow = FALSE,
+              font = list(size = 14, color = "#666")
+            )
+          )
+      })
     })
   })
 }

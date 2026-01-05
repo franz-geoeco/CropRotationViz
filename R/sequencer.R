@@ -25,9 +25,12 @@
 #'   \itemize{
 #'     \item{Data Input}{
 #'       \itemize{
-#'         \item Support for multiple spatial file formats (.shp, .geojson, .fgb, .gpkg, .sqlite)
+#'         \item Support for multiple spatial file formats (.shp, .geojson, .fgb, .gpkg, .sqlite, .tif, .tiff)
 #'         \item Upload capability for up to 10 years of spatial data
+#'         \item Batch upload option: Select multiple files at once (automatically sorted by filename)
+#'         \item Individual file selection: Choose files one by one for each year
 #'         \item Dynamic column selection for crop identification
+#'         \item Support for both vector and raster data
 #'       }
 #'     }
 #'     \item{Processing Options}{
@@ -94,15 +97,18 @@ processing_ui <- function(app_data, output_dir = NA, start_year = NA, vector_fil
       tags$style(HTML("
         /* Loading indicator styles */
         .file-status {
-          padding: 5px 10px;
+          padding: 8px 15px;
           border-radius: 4px;
-          margin: 5px 0;
-          font-size: 14px;
+          margin: 10px 0;
+          font-size: 16px;
+          font-weight: bold;
           color: white;
           display: inline-block;
+          box-shadow: 0 2px 4px rgba(0,0,0,0.2);
         }
         .status-loading {
           background-color: #f0ad4e;
+          animation: pulse 1.5s ease-in-out infinite;
         }
         .status-success {
           background-color: #5cb85c;
@@ -110,20 +116,78 @@ processing_ui <- function(app_data, output_dir = NA, start_year = NA, vector_fil
         .status-error {
           background-color: #d9534f;
         }
-        
+
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.7; }
+        }
+
         /* Progress bar styling */
         .loading-progress {
-          height: 8px;
-          margin-top: 5px;
+          height: 12px;
+          margin-top: 8px;
           margin-bottom: 10px;
-          border-radius: 4px;
+          border-radius: 6px;
           overflow: hidden;
+          background-color: rgba(255, 255, 255, 0.2);
+          box-shadow: inset 0 1px 2px rgba(0,0,0,0.1);
         }
         .progress-inner {
           height: 100%;
-          background-color: rgb(116, 150, 30);
+          background: linear-gradient(90deg, rgb(116, 150, 30) 0%, rgb(146, 180, 60) 100%);
           width: 0%;
-          transition: width 0.3s ease;
+          transition: width 0.5s ease;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+        }
+
+        /* Loading modal overlay */
+        .loading-modal-overlay {
+          position: fixed;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          background-color: rgba(0, 0, 0, 0.7);
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          z-index: 9999;
+        }
+
+        .loading-modal-content {
+          background-color: #2c3e50;
+          padding: 30px 40px;
+          border-radius: 8px;
+          box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+          text-align: center;
+          min-width: 300px;
+        }
+
+        .loading-modal-spinner {
+          font-size: 48px;
+          color: rgb(116, 150, 30);
+          margin-bottom: 20px;
+        }
+
+        .loading-modal-text {
+          color: white;
+          font-size: 18px;
+          margin-top: 10px;
+        }
+
+        .loading-modal-progress {
+          width: 100%;
+          height: 20px;
+          background-color: rgba(255, 255, 255, 0.2);
+          border-radius: 10px;
+          overflow: hidden;
+          margin-top: 15px;
+        }
+
+        .loading-modal-progress-bar {
+          height: 100%;
+          background: linear-gradient(90deg, rgb(116, 150, 30) 0%, rgb(146, 180, 60) 100%);
+          transition: width 0.5s ease;
         }
         
         .crop-box {
@@ -223,7 +287,10 @@ processing_ui <- function(app_data, output_dir = NA, start_year = NA, vector_fil
       column(width = 2, style = "margin-top: 2vh;", tags$img(src = "www/GeoECO_MLU_LANG_2.png", height = "70px", width = "265px"))
     ),
     tags$hr(style = "border-top: 1px solid white; margin-top: 20px; margin-bottom: 20px;"),
-    
+
+    # Loading modal overlay
+    uiOutput("loading_modal"),
+
     #-------------------------------------------------------------------------------
     # Step 1: File Selection and Configuration
     #-------------------------------------------------------------------------------
@@ -231,7 +298,7 @@ processing_ui <- function(app_data, output_dir = NA, start_year = NA, vector_fil
       column(4,
              # Counter display
              tags$span(
-               textOutput("file_counter"), 
+               textOutput("file_counter"),
                style = "font-size: 20px; color: #ffffff; font-weight: bold"
              ), br()),
       column(2,
@@ -257,12 +324,12 @@ processing_ui <- function(app_data, output_dir = NA, start_year = NA, vector_fil
                )
              )
       ),
-      column(2,             
-             radioButtons("aggregation", 
-                          label = "Aggregation of crop classes", 
-                          choices = c("Yes", "No"), 
+      column(2,
+             radioButtons("aggregation",
+                          label = "Aggregation of crop classes",
+                          choices = c("Yes", "No"),
                           inline = TRUE)
-             
+
       ),
       column(2,
              radioButtons("radio_process", "Type of field intersection",
@@ -290,10 +357,85 @@ processing_ui <- function(app_data, output_dir = NA, start_year = NA, vector_fil
              )
       )
     ),
+
+    # Crop Translation File Upload Section (only shown if a raster file has been uploaded and Code mode is selected)
+    conditionalPanel(
+      condition = "output.has_raster_file == true && input.id_or_name == 'Code'",
+      fluidRow(
+        column(12,
+               fileInput("crop_translation_file",
+                         "Upload Crop Names Translation File (optional, for raster files)",
+                         accept = c(".txt", ".csv", ".tsv"),
+                         buttonLabel = "Browse...",
+                         placeholder = "No file selected"),
+               div(textOutput("translation_file_status"),
+                   style = "color: #74961E; font-size: 14px; margin-top: -10px;"),
+               tags$small(
+                 style = "color: #cccccc;",
+                 "Upload a text file with crop code to name translations (tab-separated: class, crop_type). This will be used when converting raster files."
+               )
+        )
+      )
+    ),
+
     tags$hr(style = "border-top: 1px solid white; margin-top: 20px; margin-bottom: 20px;"),
-    
+
     #-------------------------------------------------------------------------------
-    # Step 2: Dynamic File Selectors
+    # Step 2: Batch Upload Option
+    #-------------------------------------------------------------------------------
+    fluidRow(
+      column(12,
+             tags$h4("File Selection Options", style = "color: white;"),
+             tags$p("You can either upload multiple files at once (batch upload) or select files individually year by year.",
+                    style = "color: #cccccc; font-size: 14px;")
+      )
+    ),
+
+    fluidRow(
+      column(4,
+             shinyFilesButton(
+               "Btn_BatchUpload",
+               "Batch Upload Multiple Files",
+               title = "Select multiple files at once (.shp, .geojson, .fgb, .gpkg, .tiff, .tif, or .sqlite)",
+               multiple = TRUE,
+               buttonType = "default",
+               class = "btn-success",
+               style = "background-color: rgb(92, 184, 92); border-color: rgb(76, 174, 76); color: white; font-size: 16px; padding: 10px 20px; margin-bottom: 15px;"
+             ),
+             shinyBS::bsButton(
+               "batch-upload-info",
+               label = "",
+               icon = icon("info"),
+               style = "default",
+               size = "extra-small"
+             ),
+             shinyBS::bsPopover(
+               "batch-upload-info",
+               "Batch Upload",
+               "Select multiple files at once. Files will be automatically sorted by name and assigned to consecutive years. You can still adjust year assignments and column selections afterwards.",
+               placement = "right",
+               trigger = "hover",
+               options = list(
+                 container = 'body',
+                 html = TRUE
+               )
+             )
+      ),
+      column(8,
+             uiOutput("batch_upload_status")
+      )
+    ),
+
+    tags$hr(style = "border-top: 1px solid #555; margin-top: 15px; margin-bottom: 15px;"),
+
+    fluidRow(
+      column(12,
+             tags$h5("Or select files individually:", style = "color: #cccccc; margin-bottom: 15px;")
+      )
+    ),
+
+    #-------------------------------------------------------------------------------
+    # Step 2b: Dynamic File Selectors (Individual)
     #-------------------------------------------------------------------------------
     lapply(1:10, function(i) {
       tagList(
@@ -306,7 +448,7 @@ processing_ui <- function(app_data, output_dir = NA, start_year = NA, vector_fil
           shinyFilesButton(
             sprintf("Btn_GetFile%d", i),
             sprintf("Choose Annual Field Polygon File: year %d", i),
-            title = sprintf("Please select polygon file year: %d (.shp, .geojson, .fgb, .gpkg or .sqlite):", i),
+            title = sprintf("Please select polygon file year: %d (.shp, .geojson, .fgb, .gpkg, .tiff, .tif or .sqlite):", i),
             multiple = FALSE,
             buttonType = "default",
             class = "btn-primary",
@@ -316,8 +458,13 @@ processing_ui <- function(app_data, output_dir = NA, start_year = NA, vector_fil
         
         fluidRow(
           column(4,
-                 # File status UI
-                 uiOutput(sprintf("file_status_ui_%d", i)),
+                 # File status UI with spinner
+                 shinycssloaders::withSpinner(
+                   uiOutput(sprintf("file_status_ui_%d", i)),
+                   type = 4,
+                   color = "#74961E",
+                   size = 1.2
+                 ),
                  # File path display
                  div(textOutput(sprintf("txt_file%d", i)), style = "color: white; font-size: 15px;")
           ),
@@ -331,7 +478,7 @@ processing_ui <- function(app_data, output_dir = NA, start_year = NA, vector_fil
                    )
                  )
           ),
-          if(is.na(start_year)){
+          if(is.null(start_year) || is.na(start_year)){
             column(2,
                    conditionalPanel(
                      condition = sprintf("output.file%d_loaded", i),
@@ -386,7 +533,7 @@ processing_ui <- function(app_data, output_dir = NA, start_year = NA, vector_fil
                condition = "output.show_process_button",
                shinyFilesButton(
                  "Choose_AOI_File",
-                 "Choose a AOI File (optional)",
+                 "Choose a Boundary File (optional)",
                  title = "Please select polygon file which will be used for splitting in areas of interest (.shp, .geojson, .fgb, .gpkg or .sqlite):",
                  multiple = FALSE,
                  buttonType = "default",
@@ -454,7 +601,7 @@ processing_ui <- function(app_data, output_dir = NA, start_year = NA, vector_fil
     conditionalPanel(
       condition = "input.btn_continue",
       fluidRow(
-        if(is.na(output_dir)) {
+        if(is.null(output_dir) || is.na(output_dir)) {
           column(width = 4,
                  conditionalPanel(
                    condition = "output.show_process_button",
@@ -469,7 +616,7 @@ processing_ui <- function(app_data, output_dir = NA, start_year = NA, vector_fil
           )
         },
         if(vector_file) {
-          column(width = 4,
+          column(width = 3,
                  conditionalPanel(
                    condition = "output.show_process_button", 
                    radioButtons(
@@ -766,7 +913,7 @@ processing_ui <- function(app_data, output_dir = NA, start_year = NA, vector_fil
 #'     }
 #'     \item{Spatial Processing}{
 #'       \itemize{
-#'         \item Support for multiple spatial file formats (.shp, .geojson, .fgb, .gpkg, .sqlite)
+#'         \item Support for multiple spatial file formats (.shp, .geojson, .fgb, .gpkg, .sqlite, .tiff, or .tif)
 #'         \item Two intersection methods: complete (preserving all areas) and fast (optimized for performance)
 #'         \item Optional crop class aggregation based on national coding system
 #'         \item Area calculations and spatial transformations
@@ -852,6 +999,10 @@ processing_ui <- function(app_data, output_dir = NA, start_year = NA, vector_fil
 processing_server <- function(input, output, session, app_data, output_dir = NA, common_column = NA, preview = TRUE, vector_file = TRUE, ncores = 4) {
   library(ggalluvial)
   
+  
+  # Reactive value to store remembered directory
+  remembered_dir <- reactiveVal(NULL)
+  
   # Start timing
   start_time <- Sys.time()
   initial_mem <- gc(reset = TRUE)
@@ -902,7 +1053,19 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
   
   # Add file loading state tracking
   file_loading_states <- reactiveValues()
-  
+
+  # Reactive value to store custom crop translation table
+  custom_crop_translation <- reactiveVal(NULL)
+
+  # Reactive value to track if any raster file has been uploaded
+  has_raster_file <- reactiveVal(FALSE)
+
+  # Output for conditional panel to show/hide crop translation file upload
+  output$has_raster_file <- reactive({
+    return(has_raster_file())
+  })
+  outputOptions(output, "has_raster_file", suspendWhenHidden = FALSE)
+
   # Initialize loading states
   observe({
     for(i in 1:10) {
@@ -922,25 +1085,32 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
       progress_key <- paste0("file", i, "_progress")
       status_key <- paste0("file", i, "_status")
       
-      if(file_loading_states[[loading_key]]) {
+      if(isTRUE(file_loading_states[[loading_key]])) {
         # Loading state
         div(
-          div(class = "file-status status-loading", 
-              icon("spinner", class = "fa-spin"), " Loading file..."),
+          div(class = "file-status status-loading",
+              icon("spinner", class = "fa-spin fa-lg"),
+              sprintf(" Loading file... %d%%", file_loading_states[[progress_key]])),
           div(class = "loading-progress",
-              div(class = "progress-inner", 
-                  style = sprintf("width: %d%%;", file_loading_states[[progress_key]])))
+              div(class = "progress-inner",
+                  style = sprintf("width: %d%%;", file_loading_states[[progress_key]]))),
+          if(!is.null(file_loading_states[[status_key]]) &&
+             nchar(as.character(file_loading_states[[status_key]])) > 0) {
+            div(style = "color: #f0ad4e; font-size: 13px; margin-top: 5px;",
+                file_loading_states[[status_key]])
+          }
         )
-      } else if(file_reactives[[i]]$is_valid()) {
+      } else if(isTRUE(file_reactives[[i]]$is_valid())) {
         # Success state
         div(class = "file-status status-success", icon("check"), " File loaded successfully")
-      } else if(!is.null(input[[sprintf("Btn_GetFile%d", i)]]) && 
-                !file_reactives[[i]]$is_valid() && 
+      } else if(!is.null(input[[sprintf("Btn_GetFile%d", i)]]) &&
+                isFALSE(file_reactives[[i]]$is_valid()) &&
                 !is.null(file_loading_states[[status_key]]) &&
-                file_loading_states[[status_key]] != "") {
+                !is.na(file_loading_states[[status_key]]) &&
+                nchar(as.character(file_loading_states[[status_key]])) > 0) {
         # Error state
         div(
-          div(class = "file-status status-error", 
+          div(class = "file-status status-error",
               icon("exclamation-triangle"), " Error loading file"),
           span(file_loading_states[[status_key]], style = "color: #d9534f; font-size: 12px;")
         )
@@ -950,50 +1120,538 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
       }
     })
   })
-  
+
+  # Render loading modal overlay
+  output$loading_modal <- renderUI({
+    # Force reactivity by checking all loading states
+    lapply(1:10, function(i) {
+      file_loading_states[[paste0("file", i, "_loading")]]
+      file_loading_states[[paste0("file", i, "_progress")]]
+      file_loading_states[[paste0("file", i, "_status")]]
+    })
+
+    # Check if any file is currently loading
+    any_loading <- FALSE
+    loading_file_num <- NULL
+    loading_progress <- 0
+    loading_status <- ""
+
+    for(i in 1:10) {
+      loading_key <- paste0("file", i, "_loading")
+      if(isTRUE(file_loading_states[[loading_key]])) {
+        any_loading <- TRUE
+        loading_file_num <- i
+        loading_progress <- file_loading_states[[paste0("file", i, "_progress")]]
+        loading_status <- file_loading_states[[paste0("file", i, "_status")]]
+        break
+      }
+    }
+
+    if(any_loading) {
+      # Auto-refresh every 100ms while loading
+      invalidateLater(100, session)
+
+      div(class = "loading-modal-overlay",
+          div(class = "loading-modal-content",
+              div(class = "loading-modal-spinner",
+                  icon("spinner", class = "fa-spin fa-3x")),
+              div(class = "loading-modal-text",
+                  strong(sprintf("Loading file for year %d...", loading_file_num))),
+              div(class = "loading-modal-text",
+                  style = "font-size: 14px; margin-top: 5px; color: #aaa;",
+                  loading_status),
+              div(class = "loading-modal-progress",
+                  div(class = "loading-modal-progress-bar",
+                      style = sprintf("width: %d%%;", loading_progress)))
+          )
+      )
+    } else {
+      NULL
+    }
+  })
+
+  # Observer for crop translation file upload
+  observeEvent(input$crop_translation_file, {
+    req(input$crop_translation_file)
+
+    tryCatch({
+      translation_table <- parse_crop_translation(input$crop_translation_file$datapath)
+
+      if(!is.null(translation_table) && length(translation_table) > 0) {
+        custom_crop_translation(translation_table)
+        output$translation_file_status <- renderText({
+          sprintf("Translation file loaded successfully (%d crop codes)", length(translation_table))
+        })
+        # Count how many raster files need reprocessing
+        raster_count <- 0
+        for(i in 1:10) {
+          if(!is.null(file_reactives[[i]]$selected_file()) &&
+             isTRUE(file_reactives[[i]]$is_valid())) {
+            file_path <- file_reactives[[i]]$selected_file()
+            file_ext <- tolower(tools::file_ext(file_path))
+            if(file_ext %in% c("tif", "tiff")) {
+              raster_count <- raster_count + 1
+            }
+          }
+        }
+
+        if(raster_count > 0) {
+          showNotification(
+            paste("Crop translation file loaded successfully with", length(translation_table), "crop codes. Reprocessing", raster_count, "raster file(s)..."),
+            type = "message",
+            duration = 5
+          )
+        } else {
+          showNotification(
+            paste("Crop translation file loaded successfully with", length(translation_table), "crop codes"),
+            type = "message",
+            duration = 5
+          )
+        }
+
+        # Reprocess any already-loaded raster files with the new translation
+        for(i in 1:10) {
+          if(!is.null(file_reactives[[i]]$selected_file()) &&
+             isTRUE(file_reactives[[i]]$is_valid())) {
+            file_path <- file_reactives[[i]]$selected_file()
+            file_ext <- tolower(tools::file_ext(file_path))
+
+            # If this is a raster file, reprocess it
+            if(file_ext %in% c("tif", "tiff")) {
+              file_num <- i
+
+              # Set loading state
+              file_loading_states[[paste0("file", file_num, "_loading")]] <- TRUE
+              file_loading_states[[paste0("file", file_num, "_progress")]] <- 40
+              file_loading_states[[paste0("file", file_num, "_status")]] <- "Reprocessing with new translation..."
+
+              tryCatch({
+                # Reload raster
+                raster_data <- terra::rast(file_path)
+
+                # Use the new custom translation
+                value_to_name <- translation_table
+
+                # Convert raster to vector
+                file_loading_states[[paste0("file", file_num, "_progress")]] <- 60
+                vectorized <- terra::as.polygons(raster_data, dissolve = TRUE)
+
+                # Convert to sf
+                file_loading_states[[paste0("file", file_num, "_progress")]] <- 70
+                sf_data <- sf::st_as_sf(vectorized)
+
+                # Apply translation to the raster values
+                if(!is.null(value_to_name) && length(value_to_name) > 0) {
+                  raster_col_name <- names(sf_data)[1]
+                  sf_data$crop_name <- sapply(sf_data[[raster_col_name]], function(val) {
+                    name <- value_to_name[as.character(val)]
+                    if(is.null(name) || is.na(name)) as.character(val) else name
+                  })
+                } else {
+                  # No translation available, use numeric values as strings
+                  raster_col_name <- names(sf_data)[1]
+                  sf_data$crop_name <- as.character(sf_data[[raster_col_name]])
+                }
+
+                # Update the reactive data
+                file_loading_states[[paste0("file", file_num, "_progress")]] <- 90
+                file_reactives[[i]]$sf_data(sf_data)
+
+                # Update column selector to include the new crop_name column
+                available_columns <- names(sf_data)[names(sf_data) != attr(sf_data, "sf_column")]
+                updateSelectInput(session, sprintf("column_selector%d", i), choices = available_columns)
+
+                # Complete loading
+                file_loading_states[[paste0("file", file_num, "_loading")]] <- FALSE
+                file_loading_states[[paste0("file", file_num, "_progress")]] <- 100
+                file_loading_states[[paste0("file", file_num, "_status")]] <- ""
+
+              }, error = function(e) {
+                file_loading_states[[paste0("file", file_num, "_loading")]] <- FALSE
+                file_loading_states[[paste0("file", file_num, "_status")]] <- paste("Error reprocessing:", e$message)
+                showNotification(paste("Error reprocessing raster file", i, ":", e$message),
+                                type = "error",
+                                duration = 8)
+              })
+            }
+          }
+        }
+      } else {
+        custom_crop_translation(NULL)
+        output$translation_file_status <- renderText({
+          "Error: Could not parse translation file"
+        })
+        showNotification(
+          "Error: Could not parse translation file. Please check the file format.",
+          type = "error",
+          duration = 8
+        )
+      }
+    }, error = function(e) {
+      custom_crop_translation(NULL)
+      output$translation_file_status <- renderText({
+        paste("Error:", e$message)
+      })
+      showNotification(
+        paste("Error loading translation file:", e$message),
+        type = "error",
+        duration = 8
+      )
+    })
+  })
+
+  # Initialize translation file status output
+  output$translation_file_status <- renderText({
+    if(!is.null(custom_crop_translation())) {
+      sprintf("Translation file loaded (%d crop codes)", length(custom_crop_translation()))
+    } else {
+      ""
+    }
+  })
+
+  # Initialize batch upload status
+  output$batch_upload_status <- renderUI({
+    NULL
+  })
+
+  # Observer for batch upload
+  observeEvent(input$Btn_BatchUpload, {
+    shinyFileChoose(
+      input,
+      "Btn_BatchUpload",
+      roots = volumes(),
+      session = session,
+      restrictions = system.file(package = "base"),
+      filetypes = c("shp", "fgb", "gpkg", "sqlite", "geojson", "tif", "tiff")
+    )
+
+    batch_files <- parseFilePaths(volumes(), input$Btn_BatchUpload)
+
+    if(nrow(batch_files) > 0) {
+      # Sort files by name to ensure consistent year assignment
+      batch_files <- batch_files[order(batch_files$name), ]
+
+      # Limit to 10 files maximum
+      if(nrow(batch_files) > 10) {
+        showNotification(
+          sprintf("Maximum 10 files allowed. Using first 10 of %d selected files.", nrow(batch_files)),
+          type = "warning",
+          duration = 8
+        )
+        batch_files <- batch_files[1:10, ]
+      }
+
+      output$batch_upload_status <- renderUI({
+        div(
+          class = "file-status status-success",
+          icon("check"),
+          sprintf(" %d files selected for batch upload", nrow(batch_files)),
+          style = "color: #ffffffff; font-size: 16px; margin-top: 10px;"
+        )
+      })
+
+      showNotification(
+        sprintf("Processing %d files...", nrow(batch_files)),
+        type = "message",
+        duration = 3
+      )
+
+      # Process each file and assign to consecutive slots
+      for(i in 1:nrow(batch_files)) {
+        file_path <- batch_files$datapath[i]
+        file_name <- batch_files$name[i]
+        file_ext <- tolower(tools::file_ext(file_path))
+
+        # Check if this is a raster file
+        if(file_ext %in% c("tif", "tiff")) {
+          has_raster_file(TRUE)
+
+          # Process raster file
+          tryCatch({
+            file_loading_states[[paste0("file", i, "_loading")]] <- TRUE
+            file_loading_states[[paste0("file", i, "_status")]] <- "Loading raster..."
+
+            # Load and vectorize raster
+            raster_layer <- terra::rast(file_path)
+
+            # Check for custom translation table
+            crop_translation_to_use <- if(!is.null(custom_crop_translation())) {
+              custom_crop_translation()
+            } else if(!is.null(default_crop_translation())) {
+              default_crop_translation()
+            } else {
+              NULL
+            }
+
+            # Convert to vector
+            vectorized_sf <- raster_to_vector(raster_layer, crop_translation_to_use)
+
+            if(!is.null(vectorized_sf) && nrow(vectorized_sf) > 0) {
+              file_reactives[[i]]$sf_data(vectorized_sf)
+              file_reactives[[i]]$selected_file(file_path)
+              file_reactives[[i]]$is_valid(TRUE)
+
+              # Update column selector
+              available_columns <- names(vectorized_sf)[names(vectorized_sf) != attr(vectorized_sf, "sf_column")]
+              updateSelectInput(session,
+                                sprintf("column_selector%d", i),
+                                choices = available_columns)
+
+              # Update bounding box if this is the first file
+              if(i == 1) {
+                bbox <- sf::st_bbox(vectorized_sf)
+                first_layer_bbox(bbox)
+              }
+
+              file_loading_states[[paste0("file", i, "_loading")]] <- FALSE
+              file_loading_states[[paste0("file", i, "_status")]] <- "Success"
+            }
+          }, error = function(e) {
+            file_loading_states[[paste0("file", i, "_loading")]] <- FALSE
+            file_loading_states[[paste0("file", i, "_status")]] <- paste("Error:", e$message)
+            showNotification(
+              sprintf("Error loading file %d (%s): %s", i, file_name, e$message),
+              type = "error",
+              duration = 10
+            )
+          })
+
+        } else if(file_ext %in% c("shp", "fgb", "gpkg", "sqlite", "geojson")) {
+          # Process vector file
+          tryCatch({
+            file_loading_states[[paste0("file", i, "_loading")]] <- TRUE
+            file_loading_states[[paste0("file", i, "_status")]] <- "Loading vector file..."
+
+            sf_obj <- st_read(file_path, quiet = TRUE)
+
+            if(nrow(sf_obj) > 0) {
+              file_reactives[[i]]$sf_data(sf_obj)
+              file_reactives[[i]]$selected_file(file_path)
+              file_reactives[[i]]$is_valid(TRUE)
+
+              # Update column selector
+              available_columns <- names(sf_obj)[names(sf_obj) != attr(sf_obj, "sf_column")]
+              updateSelectInput(session,
+                                sprintf("column_selector%d", i),
+                                choices = available_columns,
+                                selected = common_column)
+
+              # Update bounding box if this is the first file
+              if(i == 1) {
+                bbox <- st_bbox(sf_obj)
+                first_layer_bbox(bbox)
+              }
+
+              file_loading_states[[paste0("file", i, "_loading")]] <- FALSE
+              file_loading_states[[paste0("file", i, "_status")]] <- "Success"
+            }
+          }, error = function(e) {
+            file_loading_states[[paste0("file", i, "_loading")]] <- FALSE
+            file_loading_states[[paste0("file", i, "_status")]] <- paste("Error:", e$message)
+            showNotification(
+              sprintf("Error loading file %d (%s): %s", i, file_name, e$message),
+              type = "error",
+              duration = 10
+            )
+          })
+        }
+      }
+
+      # Show completion notification
+      showNotification(
+        sprintf("Batch upload complete! %d files loaded.", nrow(batch_files)),
+        type = "message",
+        duration = 5
+      )
+    }
+  })
+
   # Function to process shapefile selection
-  processShapefileSelection <- function(input_id, file_reactive, column_selector_id, common_column = NA) {
+  processShapefileSelection <- function(input_id, file_reactive, column_selector_id, common_column = NA, volumes_func) {
     shinyFileChoose(input, input_id,
-                    roots = volumes,
+                    roots = volumes_func(),
                     session = session,
                     restrictions = system.file(package = "base"),
-                    filetypes = c("shp", "fgb", "gpkg", "sqlite", "geojson"))
+                    filetypes = c("shp", "fgb", "gpkg", "sqlite", "geojson", "tif", "tiff"))
     
     if(!is.null(input[[input_id]])) {
-      file_selected <- parseFilePaths(volumes, input[[input_id]])
+      file_selected <- parseFilePaths(volumes_func(), input[[input_id]])
       
       if(nrow(file_selected) > 0) {
         file_ext <- tolower(tools::file_ext(file_selected$datapath))
         
-        if(file_ext == "shp" | file_ext == "fgb"| file_ext == "gpkg"| file_ext == "sqlite"| file_ext == "geojson") {
+        # Check if file is a raster (TIFF/TIF)
+        if(file_ext %in% c("tif", "tiff")) {
           file_reactive$selected_file(file_selected$datapath)
+
+          # Mark that a raster file has been uploaded
+          has_raster_file(TRUE)
+
+          # Set loading state
+          file_num <- as.numeric(gsub("Btn_GetFile", "", input_id))
+          file_loading_states[[paste0("file", file_num, "_loading")]] <- TRUE
+          file_loading_states[[paste0("file", file_num, "_progress")]] <- 20
+          file_loading_states[[paste0("file", file_num, "_status")]] <- "Loading raster..."
           
           tryCatch({
-            sf_obj <- st_read(file_selected$datapath, quiet = TRUE)
-            file_reactive$sf_data(sf_obj)
+            # Load raster
+            file_loading_states[[paste0("file", file_num, "_status")]] <- "Converting raster to vector..."
+            file_loading_states[[paste0("file", file_num, "_progress")]] <- 40
+            
+            raster_data <- terra::rast(file_selected$datapath)
+
+            # Priority 1: Check for custom user-uploaded translation table
+            custom_translation <- custom_crop_translation()
+            use_custom_translation <- !is.null(custom_translation) && length(custom_translation) > 0
+
+            # Priority 2: Check if raster has a levels/RAT (Raster Attribute Table)
+            levels_list <- terra::levels(raster_data)
+            has_rat <- isTRUE(terra::hasValues(raster_data)) && length(levels_list) > 0 && !is.null(levels_list[[1]])
+
+            # Determine which translation to use
+            value_to_name <- NULL
+
+            if (use_custom_translation) {
+              # Use custom translation from uploaded file
+              value_to_name <- custom_translation
+              file_loading_states[[paste0("file", file_num, "_status")]] <- "Applying custom crop translation..."
+
+            } else if (has_rat) {
+              # Get the RAT
+              rat <- terra::levels(raster_data)[[1]]
+
+              # Find the name column (common names: "label", "name", "class", "Klarschrift", etc.)
+              name_col <- NULL
+              possible_names <- c("label", "name", "class", "Klarschrift", "description", "category")
+              for (col_name in possible_names) {
+                if (col_name %in% names(rat)) {
+                  name_col <- col_name
+                  break
+                }
+              }
+
+              if (!is.null(name_col)) {
+                # Create a lookup table for value -> name from RAT
+                value_to_name <- setNames(rat[[name_col]], rat[[1]])
+              }
+            }
+
+            # Convert raster to vector
+            file_loading_states[[paste0("file", file_num, "_progress")]] <- 60
+            vectorized <- terra::as.polygons(raster_data, dissolve = TRUE)
+
+            # Convert to sf
+            file_loading_states[[paste0("file", file_num, "_status")]] <- "Finalizing conversion..."
+            file_loading_states[[paste0("file", file_num, "_progress")]] <- 80
+
+            vectorized_sf <- sf::st_as_sf(vectorized)
+            vectorized_sf <- sf::st_cast(vectorized_sf, "POLYGON")
+
+            # Apply translation if available
+            if (!is.null(value_to_name)) {
+              value_col <- names(vectorized_sf)[1]  # First column is the raster values
+              vectorized_sf[[value_col]] <- value_to_name[as.character(vectorized_sf[[value_col]])]
+            }
+            
+            # Store the vectorized data
+            file_reactive$sf_data(vectorized_sf)
             file_reactive$is_valid(TRUE)
             
-            if(is.na(common_column)){
+            # Update column selector - exclude geometry column and "Name" option for rasters
+            available_columns <- setdiff(names(vectorized_sf), attr(vectorized_sf, "sf_column"))
+
+            if(is.null(common_column) || is.na(common_column)){
               updateSelectInput(session, column_selector_id,
-                                choices = setdiff(names(sf_obj), 
+                                choices = available_columns)
+            } else {
+              # Check if common_column exists in available columns
+              if(common_column %in% available_columns) {
+                updateSelectInput(session, column_selector_id,
+                                  choices = available_columns,
+                                  selected = common_column)
+              } else {
+                updateSelectInput(session, column_selector_id,
+                                  choices = available_columns)
+              }
+            }
+            
+            # Update bounding box if this is the first file
+            if (input_id == "Btn_GetFile1") {
+              bbox <- sf::st_bbox(vectorized_sf)
+              first_layer_bbox(bbox)
+            }
+            
+            # Complete loading
+            file_loading_states[[paste0("file", file_num, "_loading")]] <- FALSE
+            file_loading_states[[paste0("file", file_num, "_progress")]] <- 100
+            file_loading_states[[paste0("file", file_num, "_status")]] <- ""
+            
+            showNotification("Raster successfully converted to vector format", 
+                             type = "message")
+            
+          }, error = function(e) {
+            file_reactive$is_valid(FALSE)
+            file_reactive$sf_data(NULL)
+            file_loading_states[[paste0("file", file_num, "_loading")]] <- FALSE
+            file_loading_states[[paste0("file", file_num, "_status")]] <- paste("Error:", e$message)
+            showNotification(paste("Error converting raster:", e$message), 
+                             type = "error")
+          })
+          
+        } else if(file_ext %in% c("shp", "fgb", "gpkg", "sqlite", "geojson")) {
+          # Handle vector files normally
+          file_reactive$selected_file(file_selected$datapath)
+
+          # Set loading state
+          file_num <- as.numeric(gsub("Btn_GetFile", "", input_id))
+          file_loading_states[[paste0("file", file_num, "_loading")]] <- TRUE
+          file_loading_states[[paste0("file", file_num, "_progress")]] <- 30
+          file_loading_states[[paste0("file", file_num, "_status")]] <- "Loading vector file..."
+
+          tryCatch({
+            # Update progress
+            file_loading_states[[paste0("file", file_num, "_progress")]] <- 50
+            file_loading_states[[paste0("file", file_num, "_status")]] <- "Reading spatial data..."
+
+            sf_obj <- st_read(file_selected$datapath, quiet = TRUE)
+
+            # Update progress
+            file_loading_states[[paste0("file", file_num, "_progress")]] <- 80
+            file_loading_states[[paste0("file", file_num, "_status")]] <- "Processing columns..."
+
+            file_reactive$sf_data(sf_obj)
+            file_reactive$is_valid(TRUE)
+
+            if(is.null(common_column) || is.na(common_column)){
+              updateSelectInput(session, column_selector_id,
+                                choices = setdiff(names(sf_obj),
                                                   attr(sf_obj, "sf_column")))
             }else{
               updateSelectInput(session, column_selector_id,
-                                choices = setdiff(names(sf_obj), 
+                                choices = setdiff(names(sf_obj),
                                                   attr(sf_obj, "sf_column")),
                                 selected = common_column)
             }
-            
+
             # Update bounding box if this is the first file
             if (input_id == "Btn_GetFile1") {
               bbox <- st_bbox(sf_obj)
               first_layer_bbox(bbox)
             }
-            
+
+            # Complete loading
+            file_loading_states[[paste0("file", file_num, "_loading")]] <- FALSE
+            file_loading_states[[paste0("file", file_num, "_progress")]] <- 100
+            file_loading_states[[paste0("file", file_num, "_status")]] <- ""
+
+            showNotification("File loaded successfully", type = "message", duration = 2)
+
           }, error = function(e) {
             file_reactive$is_valid(FALSE)
             file_reactive$sf_data(NULL)
-            showNotification(paste("Error reading file:", e$message), 
+            file_loading_states[[paste0("file", file_num, "_loading")]] <- FALSE
+            file_loading_states[[paste0("file", file_num, "_status")]] <- paste("Error:", e$message)
+            showNotification(paste("Error reading file:", e$message),
                              type = "error")
           })
         } else {
@@ -1005,71 +1663,6 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
     }
   }
   
-  # Create observers for all possible files
-  lapply(1:10, function(i) {
-    # Observer for file selection
-    observe({
-      processShapefileSelection(
-        sprintf("Btn_GetFile%d", i),
-        file_reactives[[i]],
-        sprintf("column_selector%d", i),
-        common_column
-      )
-    })
-    
-    # The rest of your observer code for each file remains unchanged
-    # Text output for file path
-    output[[sprintf("txt_file%d", i)]] <- renderText({
-      if(file_reactives[[i]]$is_valid()) {
-        paste(sprintf("File #%d:", i), 
-              file_reactives[[i]]$selected_file())
-      }
-    })
-    
-    # Validation message
-    output[[sprintf("validation_message%d", i)]] <- renderText({
-      if(!is.null(input[[sprintf("Btn_GetFile%d", i)]]) && 
-         !file_reactives[[i]]$is_valid()) {
-        "Please select a valid polygon-file (.shp, .geojson, .fgb, .gpkg or .sqlite)"
-      }
-    })
-    
-    # Observer for column and year selection
-    observeEvent(input[[sprintf("column_selector%d", i)]], {
-      req(file_reactives[[i]]$sf_data(), 
-          input[[sprintf("column_selector%d", i)]],
-          input[[sprintf("year_selector%d", i)]])
-      
-      if(input[[sprintf("column_selector%d", i)]] != "") {
-        file_reactives[[i]]$is_complete(TRUE)
-        file_reactives[[i]]$selected_year(input[[sprintf("year_selector%d", i)]])
-        
-        current_files <- processed_files()
-        current_files[[i]] <- list(
-          sf_object = file_reactives[[i]]$sf_data(),
-          selected_column = input[[sprintf("column_selector%d", i)]],
-          selected_year = input[[sprintf("year_selector%d", i)]],
-          filepath = file_reactives[[i]]$selected_file()
-        )
-        processed_files(current_files)
-        
-        if(i < 10) {
-          current_file_count(i + 1)
-        }
-      }
-    })
-    
-    # Additional observer for year changes
-    observeEvent(input[[sprintf("year_selector%d", i)]], {
-      req(file_reactives[[i]]$is_complete())
-      
-      current_files <- processed_files()
-      if(!is.null(current_files[[i]])) {
-        current_files[[i]]$selected_year <- input[[sprintf("year_selector%d", i)]]
-        processed_files(current_files)
-      }
-    })
-  })
   
   # Helper function to get names from codes - defined once at the top
   get_names <- function(codes, codierung_all) {
@@ -1081,15 +1674,25 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
     return(names[!is.na(names)])
   }
   
-  # Set up volumes for file selection
-  if(is.na(output_dir)){
-    volumes <- c(Home = fs::path_home(), "R Installation" = R.home(), getVolumes()())
-  } else {
-    volumes <- c(Home = output_dir, "R Installation" = R.home(), getVolumes()())
-  }
+  # Set up volumes for file selection - make it REACTIVE
+  volumes <- reactive({
+    base_volumes <- c(Home = fs::path_home(), "R Installation" = R.home(), getVolumes()())
+
+    # Add remembered directory if it exists
+    if (!is.null(output_dir) && !is.na(output_dir)) {
+      return(c(Output = output_dir, base_volumes))
+    } else if (!is.null(remembered_dir()) && remembered_dir() != "") {
+      return(c(Remembered = remembered_dir(), base_volumes))
+    } else {
+      return(base_volumes)
+    }
+  })
   
-  # Initialize directory selection
-  shinyDirChoose(input, "dir", roots = volumes, session = session)
+  # Initialize directory selection with reactive volumes
+  observe({
+    shinyDirChoose(input, "dir", roots = volumes(), session = session)
+  })
+  
   selected_dir <- reactiveVal()
   
   class_names <- reactiveVal(list())
@@ -1098,24 +1701,44 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
   # Display selected directory
   output$selected_dir <- renderPrint({
     if (length(input$dir) > 1) {
-      parseDirPath(volumes, input$dir)
+      parseDirPath(volumes(), input$dir)  # Use reactive volumes
+    } else if (!is.null(remembered_dir())) {
+      cat(remembered_dir())
     } else {
-      cat("No directory selected (input dir)")
+      cat("No directory selected")
     }
   })
   
   # Update selected directory when input changes
   observeEvent(input$dir, {
     if (!is.null(input$dir)) {
-      path <- parseDirPath(volumes, input$dir)
+      path <- parseDirPath(volumes(), input$dir)  # Use reactive volumes
       selected_dir(path)
+    }
+  })
+  
+  # Remember directory from first file if output_dir not given
+  observeEvent(file_reactives[[1]]$selected_file(), {
+    if ((is.null(output_dir) || is.na(output_dir)) && !is.null(file_reactives[[1]]$selected_file())) {
+      first_file_path <- file_reactives[[1]]$selected_file()
+      dir_path <- dirname(first_file_path)
+      remembered_dir(dir_path)
+      
+      # Auto-select this directory
+      if (is.null(selected_dir()) || selected_dir() == "") {
+        selected_dir(dir_path)
+        showNotification(
+          paste("Output directory automatically set to:", dir_path),
+          type = "message",
+          duration = 5
+        )
+      }
     }
   })
   
   get_selected_dir <- reactive({
     selected_dir()
   })
-  
   
   
   #----------------------------------------------------------------------------------------------------------
@@ -1130,6 +1753,9 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
     )
   })
   
+
+  
+  #----------------------------------------------------------------------------------------------------------
   # Add reactive value for tracking the first layer's bounding box
   first_layer_bbox <- reactiveVal()
   processed_files <- reactiveVal(list())
@@ -1171,6 +1797,20 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
     if (i == 1) {
       first_layer_bbox(NULL)
     }
+
+    # Check if any raster files remain
+    has_remaining_raster <- FALSE
+    for(j in 1:10) {
+      if(j != i && !is.null(file_reactives[[j]]$selected_file())) {
+        file_path <- file_reactives[[j]]$selected_file()
+        file_ext <- tolower(tools::file_ext(file_path))
+        if(file_ext %in% c("tif", "tiff")) {
+          has_remaining_raster <- TRUE
+          break
+        }
+      }
+    }
+    has_raster_file(has_remaining_raster)
   }
   
   # Add observers for remove buttons
@@ -1243,7 +1883,8 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
         sprintf("Btn_GetFile%d", i),
         file_reactives[[i]],
         sprintf("column_selector%d", i),
-        common_column
+        common_column,
+        volumes       
       )
     })
     
@@ -1259,7 +1900,7 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
     output[[sprintf("validation_message%d", i)]] <- renderText({
       if(!is.null(input[[sprintf("Btn_GetFile%d", i)]]) && 
          !file_reactives[[i]]$is_valid()) {
-        "Please select a valid polygon-file (.shp, .geojson, .fgb, .gpkg or .sqlite)"
+        "Please select a valid polygon-file (.shp, .geojson, .fgb, .gpkg, .tiff, .tif or .sqlite)"
       }
     })
     
@@ -1313,13 +1954,65 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
       return(file_reactives[[i-1]]$is_complete())
     })
     
-    outputOptions(output, sprintf("file%d_loaded", i), 
+    outputOptions(output, sprintf("file%d_loaded", i),
                   suspendWhenHidden = FALSE)
-    outputOptions(output, sprintf("file%d_selected", i), 
+    outputOptions(output, sprintf("file%d_selected", i),
                   suspendWhenHidden = FALSE)
-    outputOptions(output, sprintf("show_selector_%d", i), 
+    outputOptions(output, sprintf("show_selector_%d", i),
                   suspendWhenHidden = FALSE)
   })
+
+  # Reactive value to track raster presence and prevent update loops
+  has_raster_reactive <- reactiveVal(FALSE)
+
+  # Check for raster files and update has_raster_reactive
+  observe({
+    # Check if any loaded file is a raster
+    has_raster <- FALSE
+    for(i in 1:10) {
+      if(isTRUE(file_reactives[[i]]$is_valid()) &&
+         !is.null(file_reactives[[i]]$selected_file()) &&
+         isTRUE(is_raster_file(file_reactives[[i]]$selected_file()))) {
+        has_raster <- TRUE
+        break
+      }
+    }
+
+    # Only update if the state actually changed
+    if(has_raster != has_raster_reactive()) {
+      has_raster_reactive(has_raster)
+    }
+  })
+
+  # Update radio button choices based on raster presence
+  observeEvent(has_raster_reactive(), {
+    has_raster <- has_raster_reactive()
+    current_selection <- isolate(input$id_or_name)
+
+    if(has_raster) {
+      # Raster files present - only allow "Name" mode
+      if(current_selection != "Name") {
+        updateRadioButtons(session, "id_or_name",
+                           choices = c("Name"),
+                           selected = "Name")
+        showNotification(
+          "Raster file detected. Switching to 'Name' mode automatically.",
+          type = "message",
+          duration = 5
+        )
+      } else {
+        # Already in Name mode, just update choices
+        updateRadioButtons(session, "id_or_name",
+                           choices = c("Name"),
+                           selected = "Name")
+      }
+    } else {
+      # No raster files - allow both "Code" and "Name"
+      updateRadioButtons(session, "id_or_name",
+                         choices = c("Code", "Name"),
+                         selected = current_selection)
+    }
+  }, ignoreInit = TRUE)
   
   # Add map output
   output$map <- renderLeaflet({
@@ -1398,14 +2091,14 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
     shinyFileChoose(
       input,
       "Choose_AOI_File",
-      roots = volumes,
+      roots = volumes(),
       session = session,
       restrictions = system.file(package = "base"),
       filetypes = c("shp", "fgb", "gpkg", "sqlite", "geojson")
     )
     
     if (!is.null(input$Choose_AOI_File)) {
-      file_selected <- parseFilePaths(volumes, input$Choose_AOI_File)
+      file_selected <- parseFilePaths(volumes(), input$Choose_AOI_File)  
       
       if (nrow(file_selected) > 0) {
         file_ext <- tolower(tools::file_ext(file_selected$datapath))
@@ -1460,7 +2153,7 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
           })
         } else {
           showNotification(
-            "Invalid file type. Please select a .shp, .geojson, .fgb, .gpkg, or .sqlite file.",
+            "Invalid file type. Please select a .shp, .geojson, .fgb, .gpkg, .sqlite, .tiff, or .tif file.",
             type = "error"
           )
         }
@@ -1475,9 +2168,9 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
     aoi_sf <- aoi_data()
     
     selected_column <- input$aoi_name_column
-    
+
     # Validate that selected column exists and has unique values
-    if (selected_column %in% names(aoi_sf)) {
+    if (!is.null(selected_column) && !is.na(selected_column) && selected_column %in% names(aoi_sf)) {
       # Check for NA or empty values in selected column
       if (any(is.na(aoi_sf[[selected_column]]) | aoi_sf[[selected_column]] == "")) {
         showNotification(
@@ -1580,11 +2273,11 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
     # Initialize class_state if NULL
     if (is.null(class_state())) {
       # Get all unique crops first
-      unique_crops <- get_all_crops(processed_files(), codierung_all, input$language)
+      unique_crops <- get_all_crops(processed_files(), codierung_all, input$language, input$id_or_name)
       all_unique_crops(unique_crops)
-      
+
       if (input$id_or_name == "Code") {
-        # Define base classes
+        # Define base classes ONLY for Code mode
         if(input$language == "English"){
           base_classes <- list(
             "potatoes" = get_names(c(601, 602, 604, 605, 606), codierung_all),
@@ -1660,13 +2353,13 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
             "Sonderkulturen" = get_names(c(705, 710), codierung_all)
           )
         }
-        
+
         # Filter out empty classes and those with no matching crops
         filtered_classes <- lapply(base_classes, function(class_names) {
           intersect(class_names, unique_crops)
         })
         filtered_classes <- filtered_classes[sapply(filtered_classes, length) > 0]
-        
+
         # Create initial classes list
         initial_classes <- lapply(seq_along(filtered_classes), function(i) {
           list(
@@ -1676,28 +2369,30 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
             color = color_palette[i]
           )
         })
-        
+
         # Sort by number of crops
         sorted_indices <- order(sapply(initial_classes, function(x) length(x$crops)), decreasing = F)
         class_state(initial_classes[sorted_indices])
         class_counter(length(filtered_classes))
-        
+
         # Initially set all crops not in any class as available
         assigned_crops <- unique(unlist(lapply(initial_classes, function(x) x$crops)))
         unassigned_crops <- setdiff(unique_crops, assigned_crops)
         available_crops(unassigned_crops)
-        
+
         # Initialize class names storage
         initial_names <- sapply(base_classes, function(x) names(x))
         class_names(setNames(as.list(initial_names), paste0("class", seq_along(initial_names))))
       }else{
         # For Name-based aggregation, start with empty classes
+        # All crop names from uploaded files will be available in the left bucket
+        # No pre-prepared aggregation classes - completely free aggregation
         class_state(list())
         class_counter(0)
-        
-        # Make all crops available initially
+
+        # Make all crops from uploaded files available initially
         available_crops(unique_crops)
-        
+
         # Initialize empty class names storage
         class_names(list())
       }
@@ -2074,14 +2769,14 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
         # Initialize memory checkpoints list
         mem_checkpoints <- list()
         
-        incProgress(0.05, detail = "Adding names to all files")
+        incProgress(0.1, detail = "Adding names to all files")
         mem_checkpoints$after_names <- gc(reset = TRUE)
         
         # pre-process the layers
         all_files <- add_names(all_files, codierung_all, input$id_or_name, input$language)
         
         # start intersection
-        incProgress(0.05, detail = "Intersecting")
+        incProgress(0.1, detail = "Intersecting")
         if(input$radio_process == "complete"){
           CropRotViz_intersection <- intersect_fields(all_files, n_cores = ncores)
         }else{
@@ -2097,7 +2792,7 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
           aggregation_codes <- prepare_aggregation_data()
           aggregation_codes <- aggregation_codes$converter
           
-          incProgress(0.05, detail = "aggregating")
+          incProgress(0.15, detail = "aggregating")
           
           CropRotViz_intersection <- aggregator(CropRotViz_intersection, years, aggregation_codes, type = "NC")
           mem_checkpoints$after_aggregation <- gc(reset = TRUE)
@@ -2106,7 +2801,7 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
           aggregation_codes <- prepare_aggregation_data()
           aggregation_codes <- aggregation_codes$converter
           
-          incProgress(0.05, detail = "aggregating")
+          incProgress(0.15, detail = "aggregating")
           CropRotViz_intersection <- aggregator(CropRotViz_intersection, years, aggregation_codes, type = "Name")
           mem_checkpoints$after_aggregation <- gc(reset = TRUE)
         }else{
@@ -2115,7 +2810,7 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
         
         #--------------------------------------------------------------
         # intersect with attributes
-        incProgress(0.05, detail = "intersecting with areas")
+        incProgress(0.15, detail = "intersecting with areas")
         message("intersecting with areas")
         list_intersect_with_borders <- intersect_with_borders(CropRotViz_intersection, 3, countriesSP,
                                                               EZG, aoi_data)
@@ -2136,7 +2831,7 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
           AOIs <- NULL
         }
         
-        incProgress(0.05, detail = "writing vector file")
+        incProgress(0.15, detail = "writing vector file")
         message("writing vector file")
         if(vector_file){
           if(input$filetype == "Shapefile"){
@@ -2163,7 +2858,7 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
         incProgress(0.05, detail = "preparing diversity map")
         message("preparing diversity map")
         
-        # FIXED: Better condition and error handling
+        # condition and error handling
         diversity_data <- NULL
         tryCatch({
           # Check if there's enough data for diversity mapping
@@ -2204,7 +2899,7 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
           diversity_data <- NULL
         })
         #--------------------------------------------------------------
-        incProgress(0.05, detail = "preparing the rest of the outputs")
+        incProgress(0.1, detail = "preparing the rest of the outputs")
         
         # processing section 
         district_CropRotViz_intersection <- list()
@@ -2256,22 +2951,22 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
           sapply(district_CropRotViz_intersection, nrow) > 0
         ]
         mem_checkpoints$after_district_processing <- gc(reset = TRUE)
-        
+
         if("EZG" %in% names(CropRotViz_intersection)){
           EZG_CropRotViz_intersection <- list()
-          
+
           for (i in 1:length(unique(st_drop_geometry(EZGs)$EZG))) {
             EZG_sel <- unique(st_drop_geometry(EZGs)$EZG)[i]
-            
+
             current <- subset(CropRotViz_intersection, EZG == EZG_sel)
             current <- current%>%
               plyr::count(vars = agg_cols, wt_var = "area")%>%
               mutate(id = row_number(),
                      freq = freq/1e6)
-            
+
             # ad rotation column
-            current$rotation <- do.call(paste, st_drop_geometry(current[agg_cols]))  
-            
+            current$rotation <- do.call(paste, st_drop_geometry(current[agg_cols]))
+
             EZG_CropRotViz_intersection[[EZG_sel]] <- current
           }
         }else{
@@ -2279,74 +2974,88 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
           EZG_CropRotViz_intersection <- NA
         }
         mem_checkpoints$after_EZG_processing <- gc(reset = TRUE)
-        
+
         if("AOI" %in% names(CropRotViz_intersection)){
           AOI_CropRotViz_intersection <- list()
-          
+
           for (i in 1:length(unique(st_drop_geometry(AOIs)$AOI))) {
             AOI_sel <- unique(st_drop_geometry(AOIs)$AOI)[i]
-            
+
             current <- subset(CropRotViz_intersection, AOI == AOI_sel)
             current <- current%>%
               plyr::count(vars = agg_cols, wt_var = "area")%>%
               mutate(id = row_number(),
                      freq = freq/1e6)
-            
+
             # ad rotation column
-            current$rotation <- do.call(paste, st_drop_geometry(current[agg_cols]))  
-            
+            current$rotation <- do.call(paste, st_drop_geometry(current[agg_cols]))
+
             AOI_CropRotViz_intersection[[AOI_sel]] <- current
           }
         }else{
           AOIs  <- NA
           AOI_CropRotViz_intersection <- NA
         }
-        
+
         #----------------------------------------------------------------------------------------------------------------------------------
         # calculate complete cropping area
         cropping_area <- sum(do.call(rbind, district_CropRotViz_intersection)$freq)
-        
+
         # create all available choices
         if(input$aggregation == "Yes"){
           Crop_choices <- unique(unlist(unique(c(st_drop_geometry(CropRotViz_intersection)[grep("^Aggregated_", names(CropRotViz_intersection), value = TRUE)]))))
         }else{
           Crop_choices <- unique(unlist(unique(c(st_drop_geometry(CropRotViz_intersection)[grep("^Name_", names(CropRotViz_intersection), value = TRUE)]))))
         }
-        
+
         # create df for area distribution visualisation
         agg_cols <- c(
           agg_cols,
-          "District", 
+          "District",
           "area",
           if ("EZG" %in% names(CropRotViz_intersection)) "EZG",
-          if ("EZG" %in% names(CropRotViz_intersection) && 
+          if ("EZG" %in% names(CropRotViz_intersection) &&
               "AOI" %in% names(CropRotViz_intersection)) "AOI"
         )
-        
+
         distribution_df <- st_drop_geometry(CropRotViz_intersection)[,agg_cols]
-        
+
         language <- input$language
-        
+
         # save environment
         save(EZG_CropRotViz_intersection, district_CropRotViz_intersection, AOI_CropRotViz_intersection,
              cropping_area, years, Crop_choices, Districts, EZGs,
-             distribution_df, diversity_data, sankey_data, aggregation_codes, language, 
+             distribution_df, diversity_data, sankey_data, aggregation_codes, language,
              file = paste0(current_dir, "/CropRotViz_intersection.RData"))
-        
+
         #-----------------------------------------------------------------------------------------------------
         incProgress(0.05, detail = "preparing images for fast preview version")
         
         # create snapshot if preview == T
         if(preview){
-          data <- do.call(rbind, district_CropRotViz_intersection)
-          data$id <- 1:nrow(data)
-          create_crop_rotation_sankey(data, 
-                                      output_path = paste0(current_dir, "/CropRotViz_intersection.png"), 
-                                      min_area = 0, 
-                                      color = color_palette)
+          tryCatch({
+            data <- do.call(rbind, district_CropRotViz_intersection)
+
+            # Check if data is valid and has proper structure
+            if(!is.null(data) && is.data.frame(data) && nrow(data) > 0 && !is.na(nrow(data))) {
+              data$id <- seq_len(nrow(data))
+              create_crop_rotation_sankey(data,
+                                          output_path = paste0(current_dir, "/CropRotViz_intersection.png"),
+                                          min_area = 0,
+                                          color = color_palette)
+              incProgress(0.02, detail = "Preview image created")
+            } else {
+              warning("No valid data available for preview image")
+              incProgress(0.02, detail = "Preview skipped - no data")
+            }
+          }, error = function(e) {
+            warning(sprintf("Error creating preview image: %s", e$message))
+            incProgress(0.02, detail = "Preview failed - see warnings")
+          })
         }
-        
+
         if(input$fastImages == "Yes"){
+          incProgress(0.03, detail = "Starting parallel image generation...")
           # Create images directory
           dir.create(paste0(current_dir, "/images"))
           
@@ -2417,7 +3126,8 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
             }
             
             message(sprintf("Generating %d images in parallel...", length(image_tasks)))
-            
+            incProgress(0.02, detail = sprintf("Generating %d images in parallel...", length(image_tasks)))
+
             # Process tasks in parallel using foreach
             if(length(image_tasks) > 0) {
               results <- foreach::foreach(task = image_tasks, .packages = c('ggplot2', 'ggalluvial', 'dplyr', 'stringr', 'forcats')) %dopar% {
@@ -2475,8 +3185,11 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
             # Always ensure the cluster is stopped
             parallel::stopCluster(cl)
           })
+
+          # Update progress after image generation completes
+          incProgress(0.03, detail = "Image generation completed - Finalizing...")
         }
-        
+
         #--------------------------------------------------------------------------------------------
         mem_checkpoints$after_save <- gc(reset = TRUE)
         
@@ -2566,7 +3279,7 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
   
   # Process button observer with output_dir
   observeEvent(input$btn_process, {
-    if (!is.na(output_dir)) {
+    if (!is.null(output_dir) && !is.na(output_dir)) {
       processor(output_dir)
     } else {
       req(selected_dir())  # Ensure directory is selected

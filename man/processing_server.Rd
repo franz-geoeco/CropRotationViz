@@ -72,7 +72,7 @@ The server component implements several key functionalities:
 }
 \item{Spatial Processing}{
 \itemize{
-\item Support for multiple spatial file formats (.shp, .geojson, .fgb, .gpkg, .sqlite)
+\item Support for multiple spatial file formats (.shp, .geojson, .fgb, .gpkg, .sqlite, .tiff, or .tif)
 \item Two intersection methods: complete (preserving all areas) and fast (optimized for performance)
 \item Optional crop class aggregation based on national coding system
 \item Area calculations and spatial transformations
