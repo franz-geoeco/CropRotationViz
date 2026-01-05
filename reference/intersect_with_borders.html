@@ -20,7 +20,7 @@ the input with administrative boundaries of that country."><!-- mathjax --><scri
       </button>
       <span class="navbar-brand">
         <a class="navbar-link" href="../index.html">CropRotationViz</a>
-        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="">0.1.0</span>
+        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="">0.0.1</span>
       </span>
     </div>
 
@@ -28,8 +28,11 @@ the input with administrative boundaries of that country."><!-- mathjax --><scri
       <ul class="nav navbar-nav"><li>
   <a href="../reference/index.html">Reference</a>
 </li>
+<li>
+  <a href="../news/index.html">Changelog</a>
+</li>
       </ul><ul class="nav navbar-nav navbar-right"><li>
-  <a href="https://github.com/franzschulze/CropRotationViz/" class="external-link">
+  <a href="https://github.com/franz-geoeco/CropRotationViz/" class="external-link">
     <span class="fab fa-github fa-lg"></span>
 
   </a>
@@ -44,7 +47,7 @@ the input with administrative boundaries of that country."><!-- mathjax --><scri
   <div class="col-md-9 contents">
     <div class="page-header">
     <h1>Intersect Geometries with Administrative Borders</h1>
-    <small class="dont-index">Source: <a href="https://github.com/franzschulze/CropRotationViz/blob/HEAD/R/functions.R" class="external-link"><code>R/functions.R</code></a></small>
+    <small class="dont-index">Source: <a href="https://github.com/franz-geoeco/CropRotationViz/blob/HEAD/R/functions.R" class="external-link"><code>R/functions.R</code></a></small>
     <div class="hidden name"><code>intersect_with_borders.Rd</code></div>
     </div>
 
@@ -56,7 +59,7 @@ the input with administrative boundaries of that country.</p>
     </div>
 
     <div id="ref-usage">
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">intersect_with_borders</span><span class="op">(</span><span class="va">input</span>, <span class="va">level</span>, <span class="va">EZG</span><span class="op">)</span></span></code></pre></div>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">intersect_with_borders</span><span class="op">(</span><span class="va">input</span>, <span class="va">level</span>, <span class="va">countriesSP</span>, <span class="va">EZG</span>, <span class="va">aoi</span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div id="arguments">
@@ -70,6 +73,18 @@ the input with administrative boundaries of that country.</p>
 <dt id="arg-level">level<a class="anchor" aria-label="anchor" href="#arg-level"></a></dt>
 <dd><p>Numeric value specifying the administrative level for intersection
 (e.g., 1 for states/provinces, 2 for counties/districts)</p></dd>
+
+
+<dt id="arg-countriessp">countriesSP<a class="anchor" aria-label="anchor" href="#arg-countriessp"></a></dt>
+<dd><p>SpatialPolygonsDataFrame object containing world map boundaries</p></dd>
+
+
+<dt id="arg-ezg">EZG<a class="anchor" aria-label="anchor" href="#arg-ezg"></a></dt>
+<dd><p>SpatialPolygonsDataFrame object containing German river catchments</p></dd>
+
+
+<dt id="arg-aoi">aoi<a class="anchor" aria-label="anchor" href="#arg-aoi"></a></dt>
+<dd><p>SpatialPolygonsDataFrame object containing the areas of interest</p></dd>
 
 </dl></div>
     <div id="value">
@@ -110,7 +125,7 @@ watershed boundary layer (EZG).</p>
 </div>
 
 <div class="pkgdown">
-  <p></p><p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.1.0.</p>
+  <p></p><p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.1.1.</p>
 </div>
 
       </footer></div>
