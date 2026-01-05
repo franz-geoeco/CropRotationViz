@@ -33,7 +33,7 @@
       </button>
       <span class="navbar-brand">
         <a class="navbar-link" href="index.html">CropRotationViz</a>
-        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="">0.1.0</span>
+        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="">0.0.1</span>
       </span>
     </div>
 
@@ -42,10 +42,13 @@
 <li>
   <a href="reference/index.html">Reference</a>
 </li>
+<li>
+  <a href="news/index.html">Changelog</a>
+</li>
       </ul>
 <ul class="nav navbar-nav navbar-right">
 <li>
-  <a href="https://github.com/franzschulze/CropRotationViz/" class="external-link">
+  <a href="https://github.com/franz-geoeco/CropRotationViz/" class="external-link">
     <span class="fab fa-github fa-lg"></span>
 
   </a>
@@ -72,6 +75,19 @@
 </h1></div>
 <!-- badges: start -->
 
+<div class="section level2">
+<h2 id="overview">Overview<a class="anchor" aria-label="anchor" href="#overview"></a>
+</h2>
+<p>CropRotationViz is a comprehensive R package that provides interactive Shiny applications for analyzing and visualizing crop rotation patterns from multi-year agricultural field data. The package integrates spatial data processing, statistical analysis, and dynamic visualization tools to help researchers and practitioners understand temporal patterns in agricultural land use. The package consists of three main components:</p>
+<ul>
+<li>A processing application for preparing and intersecting field data with user customisable settings</li>
+<li>A full visualization application for detailed analysis</li>
+<li>A fast visualization application for quick insights and area comparison</li>
+</ul>
+<div align="center">
+<p><img src="images/example.png" alt="Descriptive Alt Text" width="100%"></p>
+</div>
+</div>
 <div class="section level2">
 <h2 id="table-of-contents">Table of Contents<a class="anchor" aria-label="anchor" href="#table-of-contents"></a>
 </h2>
@@ -107,20 +123,19 @@
 </li>
 <li><a href="#example-data">Example Data</a></li>
 <li><a href="#dependencies">Dependencies</a></li>
+<li>
+<a href="#background">Background</a>
+<ul>
+<li><a href="#how-it-works">How it Works</a></li>
+<li><a href="#example">Example</a></li>
+</ul>
+</li>
 <li><a href="#contributing">Contributing</a></li>
 <li><a href="#license">License</a></li>
 <li><a href="#citation">Citation</a></li>
 <li><a href="#contact">Contact</a></li>
 <li><a href="#acknowledgments">Acknowledgments</a></li>
 </ul>
-</div>
-<div class="section level2">
-<h2 id="overview">Overview<a class="anchor" aria-label="anchor" href="#overview"></a>
-</h2>
-<p>CropRotationViz is an R package providing interactive Shiny applications for processing, analyzing and visualizing crop rotation sequences from agricultural field data. It offers tools for processing field geometries, analyzing crop rotations across multiple years, and creating interactive visualizations.</p>
-<div align="center">
-<p><img src="images/example.png" alt="Descriptive Alt Text" width="100%"></p>
-</div>
 </div>
 <div class="section level2">
 <h2 id="features">Features<a class="anchor" aria-label="anchor" href="#features"></a>
@@ -164,7 +179,7 @@
 <span><span class="fu"><a href="https://rdrr.io/r/utils/install.packages.html" class="external-link">install.packages</a></span><span class="op">(</span><span class="st">"remotes"</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># Install CropRotationViz</span></span>
-<span><span class="fu">remotes</span><span class="fu">::</span><span class="fu"><a href="https://remotes.r-lib.org/reference/install_github.html" class="external-link">install_github</a></span><span class="op">(</span><span class="st">"franzschulze/CropRotationViz"</span><span class="op">)</span></span></code></pre></div>
+<span><span class="fu">remotes</span><span class="fu">::</span><span class="fu"><a href="https://remotes.r-lib.org/reference/install_github.html" class="external-link">install_github</a></span><span class="op">(</span><span class="st">"franz-geoeco/CropRotationViz"</span><span class="op">)</span></span></code></pre></div>
 </div>
 <div class="section level2">
 <h2 id="usage">Usage<a class="anchor" aria-label="anchor" href="#usage"></a>
@@ -174,17 +189,26 @@
 </h3>
 <div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Load the package</span></span>
-<span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/franzschulze/CropRotationViz" class="external-link">CropRotationViz</a></span><span class="op">)</span></span>
+<span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/franz-geoeco/CropRotationViz" class="external-link">CropRotationViz</a></span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># Launch the Shiny processing application</span></span>
-<span><span class="fu"><a href="reference/run_sequencer_app.html">run_sequencer_app</a></span><span class="op">(</span><span class="op">)</span></span>
+<span><span class="fu"><a href="reference/run_processing_app.html">run_processing_app</a></span><span class="op">(</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># Launch the Shiny visualization application</span></span>
-<span><span class="fu">run_visualization_app</span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
+<span><span class="fu"><a href="reference/run_visualization_app.html">run_visualization_app</a></span><span class="op">(</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Launch the Shiny fast visualization application</span></span>
+<span><span class="fu"><a href="reference/run_fast_visualization_app.html">run_fast_visualization_app</a></span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
 </div>
 <div class="section level3">
 <h3 id="step-by-step-guide">Step-by-Step Guide<a class="anchor" aria-label="anchor" href="#step-by-step-guide"></a>
 </h3>
+<div class="section level4">
+<h4 id="generate-dummy-data">Generate Dummy Data<a class="anchor" aria-label="anchor" href="#generate-dummy-data"></a>
+</h4>
+<p>If you do not have field data at hand or just want to test the functionality of the application, you can run the following line, to produce dummy annual field shapefiles, which you can load into the processing application.</p>
+<p><code>CropRotationViz::dummy_filed_generator(output_dir = "path/to/your/dir")</code></p>
+</div>
 <div class="section level4">
 <h4 id="processing">Processing<a class="anchor" aria-label="anchor" href="#processing"></a>
 </h4>
@@ -192,13 +216,17 @@
 <li>
 <strong>Launch the Processing Application</strong>
 <ul>
-<li>Run <code><a href="reference/run_sequencer_app.html">CropRotationViz::run_sequencer_app()</a></code>
+<li>Run <code><a href="reference/run_processing_app.html">CropRotationViz::run_processing_app()</a></code>
 </li>
-<li>or add already an output_dir like <code>CropRotationViz::run_sequencer_app(output_dir = "path/to/dir")</code>
+<li>or add already an output_dir like <code>CropRotationViz::run_processing_app(output_dir = "path/to/dir")</code>
 </li>
 <li>if all polygon files share a common column explaining the crops use <code>common_column = "your_column"</code>
 </li>
 <li>if you don’t want to input the years mannually add a start year <code>start_year = 2000</code>
+</li>
+<li>if you don’t need a preview of your intersection as Sankey chart (.png) set <code>preview = F</code>
+</li>
+<li>if you don’t need a vector file of your intersected fields set <code>vector_file = F</code>
 </li>
 <li>The application will open your default web browser</li>
 </ul>
@@ -213,15 +241,21 @@
 </ul>
 </li>
 <li>
-<strong>Process Data</strong>
+<strong>Select Settings</strong>
 <ul>
 <li>Select processing options:
 <ul>
 <li>NC codes or crop names and years (if you didn’t provide it)</li>
 <li>Complete or fast intersection</li>
-<li>Aggregation preferences</li>
+<li>Select if you want to enable a fast visualization mode (run_fast_visualization())</li>
 </ul>
 </li>
+<li>Customize the crop class aggregation (optional)</li>
+</ul>
+</li>
+<li>
+<strong>Process Data</strong>
+<ul>
 <li>Choose output directory (if you didn’t provide it in the start function) and format</li>
 <li>Click “Process Files” to start analysis</li>
 </ul>
@@ -235,11 +269,40 @@
 <li>
 <strong>Launch the Visualization Application</strong>
 <ul>
-<li>Run <code>CropRotationViz::run_visualization_app()</code>
+<li>Run <code><a href="reference/run_visualization_app.html">CropRotationViz::run_visualization_app()</a></code>
 </li>
 <li>or add alrady the input_dir with the output from the processing application like <code>CropRotationViz::run_visualization_app(input_dir = "path/to/dir")</code>
 </li>
-<li>he application will open your default web browser</li>
+<li>the application will open your default web browser</li>
+</ul>
+</li>
+<li>
+<strong>Load Data</strong>
+<ul>
+<li>Click “Browser” or drag and drop the .RData File from the processing output</li>
+</ul>
+</li>
+<li>
+<strong>View Results</strong>
+<ul>
+<li>Examine the interactive charts</li>
+<li>Review processed data statistics</li>
+</ul>
+</li>
+</ol>
+</div>
+<div class="section level4">
+<h4 id="fast-visualization">Fast Visualization<a class="anchor" aria-label="anchor" href="#fast-visualization"></a>
+</h4>
+<ol style="list-style-type: decimal">
+<li>
+<strong>Launch the Visualization Application</strong>
+<ul>
+<li>Run <code>CropRotationViz::run_fast_vizualisation_app()</code>
+</li>
+<li>or add alrady the input_dir with the output from the processing application like <code>CropRotationViz::run_fast_vizualisation_app(input_dir = "path/to/dir")</code>
+</li>
+<li>the application will open your default web browser</li>
 </ul>
 </li>
 <li>
@@ -266,6 +329,7 @@
 <li>Spatial files containing field boundaries</li>
 <li>Crop type information (NC codes or crop names)</li>
 <li>Minimum of 2 years of data</li>
+<li>Valid geometries</li>
 <li>Supported formats: SHP, GeoJSON, FlatGeobuf, GeoPackage, SQLite</li>
 </ul>
 <div class="section level3">
@@ -310,12 +374,16 @@
 </div>
 </div>
 <div class="section level2">
-<h2 id="example-data">Example Data<a class="anchor" aria-label="anchor" href="#example-data"></a>
+<h2 id="test-data">Test Data<a class="anchor" aria-label="anchor" href="#test-data"></a>
 </h2>
-<p>The package includes example data that can be accessed:</p>
+<p>The package includes a function for creating random test data:</p>
 <div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Load example data</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/utils/data.html" class="external-link">data</a></span><span class="op">(</span><span class="st">"Input_App_data"</span>, package <span class="op">=</span> <span class="st">"CropRotationViz"</span><span class="op">)</span></span></code></pre></div>
+<code class="sourceCode R"><span><span class="co"># create 100 test polygons from 2020-2023</span></span>
+<span><span class="fu">CropRotationViz</span><span class="fu">::</span><span class="fu"><a href="reference/dummy_field_creator.html">dummy_field_creator</a></span><span class="op">(</span></span>
+<span>  output_dir <span class="op">=</span> <span class="st">"path/to/output"</span>,</span>
+<span>  field_count <span class="op">=</span> <span class="fl">100</span>,</span>
+<span>  years <span class="op">=</span> <span class="fl">2020</span><span class="op">:</span><span class="fl">2023</span></span>
+<span><span class="op">)</span></span></code></pre></div>
 </div>
 <div class="section level2">
 <h2 id="dependencies">Dependencies<a class="anchor" aria-label="anchor" href="#dependencies"></a>
@@ -359,6 +427,42 @@
 <p>All dependencies will be automatically installed when installing CropRotationViz.</p>
 </div>
 <div class="section level2">
+<h2 id="background">Background<a class="anchor" aria-label="anchor" href="#background"></a>
+</h2>
+<p>The core functionality of the processing module centers around field intersection across multiple years of data. The system supports two intersection modes to accommodate different use cases:</p>
+<p>Complete Intersection (Default): Includes all fields that appear in at least one year, with NA values populated for years where a field is absent Fast Intersection: Only includes fields that are consistently present across all years</p>
+<div class="section level3">
+<h3 id="how-it-works">How It Works<a class="anchor" aria-label="anchor" href="#how-it-works"></a>
+</h3>
+<ul>
+<li>
+<strong>Complete Intersection Mode</strong>
+<ul>
+<li>Identifies all unique fields across all available years Maintains fields even if they only appear in a subset of years Automatically fills missing data with NA values Preserves data completeness at the cost of additional processing time</li>
+</ul>
+</li>
+<li>
+<strong>Fast Intersection Mode</strong>
+<ul>
+<li>Only retains fields that appear consistently across all years Reduces processing overhead Results in a smaller, more consistent dataset Activated by setting <code>intersection_type = "Fast"</code>
+</li>
+</ul>
+</li>
+</ul>
+</div>
+<div class="section level3">
+<h3 id="example">Example<a class="anchor" aria-label="anchor" href="#example"></a>
+</h3>
+<p>Consider a dataset spanning two years with varying fields:</p>
+<div align="center">
+<p><img src="images/Flow_chart.png" alt="Descriptive Alt Text" width="100%"></p>
+</div>
+<div align="center">
+<p><img src="images/intersection.png" alt="Descriptive Alt Text" width="100%"></p>
+</div>
+</div>
+</div>
+<div class="section level2">
 <h2 id="contributing">Contributing<a class="anchor" aria-label="anchor" href="#contributing"></a>
 </h2>
 <p>Contributions are welcome! Please feel free to submit a Pull Request. For major changes, please open an issue first to discuss what you would like to change.</p>
@@ -386,14 +490,14 @@
 <span id="cb4-4"><a href="#cb4-4" tabindex="-1"></a><span class="co">  year = {2024},</span></span>
 <span id="cb4-5"><a href="#cb4-5" tabindex="-1"></a><span class="co">  publisher = {GitHub},</span></span>
 <span id="cb4-6"><a href="#cb4-6" tabindex="-1"></a><span class="co">  journal = {GitHub repository},</span></span>
-<span id="cb4-7"><a href="#cb4-7" tabindex="-1"></a><span class="co">  url = {https://github.com/franzschulze/CropRotationViz}</span></span>
+<span id="cb4-7"><a href="#cb4-7" tabindex="-1"></a><span class="co">  url = {https://github.com/franz-geoeco/CropRotationViz}</span></span>
 <span id="cb4-8"><a href="#cb4-8" tabindex="-1"></a><span class="co">}</span></span></code></pre></div>
 </div>
 <div class="section level2">
 <h2 id="contact">Contact<a class="anchor" aria-label="anchor" href="#contact"></a>
 </h2>
 <p>Franz Schulze - <a href="mailto:franz.schulze@geo.uni-halle.de" class="email">franz.schulze@geo.uni-halle.de</a></p>
-<p>Project Link: <a href="https://github.com/franzschulze/CropRotationViz" class="external-link">https://github.com/franzschulze/CropRotationViz</a></p>
+<p>Project Link: <a href="https://github.com/franz-geoeco/CropRotationViz" class="external-link">https://github.com/franz-geoeco/CropRotationViz</a></p>
 </div>
 <div class="section level2">
 <h2 id="acknowledgments">Acknowledgments<a class="anchor" aria-label="anchor" href="#acknowledgments"></a>
@@ -411,8 +515,8 @@
     <div class="links">
 <h2 data-toc-skip>Links</h2>
 <ul class="list-unstyled">
-<li><a href="https://github.com/franzschulze/CropRotationViz/" class="external-link">Browse source code</a></li>
-<li><a href="https://github.com/franzschulze/CropRotationViz/issues" class="external-link">Report a bug</a></li>
+<li><a href="https://github.com/franz-geoeco/CropRotationViz/" class="external-link">Browse source code</a></li>
+<li><a href="https://github.com/franz-geoeco/CropRotationViz/issues" class="external-link">Report a bug</a></li>
 </ul>
 </div>
 
@@ -443,7 +547,9 @@
 <div class="dev-status">
 <h2 data-toc-skip>Dev status</h2>
 <ul class="list-unstyled">
-<li><a href="https://github.com/franzschulze/CropRotationViz/actions" class="external-link"><img src="https://github.com/franzschulze/CropRotationViz/workflows/R-CMD-check/badge.svg" alt="R-CMD-check"></a></li>
+<li><a href="https://github.com/franz-geoeco/CropRotationViz/actions/workflows/R-CMD-check.yaml" class="external-link"><img src="https://github.com/franz-geoeco/CropRotationViz/actions/workflows/R-CMD-check.yaml/badge.svg" alt="R-check-dev"></a></li>
+<li><a href="https://codecov.io/gh/franz-geoeco/CropRotationViz" class="external-link"><img src="https://codecov.io/gh/franz-geoeco/repo/branch/main/graph/badge.svg" alt="codecov"></a></li>
+<li><a href="https://opensource.org/licenses/MIT" class="external-link"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a></li>
 </ul>
 </div>
 
@@ -458,7 +564,7 @@
 
 <div class="pkgdown">
   <p></p>
-<p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.1.0.</p>
+<p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.1.1.</p>
 </div>
 
       </footer>
