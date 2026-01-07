@@ -2,21 +2,27 @@
 
 # Create test data
 create_test_rotation_data <- function() {
-  data.frame(
+  df <- data.frame(
+    id = 1:5,
+    freq = c(100, 50, 150, 30, 200),
     Area_km2 = c(10.5, 5.2, 15.8, 3.1, 20.0),
     Name_2020 = c("Wheat", "Corn", "Wheat", "Barley", "Corn"),
     Name_2021 = c("Corn", "Wheat", "Barley", "Wheat", "Corn"),
     Name_2022 = c("Barley", "Barley", "Corn", "Corn", "Wheat"),
     stringsAsFactors = FALSE
   )
+  # Add rotation column (concatenation of crops across years)
+  df$rotation <- paste(df$Name_2020, df$Name_2021, df$Name_2022, sep = "-")
+  df
 }
 
 create_test_distribution <- function() {
   data.frame(
-    crop = c("Wheat", "Corn", "Barley"),
-    area_2020 = c(100, 80, 60),
-    area_2021 = c(90, 85, 65),
-    area_2022 = c(95, 90, 70),
+    # area in square meters (function divides by 1e6 to get km²)
+    area = c(10.5 * 1e6, 5.2 * 1e6, 15.8 * 1e6, 3.1 * 1e6, 20.0 * 1e6),
+    Name_2020 = c("Wheat", "Corn", "Wheat", "Barley", "Corn"),
+    Name_2021 = c("Corn", "Wheat", "Barley", "Wheat", "Corn"),
+    Name_2022 = c("Barley", "Barley", "Corn", "Corn", "Wheat"),
     stringsAsFactors = FALSE
   )
 }
@@ -171,8 +177,9 @@ test_that("transform_rotation_summary type='specific' filters correctly", {
 
 # Tests for process_specific_transitions
 test_that("process_specific_transitions analyzes crop transitions", {
-  # Create test data with Aggregated columns
+  # Create test data with Aggregated columns and freq
   data <- data.frame(
+    freq = c(100, 150, 80, 120),
     Aggregated_2020 = c("Wheat", "Corn", "Barley", "Wheat"),
     Aggregated_2021 = c("Corn", "Wheat", "Wheat", "Barley"),
     Aggregated_2022 = c("Barley", "Barley", "Corn", "Corn"),
@@ -192,6 +199,7 @@ test_that("process_specific_transitions analyzes crop transitions", {
 
 test_that("process_specific_transitions distinguishes before/after transitions", {
   data <- data.frame(
+    freq = c(100, 150, 80),
     Aggregated_2020 = c("Wheat", "Corn", "Barley"),
     Aggregated_2021 = c("Corn", "Wheat", "Wheat"),
     Aggregated_2022 = c("Barley", "Barley", "Corn"),
@@ -207,6 +215,7 @@ test_that("process_specific_transitions distinguishes before/after transitions",
 
 test_that("process_specific_transitions calculates percentages", {
   data <- data.frame(
+    freq = rep(10, 100),
     Aggregated_2020 = rep("Corn", 100),
     Aggregated_2021 = rep("Wheat", 100),
     Aggregated_2022 = rep("Barley", 100),
@@ -222,6 +231,7 @@ test_that("process_specific_transitions calculates percentages", {
 
 test_that("process_specific_transitions handles crops with no transitions", {
   data <- data.frame(
+    freq = c(50, 60, 70),
     Aggregated_2020 = c("Corn", "Corn", "Corn"),
     Aggregated_2021 = c("Barley", "Barley", "Barley"),
     Aggregated_2022 = c("Corn", "Corn", "Corn"),

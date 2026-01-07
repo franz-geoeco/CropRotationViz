@@ -2,30 +2,41 @@
 
 # Create test data for diversity mapping
 create_test_diversity_data <- function() {
-  coords_list <- list(
-    list(rbind(c(0,0), c(1,0), c(1,1), c(0,1), c(0,0))),
-    list(rbind(c(1,0), c(2,0), c(2,1), c(1,1), c(1,0))),
-    list(rbind(c(2,0), c(3,0), c(3,1), c(2,1), c(2,0)))
-  )
+  # Create 12 fields - 6 per district with varied diversity patterns
+  coords_list <- lapply(0:11, function(i) {
+    list(rbind(c(i,0), c(i+1,0), c(i+1,1), c(i,1), c(i,0)))
+  })
 
   polys <- lapply(coords_list, sf::st_polygon)
 
   sf::st_sf(
-    Aggregated_2020 = c("Wheat", "Corn", "Wheat"),
-    Aggregated_2021 = c("Corn", "Wheat", "Barley"),
-    Aggregated_2022 = c("Barley", "Barley", "Corn"),
-    geometry = sf::st_sfc(polys[[1]], polys[[2]], polys[[3]]),
+    District = c(rep("District1", 6), rep("District2", 6)),
+    area = c(1.0, 1.5, 2.0, 1.8, 2.2, 1.3, 0.8, 1.2, 2.5, 1.9, 1.1, 2.3),
+    # District1: High diversity - many different crops and transitions
+    # District2: Low diversity - same crops repeated, fewer transitions
+    Aggregated_2020 = c("Wheat", "Corn", "Barley", "Rapeseed", "Soybean", "Wheat",
+                        "Wheat", "Wheat", "Corn", "Corn", "Wheat", "Corn"),
+    Aggregated_2021 = c("Corn", "Barley", "Rapeseed", "Soybean", "Wheat", "Corn",
+                        "Wheat", "Corn", "Wheat", "Corn", "Wheat", "Wheat"),
+    Aggregated_2022 = c("Barley", "Rapeseed", "Soybean", "Wheat", "Corn", "Barley",
+                        "Wheat", "Wheat", "Corn", "Wheat", "Corn", "Wheat"),
+    geometry = sf::st_sfc(polys[[1]], polys[[2]], polys[[3]], polys[[4]], polys[[5]], polys[[6]],
+                          polys[[7]], polys[[8]], polys[[9]], polys[[10]], polys[[11]], polys[[12]]),
     crs = 4326
   )
 }
 
 create_test_districts <- function() {
-  coords <- list(rbind(c(0,0), c(3,0), c(3,1), c(0,1), c(0,0)))
-  poly <- sf::st_polygon(coords)
+  coords_list <- list(
+    list(rbind(c(0,0), c(6,0), c(6,1), c(0,1), c(0,0))),
+    list(rbind(c(6,0), c(12,0), c(12,1), c(6,1), c(6,0)))
+  )
+
+  polys <- lapply(coords_list, sf::st_polygon)
 
   sf::st_sf(
-    NAME = "District1",
-    geometry = sf::st_sfc(poly),
+    NAME = c("District1", "District2"),
+    geometry = sf::st_sfc(polys[[1]], polys[[2]]),
     crs = 4326
   )
 }
@@ -46,23 +57,26 @@ test_that("diversity_mapping calculates crop diversity metrics", {
 
   # Check that result is a list
   expect_type(result, "list")
+  expect_equal(length(result), 3)
 
-  # Check for District_div_data
-  expect_true("District_div_data" %in% names(result))
-
-  # Check that District_div_data has required components
-  if (!is.null(result$District_div_data)) {
-    expect_true("BISCALE" %in% names(result$District_div_data))
-  }
+  # Check that first element (District_div_data) exists and has required components
+  expect_false(is.null(result[[1]]))
+  expect_true("BISCALE" %in% names(result[[1]]))
+  expect_true("color_pal" %in% names(result[[1]]))
+  expect_true("labels1" %in% names(result[[1]]))
 })
 
 test_that("diversity_mapping handles EZG (river basins)", {
   skip_on_cran()
 
   input <- create_test_diversity_data()
+  # Add EZG column to input data
+  input$EZG <- rep(c("Basin1", "Basin2"), each = 6)
+
   districts <- create_test_districts()
   ezgs <- create_test_districts()  # Use same geometry for testing
-  names(ezgs)[1] <- "Basin1"
+  names(ezgs)[1] <- "EZG"  # Column name must be "EZG"
+  ezgs$EZG <- c("Basin1", "Basin2")
 
   agg_cols <- c("Aggregated_2020", "Aggregated_2021", "Aggregated_2022")
 
@@ -73,8 +87,9 @@ test_that("diversity_mapping handles EZG (river basins)", {
     EZGs = ezgs
   )
 
-  # Check for EZG_div_data
-  expect_true("EZG_div_data" %in% names(result))
+  # Check for EZG_div_data (second element in returned list)
+  expect_false(is.null(result[[2]]))
+  expect_true("BISCALE" %in% names(result[[2]]))
 })
 
 test_that("diversity_mapping handles AOI (areas of interest)", {
@@ -84,7 +99,14 @@ test_that("diversity_mapping handles AOI (areas of interest)", {
   districts <- create_test_districts()
   aois <- create_test_districts()  # Use same geometry for testing
 
+  # Set up AOI column names correctly
+  names(aois)[1] <- "AOI"  # Column name must be "AOI"
+  aois$AOI <- c("AOI1", "AOI2")
+
   agg_cols <- c("Aggregated_2020", "Aggregated_2021", "Aggregated_2022")
+
+  # Need to add AOI column to input data for AOI processing
+  input$AOI <- rep(c("AOI1", "AOI2"), each = 6)
 
   result <- diversity_mapping(
     input = input,
@@ -93,8 +115,9 @@ test_that("diversity_mapping handles AOI (areas of interest)", {
     AOIs = aois
   )
 
-  # Check for AOI_div_data
-  expect_true("AOI_div_data" %in% names(result))
+  # Check for AOI_div_data (third element in returned list)
+  expect_false(is.null(result[[3]]))
+  expect_true("BISCALE" %in% names(result[[3]]))
 })
 
 test_that("diversity_mapping returns list with correct structure", {
@@ -127,19 +150,25 @@ test_that("diversity_mapper creates leaflet map object", {
   poly <- sf::st_polygon(coords)
 
   biscale_data <- sf::st_sf(
-    NAME = "District1",
-    unique_crops = 5,
-    transitions = 3,
+    District = "District1",
+    mean_unique_weight = 2.5,
+    mean_transi_weight = 1.8,
     bi_class = "2-2",
     geometry = sf::st_sfc(poly),
     crs = 4326
   )
 
-  data <- list(
-    BISCALE = biscale_data,
-    color_pal = c("2-2" = "#FF0000"),
-    labels1 = "Test label"
+  color_pal <- leaflet::colorFactor(
+    palette = c("2-2" = "#FF0000"),
+    domain = "2-2"
   )
+
+  labels1 <- data.frame(
+    bi_x = c("Low", "Medium", "High"),
+    bi_y = c("Low", "Medium", "High")
+  )
+
+  data <- list(biscale_data, color_pal, labels1)
 
   result <- diversity_mapper(
     data = data,
@@ -158,19 +187,25 @@ test_that("diversity_mapper accepts different types", {
   poly <- sf::st_polygon(coords)
 
   biscale_data <- sf::st_sf(
-    NAME = "Basin1",
-    unique_crops = 5,
-    transitions = 3,
+    EZG = "Basin1",
+    mean_unique_weight = 2.5,
+    mean_transi_weight = 1.8,
     bi_class = "2-2",
     geometry = sf::st_sfc(poly),
     crs = 4326
   )
 
-  data <- list(
-    BISCALE = biscale_data,
-    color_pal = c("2-2" = "#FF0000"),
-    labels1 = "Test label"
+  color_pal <- leaflet::colorFactor(
+    palette = c("2-2" = "#FF0000"),
+    domain = "2-2"
   )
+
+  labels1 <- data.frame(
+    bi_x = c("Low", "Medium", "High"),
+    bi_y = c("Low", "Medium", "High")
+  )
+
+  data <- list(biscale_data, color_pal, labels1)
 
   # Test with "River Basin" type
   result <- diversity_mapper(
@@ -191,20 +226,26 @@ test_that("diversity_soil_plotter creates plotly boxplot", {
   poly <- sf::st_polygon(coords)
 
   biscale_data <- sf::st_sf(
-    NAME = "District1",
-    unique_crops = 5,
-    transitions = 3,
+    District = "District1",
+    mean_unique_weight = 2.5,
+    mean_transi_weight = 1.8,
     bi_class = "2-2",
     BS_mean = 75.5,
     geometry = sf::st_sfc(poly),
     crs = 4326
   )
 
-  data <- list(
-    BISCALE = biscale_data,
-    color_pal = c("2-2" = "#FF0000"),
-    labels1 = "Test label"
+  color_pal <- leaflet::colorFactor(
+    palette = c("2-2" = "#FF0000"),
+    domain = "2-2"
   )
+
+  labels1 <- data.frame(
+    bi_x = c("Low", "Medium", "High"),
+    bi_y = c("Low", "Medium", "High")
+  )
+
+  data <- list(biscale_data, color_pal, labels1)
 
   result <- diversity_soil_plotter(
     data = data,
@@ -223,20 +264,26 @@ test_that("diversity_soil_plotter handles different types", {
   poly <- sf::st_polygon(coords)
 
   biscale_data <- sf::st_sf(
-    NAME = "Basin1",
-    unique_crops = 5,
-    transitions = 3,
+    EZG = "Basin1",
+    mean_unique_weight = 3.2,
+    mean_transi_weight = 2.1,
     bi_class = "3-1",
     BS_mean = 80.2,
     geometry = sf::st_sfc(poly),
     crs = 4326
   )
 
-  data <- list(
-    BISCALE = biscale_data,
-    color_pal = c("3-1" = "#00FF00"),
-    labels1 = "Test label"
+  color_pal <- leaflet::colorFactor(
+    palette = c("3-1" = "#00FF00"),
+    domain = "3-1"
   )
+
+  labels1 <- data.frame(
+    bi_x = c("Low", "Medium", "High"),
+    bi_y = c("Low", "Medium", "High")
+  )
+
+  data <- list(biscale_data, color_pal, labels1)
 
   result <- diversity_soil_plotter(
     data = data,
@@ -258,20 +305,26 @@ test_that("diversity_soil_plotter handles multiple bi_class categories", {
   polys <- lapply(coords_list, sf::st_polygon)
 
   biscale_data <- sf::st_sf(
-    NAME = c("District1", "District2"),
-    unique_crops = c(5, 7),
-    transitions = c(3, 4),
+    District = c("District1", "District2"),
+    mean_unique_weight = c(2.5, 3.5),
+    mean_transi_weight = c(1.8, 2.4),
     bi_class = c("2-2", "3-3"),
     BS_mean = c(75.5, 85.2),
     geometry = sf::st_sfc(polys[[1]], polys[[2]]),
     crs = 4326
   )
 
-  data <- list(
-    BISCALE = biscale_data,
-    color_pal = c("2-2" = "#FF0000", "3-3" = "#00FF00"),
-    labels1 = "Test label"
+  color_pal <- leaflet::colorFactor(
+    palette = c("2-2" = "#FF0000", "3-3" = "#00FF00"),
+    domain = c("2-2", "3-3")
   )
+
+  labels1 <- data.frame(
+    bi_x = c("Low", "Medium", "High"),
+    bi_y = c("Low", "Medium", "High")
+  )
+
+  data <- list(biscale_data, color_pal, labels1)
 
   result <- diversity_soil_plotter(
     data = data,

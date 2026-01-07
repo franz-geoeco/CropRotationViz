@@ -26,17 +26,38 @@
 #' @keywords internal
 parse_crop_translation <- function(file_path) {
   tryCatch({
-    # Try to read the file
-    # Support tab, comma, or semicolon separated files
+    # Read raw lines to detect separator
+    lines <- readLines(file_path, warn = FALSE)
+    if(length(lines) < 2) {
+      warning("Translation file must have at least a header and one data row")
+      return(NULL)
+    }
+
+    # Detect separator (tab, semicolon, or comma)
+    header <- lines[1]
+    separator <- if(grepl("\t", header)) {
+      "\t"
+    } else if(grepl(";", header)) {
+      ";"
+    } else if(grepl(",", header)) {
+      ","
+    } else {
+      "\t"  # default to tab
+    }
+
+    # Read the file with proper settings for multi-word values
     translation_data <- read.table(
       file_path,
       header = TRUE,
-      sep = "\t",
+      sep = separator,
       stringsAsFactors = FALSE,
       fill = TRUE,
       na.strings = c("", "NA"),
       strip.white = TRUE,
-      comment.char = ""
+      comment.char = "",
+      quote = "\"'",           # Handle quoted values
+      blank.lines.skip = TRUE, # Skip empty lines
+      encoding = "UTF-8"       # Handle special characters
     )
 
     # Check if we have at least 2 columns
@@ -53,6 +74,9 @@ parse_crop_translation <- function(file_path) {
     valid_rows <- !is.na(codes) & !is.na(names_col) & codes != "" & names_col != ""
     codes <- codes[valid_rows]
     names_col <- names_col[valid_rows]
+
+    # Trim whitespace from crop names
+    names_col <- trimws(names_col)
 
     # Create named vector (code -> name mapping)
     translation_table <- setNames(as.character(names_col), as.character(codes))
@@ -676,7 +700,9 @@ intersect_fields <- function(fields_list, max_area = 20000000 * 1e6, n_cores = 4
   }
   
   message("\nChecking for non-intersecting polygons...")
-  incProgress(0.05, detail = "Checking for non-intersecting polygons...")
+  if (!is.null(shiny::getDefaultReactiveDomain())) {
+    incProgress(0.05, detail = "Checking for non-intersecting polygons...")
+  }
   # bind the intersected with the non intersecting polygons
   if (!is.null(intersected)) {
     non_intersecting <- intersecting_check_spatial(fields_list, intersected, n_cores = n_cores, 
