@@ -55,21 +55,29 @@ The package consists of three main components:
 
 - **Field Data Processing Tool**
   - Support for multiple spatial file formats (SHP, GeoJSON, FlatGeobuf, GeoPackage, SQLite)
+  - **Raster file support** (.tif, .tiff) with custom crop translation files
+  - **Batch upload feature** - Select and load multiple files at once (automatically sorted by filename)
+  - Individual file selection - Choose files one by one for each year
+  - **Crop translation file support** - Upload custom CSV/TSV files to translate raster values to crop names
   - Automated field intersection analysis
   - Spatial data validation and cleaning
   - Batch processing of multiple years of data
 
 - **Visualization Tools**
-  - Interactive map interface with field boundaries
-  - Crop rotation sequence visualization
+  - **Interactive map interface** with field boundaries and pie charts
+  - **Alluvial/Sankey diagrams** for visualizing crop rotation flows and transitions
+  - **Side-by-side comparison mode** - Compare different districts or river catchments
+  - **Mini pie charts on maps** - Display crop distribution directly on the map
+  - **Temporal analysis charts** - Track crop area changes over time
   - Custom color schemes for different crop types
-  - Sankey diagrams for rotation flows
+  - Interactive data tables with filtering and sorting
 
 - **Data Analysis**
   - Crop sequence pattern analysis
   - Area calculations and statistics
   - Temporal change analysis
   - Support for different coding systems (NC codes and crop names)
+  - Raster data analysis with custom crop code mappings
 
 ## Video
 [![CropRotationViz Tutorial](https://img.youtube.com/vi/Sfk5lLFhBio/0.jpg)](https://www.youtube.com/watch?v=Sfk5lLFhBio)
@@ -91,7 +99,7 @@ For users who don't have R installed or prefer a ready-to-use application:
 
 For R users who want to integrate CropRotationViz into their existing R workflow:
 
-**Prerequisites**: R (version 4.0 or higher recommended)
+**Prerequisites**: R (version 4.3 or higher recommended)
 
 ```r
 # Install remotes if you haven't already
@@ -142,46 +150,75 @@ If you do not have field data at hand or just want to test the functionality of 
    - The application will open your default web browser
 
 2. **Load Data**
-   - Click "Choose File" for each year of data
-   - Select the appropriate spatial file (SHP, GeoJSON, FlatGeobuf, GeoPackage, or SQLite)
+
+   **Option A: Batch Upload (Recommended)**
+   - Click "Batch Upload Multiple Files" button
+   - Select multiple files at once (files are automatically sorted by filename)
+   - Supported formats: .shp, .geojson, .fgb, .gpkg, .tiff, .tif, .sqlite
+   - Files will be automatically assigned to years based on the start year
+
+   **Option B: Individual File Selection**
+   - Click "Choose Annual Field Polygon File" for each year
+   - Select the appropriate spatial file for each year individually
    - Choose the column containing crop codes or names
    - Assign the correct year to each file
-3. **Select Settings**
+
+3. **Raster File Support (Optional)**
+   - If you upload raster files (.tif, .tiff), you can optionally upload a **crop translation file**
+   - The translation file maps raster pixel values to crop names
+   - **Supported formats**: CSV, TSV, or TXT (tab-separated, comma-separated, or semicolon-separated)
+   - **Required structure**: Two columns with headers
+     ```
+     class    crop_type
+     11       winter wheat
+     81       clover/alfalfa
+     200      corn
+     ```
+   - The translation will be applied automatically to all loaded raster files
+
+4. **Select Settings**
    - Select processing options:
      - NC codes or crop names and years (if you didn't provide it)
      - Complete or fast intersection
      - Select if you want to enable a fast visualization mode (run_fast_visualization())
    - Customize the crop class aggregation (optional)
 
-3. **Process Data**
+5. **Process Data**
    - Choose output directory (if you didn't provide it in the start function) and format
    - Click "Process Files" to start analysis
 
 #### Visualization
 1. **Launch the Visualization Application**
    - Run `CropRotationViz::run_visualization_app()`
-   - or add alrady the input_dir with the output from the processing application like `CropRotationViz::run_visualization_app(input_dir = "path/to/dir")`
+   - or add already the input_dir with the output from the processing application like `CropRotationViz::run_visualization_app(input_dir = "path/to/dir")`
    - the application will open your default web browser
 
 2. **Load Data**
    - Click "Browser" or drag and drop the .RData File from the processing output
-     
-3. **View Results**
-   - Examine the interactive charts
-   - Review processed data statistics
 
-#### Fast Visualization
-1. **Launch the Visualization Application**
+3. **View Results**
+   - **Alluvial/Sankey Diagrams**: Visualize crop rotation flows and transitions between years
+   - **Interactive Data Tables**: Filter, sort, and explore crop sequence data
+   - **Temporal Analysis**: Track changes in crop areas over time
+   - **Crop-Specific Analysis**: Focus on specific crops and their rotation patterns
+   - **Custom Color Schemes**: Customize colors for different crop types
+   - **Summary Statistics**: Review area calculations and sequence patterns
+
+#### Fast Visualization (Side-by-Side Comparison)
+1. **Launch the Fast Visualization Application**
    - Run `CropRotationViz::run_fast_vizualisation_app()`
-   - or add alrady the input_dir with the output from the processing application like `CropRotationViz::run_fast_vizualisation_app(input_dir = "path/to/dir")`
+   - or add already the input_dir with the output from the processing application like `CropRotationViz::run_fast_vizualisation_app(input_dir = "path/to/dir")`
    - the application will open your default web browser
 
 2. **Load Data**
    - Click "Browser" or drag and drop the .RData File from the processing output
-     
+
 3. **View Results**
-   - Examine the interactive map
-   - Review processed data statistics
+   - **Interactive Map**: Explore field boundaries with spatial navigation
+   - **Side-by-Side Comparison**: Compare different districts or river catchments
+   - **Mini Pie Charts**: View crop distribution directly on the map using interactive pie charts
+   - **Dynamic Selection**: Click on regions to load and compare visualizations
+   - **Spatial Statistics**: Review area-based crop distribution data
      
 ## Data Requirements
 
@@ -189,10 +226,14 @@ If you do not have field data at hand or just want to test the functionality of 
 - Crop type information (NC codes or crop names)
 - Minimum of 2 years of data
 - Valid geometries
-- Supported formats: SHP, GeoJSON, FlatGeobuf, GeoPackage, SQLite
+- **Supported vector formats**: SHP, GeoJSON, FlatGeobuf, GeoPackage, SQLite
+- **Supported raster formats**: TIFF (.tif, .tiff)
+- **Optional**: Crop translation file (CSV/TSV) for raster data
 
 
 ### Input Data Structure
+
+#### Vector Data
 Your input data should contain at minimum the following attributes for each field:
 
 | YEAR | CROP_CODE | CROP_NAME  | geometry |
@@ -207,6 +248,27 @@ Where:
 - CROP_CODE: Numerical code for the crop type (e.g., NC codes)
 - CROP_NAME: Text name of the crop
 - geometry: Spatial geometry of the field (POLYGON or MULTIPOLYGON)
+
+#### Raster Data
+For raster files (.tif, .tiff):
+- Pixel values should represent crop type codes
+- Optionally provide a crop translation file to map pixel values to crop names
+
+#### Crop Translation File (for Raster Data)
+Format: CSV, TSV, or TXT file with two columns:
+
+| class | crop_type |
+|-------|-----------|
+| 11 | winter wheat |
+| 81 | clover/alfalfa |
+| 200 | corn |
+| 500 | soybean |
+
+Where:
+- **class**: Numerical code matching the raster pixel values
+- **crop_type**: Descriptive name of the crop
+
+**Supported separators**: Tab, comma, or semicolon
 
 
 

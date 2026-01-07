@@ -277,12 +277,17 @@ processing_ui <- function(app_data, output_dir = NA, start_year = NA, vector_fil
 
         /* Make all shinyFiles buttons use consistent green color */
         .btn-default, .shinyFiles {
-            background-color: #5cb85c !important;
-            border-color: #4cae4c !important;
+            background-color: rgb(116, 150, 30) !important;
+            border-color: rgb(96, 130, 20) !important;
         }
         .btn-default:hover, .shinyFiles:hover {
-            background-color: #4cae4c !important;
-            border-color: #398439 !important;
+            background-color: rgb(96, 130, 20) !important;
+            border-color: rgb(76, 110, 10) !important;
+        }
+
+        /* Update status-success to match the same green */
+        .status-success {
+            background-color: rgb(116, 150, 30) !important;
         }
       "))
     ),
