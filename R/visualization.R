@@ -133,24 +133,24 @@ viz_ui <- function(input_dir = NA){
                            column(style = "margin-top: -30px; margin-bottom: 0px;", width = 4, h2("Crop Sequences")), 
                            column(5),
                            column(width = 2, style = "margin-top: 2vh;", tags$img(src = "www/GeoECO_MLU_LANG_2.png", height = "70px", width = "265px"))
-                           ),
-                           br(),
+                         ),
+                         br(),
                          fluidRow(
                            #-------------------------------------------------------------------------------
                            # Step 1: Settings
                            #-------------------------------------------------------------------------------
                            column(2,
-                                         numericRangeInput("Area_range_sec", "Sequence Area Range (km²):",
-                                                           min = 0, max = 4000,
-                                                           value = c(0, 1000))
+                                  numericRangeInput("Area_range_sec", "Sequence Area Range (km²):",
+                                                    min = 0, max = 4000,
+                                                    value = c(0, 1000))
                            ),
                            column(1, 
                                   bsButton("range-info",
-                                              label = "",
-                                              icon = icon("info"),
-                                              style = "default",
-                                              size = "extra-small"
-                                           ),
+                                           label = "",
+                                           icon = icon("info"),
+                                           style = "default",
+                                           size = "extra-small"
+                                  ),
                                   bsPopover(
                                     id = "range-info",
                                     title = "Sequence Size",
@@ -163,7 +163,7 @@ viz_ui <- function(input_dir = NA){
                                       delay = list(show = 0, hide = 0) 
                                     )
                                   ),
-                                  ),
+                           ),
                            column(2, 
                                   pickerInput(
                                     inputId = "Crops_sec", 
@@ -180,28 +180,28 @@ viz_ui <- function(input_dir = NA){
                                               label = "",
                                               icon = icon("info"),
                                               style = "default", size = "extra-small"),
-                                     bsPopover(
-                                        id = "crops-info",
-                                        title = "Crops Selection",
-                                        content = "Here you can include or exclude crops from charting if you want to highlight specific crops or disable to dominant wants.",
-                                        placement = "right",
-                                        trigger = "hover",
-                                        options = list(
-                                          container = 'body',
-                                          html = TRUE,
-                                          delay = list(show = 0, hide = 0) 
-                                        )
-                                      ),
+                                  bsPopover(
+                                    id = "crops-info",
+                                    title = "Crops Selection",
+                                    content = "Here you can include or exclude crops from charting if you want to highlight specific crops or disable to dominant wants.",
+                                    placement = "right",
+                                    trigger = "hover",
+                                    options = list(
+                                      container = 'body',
+                                      html = TRUE,
+                                      delay = list(show = 0, hide = 0) 
+                                    )
                                   ),
+                           ),
                            column(4, plotOutput("perc_plot", height = 80))
                          ),
                          fluidRow(
                            column(2),
                            column(2,
                                   actionButton("update_plot_sequence",
-                                             "Load Visualization",
-                                             class = "btn-primary btn-block",
-                                             icon = icon("sync"))
+                                               "Load Visualization",
+                                               class = "btn-primary btn-block",
+                                               icon = icon("sync"))
                            )
                          ),
                          br(),
@@ -222,8 +222,8 @@ viz_ui <- function(input_dir = NA){
                            ),
                            column(1,
                                   downloadButton("Save_sankey_plot", label = "Save Plot"
-                                                 )
                                   )
+                           )
                          ),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),
                          
                          # Horizontal line
@@ -240,21 +240,21 @@ viz_ui <- function(input_dir = NA){
                                               label = "",
                                               icon = icon("info"),
                                               style = "default", size = "extra-small"),
-                                     bsPopover(
-                                        id = "table-info",
-                                        title = "Table with the Largest Crop Sequence Patterns",
-                                        content = "Here you can see the largest crop sequence pattern in MWP in a 7 year sequence (or selected range). You can search, sort or expand the table as you like.",
-                                        placement = "left",
-                                        trigger = "hover",
-                                        options = list(
-                                          container = 'body',
-                                          html = TRUE,
-                                          delay = list(show = 0, hide = 0) 
-                                        )
-                                      )
+                                  bsPopover(
+                                    id = "table-info",
+                                    title = "Table with the Largest Crop Sequence Patterns",
+                                    content = "Here you can see the largest crop sequence pattern in MWP in a 7 year sequence (or selected range). You can search, sort or expand the table as you like.",
+                                    placement = "left",
+                                    trigger = "hover",
+                                    options = list(
+                                      container = 'body',
+                                      html = TRUE,
+                                      delay = list(show = 0, hide = 0) 
+                                    )
                                   )
+                           )
                          ),br(),
-            
+                         
                          fluidRow(
                            column(1),
                            column(10,
@@ -296,22 +296,22 @@ viz_ui <- function(input_dir = NA){
                                                            value = c(0, 1000))
                          ),
                          column(1, shinyBS::bsButton("range_spec-info",
-                                            label = "",
-                                            icon = icon("info"),
-                                            style = "default", size = "extra-small"),
+                                                     label = "",
+                                                     icon = icon("info"),
+                                                     style = "default", size = "extra-small"),
                                 shinyBS::bsPopover(
-                                      id = "range_spec-info",
-                                      title = "sequence Size",
-                                      content = "Here you can select the size of a full sequence to be displayed. Therfore a selection from 100-200 means that a full 7 year sequence has to be between 100 and 200 km².",
-                                      placement = "right",
-                                      trigger = "hover",
-                                      options = list(
-                                        container = 'body',
-                                        html = TRUE,
-                                        delay = list(show = 0, hide = 0) 
-                                      )
-                                    )
-                                ),
+                                  id = "range_spec-info",
+                                  title = "sequence Size",
+                                  content = "Here you can select the size of a full sequence to be displayed. Therfore a selection from 100-200 means that a full 7 year sequence has to be between 100 and 200 km².",
+                                  placement = "right",
+                                  trigger = "hover",
+                                  options = list(
+                                    container = 'body',
+                                    html = TRUE,
+                                    delay = list(show = 0, hide = 0) 
+                                  )
+                                )
+                         ),
                          column(2, 
                                 pickerInput(
                                   inputId = "Crop_spec", 
@@ -325,31 +325,31 @@ viz_ui <- function(input_dir = NA){
                                   ), multiple = F)
                          ),
                          column(1, shinyBS::bsButton("crops_spec-info",
-                                            label = "",
-                                            icon = icon("info"),
-                                            style = "default", size = "extra-small"),
+                                                     label = "",
+                                                     icon = icon("info"),
+                                                     style = "default", size = "extra-small"),
                                 shinyBS::bsPopover(
-                                      id = "crops_spec-info",
-                                      title = "Crop Selection",
-                                      content = "Here you can choose a crop for charting. The crop has to be in one of the seven years (in the sequence)",
-                                      placement = "right",
-                                      trigger = "hover",
-                                      options = list(
-                                        container = 'body',
-                                        html = TRUE,
-                                        delay = list(show = 0, hide = 0) 
-                                      )
-                                    )
-                                ),
+                                  id = "crops_spec-info",
+                                  title = "Crop Selection",
+                                  content = "Here you can choose a crop for charting. The crop has to be in one of the seven years (in the sequence)",
+                                  placement = "right",
+                                  trigger = "hover",
+                                  options = list(
+                                    container = 'body',
+                                    html = TRUE,
+                                    delay = list(show = 0, hide = 0) 
+                                  )
+                                )
+                         ),
                          column(4, plotOutput("perc_spec_plot", height = 80))
                          ),
                          fluidRow(
                            column(2),
                            column(2,
                                   actionButton("update_crop_specific",
-                                             "Load Visualization",
-                                             class = "btn-primary btn-block",
-                                             icon = icon("sync"))
+                                               "Load Visualization",
+                                               class = "btn-primary btn-block",
+                                               icon = icon("sync"))
                            )
                          ),
                          br(),
@@ -406,22 +406,22 @@ viz_ui <- function(input_dir = NA){
                            column(2,
                                   h4("Unique Sequences and Size")),
                            column(1, shinyBS::bsButton("table_spec-info",
-                                              label = "",
-                                              icon = icon("info"),
-                                              style = "default", size = "extra-small"),
+                                                       label = "",
+                                                       icon = icon("info"),
+                                                       style = "default", size = "extra-small"),
                                   shinyBS::bsPopover(
-                                        id = "table_spec-info",
-                                        title = "Table with the Largest Crop Sequence Patterns",
-                                        content = "Here you can see the largest crop sequence pattern in MWP in a 7 year sequence (or selected range). You can search, sort or expand the table as you like.",
-                                        placement = "left",
-                                        trigger = "hover",
-                                        options = list(
-                                          container = 'body',
-                                          html = TRUE,
-                                          delay = list(show = 0, hide = 0) 
-                                        )
-                                      )
+                                    id = "table_spec-info",
+                                    title = "Table with the Largest Crop Sequence Patterns",
+                                    content = "Here you can see the largest crop sequence pattern in MWP in a 7 year sequence (or selected range). You can search, sort or expand the table as you like.",
+                                    placement = "left",
+                                    trigger = "hover",
+                                    options = list(
+                                      container = 'body',
+                                      html = TRUE,
+                                      delay = list(show = 0, hide = 0) 
+                                    )
                                   )
+                           )
                            
                          ),
                          br(),
@@ -445,8 +445,8 @@ viz_ui <- function(input_dir = NA){
                                   shinycssloaders::withSpinner(
                                     plotlyOutput("sankey_plotly_specific")
                                   ), br(), br(), br(),br(), br()
-                                  ),
-                           )
+                           ),
+                         )
                          
                 ),
                 tabPanel("Plot Sequence per Area",
@@ -463,7 +463,7 @@ viz_ui <- function(input_dir = NA){
                                                  label = "Select",
                                                  selected = "District",
                                                  choices = c("District", "River Basin"))
-                                    )
+                             )
                            },
                            conditionalPanel(
                              condition = "input.district_or_ezg != 'River Basin'",
@@ -478,7 +478,7 @@ viz_ui <- function(input_dir = NA){
                                         size = 15,
                                         selectedTextFormat = "count > 3"
                                       ), multiple = F)
-                           )
+                             )
                            ),
                            conditionalPanel(
                              condition = "input.district_or_ezg == 'River Basin'",
@@ -512,31 +512,37 @@ viz_ui <- function(input_dir = NA){
                                       selectedTextFormat = "count > 3"
                                     ), multiple = TRUE)
                            ),
+                           column(2,
+                                  actionButton("update_plot_areas",
+                                               "Load Visualization",
+                                               width = '100%',
+                                               style = "color: #fff; background-color: rgb(0,86,157); border-color: rgb(0,86,157); margin-top: 25px")
+                           ),
                            conditionalPanel(
                              condition = "input.district_or_ezg != 'River Basin'",
-                             column(4, plotOutput("perc_district_plot", height = 80))
-                             ),
+                             column(2, plotOutput("perc_district_plot", height = 80))
+                           ),
                            conditionalPanel(
                              condition = "input.district_or_ezg == 'River Basin'",
-                             column(4, plotOutput("perc_basin_plot", height = 80))
+                             column(2, plotOutput("perc_basin_plot", height = 80))
                            )
                          ),
                          fluidRow(
                            conditionalPanel(
                              condition = "input.district_or_ezg != 'River Basin'",
-                              column(2,
-                                      shinycssloaders::withSpinner(
-                                        leafletOutput("leaflet_district")
-                                      )
-                              )
-                             ),
+                             column(2,
+                                    shinycssloaders::withSpinner(
+                                      leafletOutput("leaflet_district")
+                                    )
+                             )
+                           ),
                            conditionalPanel(
                              condition = "input.district_or_ezg != 'River Basin'",
-                              column(10,
-                                      shinycssloaders::withSpinner(
-                                        plotOutput("sankey_district")
-                                      )
-                              )
+                             column(10,
+                                    shinycssloaders::withSpinner(
+                                      plotOutput("sankey_district")
+                                    )
+                             )
                            ),
                            conditionalPanel(
                              condition = "input.district_or_ezg == 'River Basin'",
@@ -578,28 +584,28 @@ viz_ui <- function(input_dir = NA){
                          fluidRow(
                            column(3,
                                   sliderInput(
-                                   "year_select",
-                                   "Select Year",
-                                   min = 2000,
-                                   max = 2024,
-                                   value = 2008,
-                                   step = 1,
-                                   sep = "",
-                                   ticks = T
-                                 ),
-                                 conditionalPanel(
-                                   condition = "input.district_or_ezg != 'River Basin'",
-                                   shinycssloaders::withSpinner(
-                                     plotlyOutput("district_donut_plot")  # Adjust height as needed
-                                   )
-                                 ),
-                                 conditionalPanel(
-                                   condition = "input.district_or_ezg == 'River Basin'",
-                                   shinycssloaders::withSpinner(
-                                     plotlyOutput("basin_donut_plot")  # Adjust height as needed
-                                   )
-                                 )
-                                 ),
+                                    "year_select",
+                                    "Select Year",
+                                    min = 2000,
+                                    max = 2024,
+                                    value = 2008,
+                                    step = 1,
+                                    sep = "",
+                                    ticks = T
+                                  ),
+                                  conditionalPanel(
+                                    condition = "input.district_or_ezg != 'River Basin'",
+                                    shinycssloaders::withSpinner(
+                                      plotlyOutput("district_donut_plot")  # Adjust height as needed
+                                    )
+                                  ),
+                                  conditionalPanel(
+                                    condition = "input.district_or_ezg == 'River Basin'",
+                                    shinycssloaders::withSpinner(
+                                      plotlyOutput("basin_donut_plot")  # Adjust height as needed
+                                    )
+                                  )
+                           ),
                            br(), br(), br(), br(), br(),
                            conditionalPanel(
                              condition = "input.district_or_ezg != 'River Basin'",
@@ -650,7 +656,7 @@ viz_ui <- function(input_dir = NA){
                            
                   )
                 },
-
+                
                 # Rotation Ranking Tab
                 tabPanel("Rotation Ranking",
                          br(),
@@ -666,7 +672,7 @@ viz_ui <- function(input_dir = NA){
                            column(width = 3,
                                   wellPanel(
                                     h4("Analysis Parameters"),
-
+                                    
                                     sliderInput(
                                       "ranking_rotation_length",
                                       "Rotation Length (Years):",
@@ -675,36 +681,36 @@ viz_ui <- function(input_dir = NA){
                                       value = 3,
                                       step = 1
                                     ),
-
+                                    
                                     hr(),
-
+                                    
                                     h4("Year Range Selection"),
-
+                                    
                                     uiOutput("ranking_year_range_ui"),
-
+                                    
                                     hr(),
-
+                                    
                                     h4("Filter Options"),
-
+                                    
                                     uiOutput("ranking_area_filter_ui"),
-
+                                    
                                     uiOutput("ranking_crop_filter_ui"),
-
+                                    
                                     uiOutput("ranking_specific_crop_ui"),
-
+                                    
                                     uiOutput("ranking_spatial_filter_ui"),
-
+                                    
                                     hr(),
-
+                                    
                                     actionButton(
                                       "ranking_analyze_btn",
                                       "Analyze Rotations",
                                       class = "btn-primary btn-block",
                                       icon = icon("chart-bar")
                                     ),
-
+                                    
                                     hr(),
-
+                                    
                                     downloadButton(
                                       "ranking_download_data",
                                       "Download Results",
@@ -712,7 +718,7 @@ viz_ui <- function(input_dir = NA){
                                     )
                                   )
                            ),
-
+                           
                            # Main content area
                            column(width = 9,
                                   # Summary Metrics Row
@@ -726,7 +732,7 @@ viz_ui <- function(input_dir = NA){
                                     column(3,
                                            div(class = "metric-box",
                                                div(class = "metric-value", textOutput("ranking_total_area")),
-                                               div(class = "metric-label", "Total Area (ha)")
+                                               div(class = "metric-label", "Total Area (km²)")
                                            )
                                     ),
                                     column(3,
@@ -738,29 +744,29 @@ viz_ui <- function(input_dir = NA){
                                     column(3,
                                            div(class = "metric-box",
                                                div(class = "metric-value", textOutput("ranking_avg_area")),
-                                               div(class = "metric-label", "Avg. Area per Rotation")
+                                               div(class = "metric-label", "Avg. Area per Rotation (km²)")
                                            )
                                     )
                                   ),
-
+                                  
                                   # Tabs for different views
                                   tabsetPanel(
                                     type = "tabs",
-
+                                    
                                     tabPanel(
                                       "Ranking Table",
                                       icon = icon("table"),
                                       br(),
                                       DT::dataTableOutput("ranking_rotation_table")
                                     ),
-
+                                    
                                     tabPanel(
                                       "Area Chart",
                                       icon = icon("chart-bar"),
                                       br(),
                                       plotlyOutput("ranking_area_chart", height = "600px")
                                     ),
-
+                                    
                                     tabPanel(
                                       "Top 20 Distribution",
                                       icon = icon("chart-pie"),
@@ -768,9 +774,9 @@ viz_ui <- function(input_dir = NA){
                                       plotlyOutput("ranking_pie_chart", height = "600px")
                                     )
                                   ),
-
+                                  
                                   hr(),
-
+                                  
                                   # Conditional map display - moved below charts
                                   conditionalPanel(
                                     condition = "input.ranking_spatial_type != 'full'",
@@ -796,10 +802,10 @@ viz_ui <- function(input_dir = NA){
                          ),
                          br(), br(), br()
                 ),
-
+                
                 div(style = "padding-bottom: 100px;"), # Add padding for footer
-
-
+                
+                
                 # Custom footer
                 tags$footer(
                   style = "position: fixed; 
@@ -978,17 +984,17 @@ ui <- function(app_data) {
 #' @param rotation_length Number of years in the rotation
 #' @param start_year First year of the rotation
 #' @param end_year Last year of the rotation
-#' @param min_area Minimum area filter (in ha)
-#' @param max_area Maximum area filter (in ha)
+#' @param min_area Minimum area filter for aggregated rotations (in km²)
+#' @param max_area Maximum area filter for aggregated rotations (in km²)
 #' @param excluded_crops Vector of crop names to exclude
 #' @return Data frame with unique rotations and their areas
 extract_rotations_ranking <- function(data, rotation_length, start_year, end_year,
-                              min_area = NULL, max_area = NULL, excluded_crops = NULL,
-                              specific_crop = NULL) {
-
+                                      min_area = NULL, max_area = NULL, excluded_crops = NULL,
+                                      specific_crop = NULL) {
+  
   # Find Aggregated_YYYY or Name_YYYY columns
   crop_cols <- grep("^(Aggregated|Name)_[0-9]{4}$", names(data), value = TRUE)
-
+  
   if (length(crop_cols) == 0) {
     return(data.frame(
       rotation = character(0),
@@ -997,15 +1003,15 @@ extract_rotations_ranking <- function(data, rotation_length, start_year, end_yea
       percentage = numeric(0)
     ))
   }
-
+  
   # Extract years from column names
   col_years <- as.numeric(gsub("^(Aggregated|Name)_", "", crop_cols))
-
+  
   # Sort columns by year
   sorted_indices <- order(col_years)
   crop_cols <- crop_cols[sorted_indices]
   col_years <- col_years[sorted_indices]
-
+  
   # Get area column (freq is already in ha)
   area_col <- "freq"
   if (!area_col %in% names(data)) {
@@ -1016,22 +1022,14 @@ extract_rotations_ranking <- function(data, rotation_length, start_year, end_yea
       percentage = numeric(0)
     ))
   }
-
-  # Apply area filters
-  if (!is.null(min_area)) {
-    data <- data[data[[area_col]] >= min_area, ]
-  }
-  if (!is.null(max_area)) {
-    data <- data[data[[area_col]] <= max_area, ]
-  }
-
+  
   # Select only the relevant year columns using sliding window approach
   if (!is.null(start_year) && !is.null(end_year)) {
     year_range <- start_year:end_year
-
+    
     # Filter columns to those within the year range
     matching_indices <- which(col_years %in% year_range)
-
+    
     if (length(matching_indices) > 0) {
       crop_cols <- crop_cols[matching_indices]
       col_years <- col_years[matching_indices]
@@ -1044,7 +1042,7 @@ extract_rotations_ranking <- function(data, rotation_length, start_year, end_yea
       ))
     }
   }
-
+  
   # Check if we have enough years for the rotation length
   if (length(crop_cols) < rotation_length) {
     return(data.frame(
@@ -1054,27 +1052,27 @@ extract_rotations_ranking <- function(data, rotation_length, start_year, end_yea
       percentage = numeric(0)
     ))
   }
-
+  
   # Create rotation sequences using sliding window
   rotation_sequences <- list()
   rotation_areas <- list()
-
+  
   for (i in 1:(length(crop_cols) - rotation_length + 1)) {
     seq_cols <- crop_cols[i:(i + rotation_length - 1)]
-
+    
     # Build rotation strings from the selected columns
     rotation_str <- apply(data[, ..seq_cols, drop = FALSE], 1, function(x) {
       paste(x, collapse = " -> ")
     })
-
+    
     rotation_sequences[[i]] <- rotation_str
     rotation_areas[[i]] <- data[[area_col]]
   }
-
+  
   # Combine all sequences
   all_rotations <- unlist(rotation_sequences)
   all_areas <- unlist(rotation_areas)
-
+  
   # Aggregate by unique rotation
   rotation_summary <- data.frame(
     rotation = all_rotations,
@@ -1093,6 +1091,16 @@ extract_rotations_ranking <- function(data, rotation_length, start_year, end_yea
       rank = row_number()
     )
 
+  # Apply area filters to aggregated rotations
+  if (!is.null(min_area)) {
+    rotation_summary <- rotation_summary %>%
+      filter(area_ha >= min_area)
+  }
+  if (!is.null(max_area)) {
+    rotation_summary <- rotation_summary %>%
+      filter(area_ha <= max_area)
+  }
+
   # Filter out rotations containing excluded crops
   if (!is.null(excluded_crops) && length(excluded_crops) > 0) {
     # Create regex pattern to match any of the excluded crops
@@ -1100,7 +1108,7 @@ extract_rotations_ranking <- function(data, rotation_length, start_year, end_yea
     rotation_summary <- rotation_summary %>%
       filter(!grepl(exclude_pattern, rotation, ignore.case = TRUE))
   }
-
+  
   # Filter for rotations containing specific crop(s)
   # All specified crops must be present in the rotation
   if (!is.null(specific_crop) && length(specific_crop) > 0) {
@@ -1110,7 +1118,7 @@ extract_rotations_ranking <- function(data, rotation_length, start_year, end_yea
         filter(grepl(crop, rotation, ignore.case = TRUE))
     }
   }
-
+  
   # Recalculate percentages and ranks after filtering
   if (nrow(rotation_summary) > 0) {
     rotation_summary <- rotation_summary %>%
@@ -1119,19 +1127,19 @@ extract_rotations_ranking <- function(data, rotation_length, start_year, end_yea
         rank = row_number()
       )
   }
-
+  
   return(rotation_summary)
 }
 
 
 #' @export
 viz_server <- function(input, output, session, app_data, input_dir) {
-
+  
   options(warn = -1) 
   
   all_wrap_number_count_small <- app_data$Input_App_data$all_wrap_number_count_small
   loaded_env <- app_data$Input_App_data$loaded_env
-
+  
   options(shiny.maxRequestSize=1024^3 )
   # Reactive value to track if data is loaded
   data_loaded <- reactiveVal(FALSE)
@@ -1164,7 +1172,7 @@ viz_server <- function(input, output, session, app_data, input_dir) {
       tryCatch({
         # Load the RData file into the container environment
         load(list.files(input_dir, pattern = ".*intersection\\.RData$", full.names = TRUE)[1], envir = loaded_env)
-
+        
         # Copy required objects to the global environment
         list2env(as.list(loaded_env), .GlobalEnv)
         
@@ -1202,7 +1210,7 @@ viz_server <- function(input, output, session, app_data, input_dir) {
     tryCatch({
       # Load the RData file into the container environment
       load(input$file$datapath, envir = loaded_env)
-
+      
       # Copy required objects to the global environment
       list2env(as.list(loaded_env), .GlobalEnv)
       
@@ -1245,12 +1253,12 @@ viz_server <- function(input, output, session, app_data, input_dir) {
   # If data is loaded, run the main app server logic
   observe({
     req(data_loaded())
-
+    
     CropRotViz_intersection <- data.table::rbindlist(district_CropRotViz_intersection)
-
+    
     # Then add the id column
     CropRotViz_intersection[, id := seq_len(.N)]
-
+    
     # Initialize choices after loading data
     # Get crop choices - more efficiently
     Crop_choices <- tryCatch({
@@ -1359,13 +1367,13 @@ viz_server <- function(input, output, session, app_data, input_dir) {
     
     # rotation_data with caching for performance
     rotation_data <- reactiveVal(NULL)
-
+    
     observeEvent(input$update_plot_sequence, {
       req(input$Area_range_sec, input$Crops_sec)
-
+      
       withProgress(message = 'Updating visualization...', value = 0, {
         incProgress(0.3, detail = "Processing data")
-
+        
         result <- transform_rotation_data(
           All_rot_big = CropRotViz_intersection,
           distribution_df  = distribution_df,
@@ -1374,7 +1382,7 @@ viz_server <- function(input, output, session, app_data, input_dir) {
           selected_crops = input$Crops_sec,
           type = "basic"
         )
-
+        
         incProgress(0.7, detail = "Finalizing")
         rotation_data(result)
       })
@@ -1427,13 +1435,13 @@ viz_server <- function(input, output, session, app_data, input_dir) {
     
     # spec_rotation_data with caching for performance
     spec_rotation_data <- reactiveVal(NULL)
-
+    
     observeEvent(input$update_crop_specific, {
       req(input$Area_range_spec, input$Crop_spec)
-
+      
       withProgress(message = 'Updating visualization...', value = 0, {
         incProgress(0.3, detail = "Processing data")
-
+        
         result <- transform_rotation_data(
           All_rot_big      = CropRotViz_intersection,
           distribution_df  = distribution_df,
@@ -1441,41 +1449,59 @@ viz_server <- function(input, output, session, app_data, input_dir) {
           type             = "specific",
           specific_crop    = input$Crop_spec
         )
-
+        
         incProgress(0.7, detail = "Finalizing")
         spec_rotation_data(result)
       })
     })
-
-
+    
+    
     # district_rotation_data with caching for performance
-    district_rotation_data <- reactive({
-      # Add invalidation trigger for Area_range_areas and Crops_kreis
-      req(input$Area_range_areas, input$Crop_spec)
-      transform_rotation_data(
-        All_rot_big      = district_CropRotViz_intersection,
-        distribution_df  = distribution_df,
-        choices          = Crop_choices,
-        selected_crops   = input$Crops_kreis,
-        input_area_range = input$Area_range_areas,
-        type             = "district",
-        district         = input$District_sel
-      )
-    })
+    district_rotation_data <- reactiveVal(NULL)
 
+    observeEvent(input$update_plot_areas, {
+      req(input$Area_range_areas, input$Crops_kreis)
+
+      withProgress(message = 'Updating district visualization...', value = 0, {
+        incProgress(0.3, detail = "Processing data")
+
+        result <- transform_rotation_data(
+          All_rot_big      = district_CropRotViz_intersection,
+          distribution_df  = distribution_df,
+          choices          = Crop_choices,
+          selected_crops   = input$Crops_kreis,
+          input_area_range = input$Area_range_areas,
+          type             = "district",
+          district         = input$District_sel
+        )
+
+        incProgress(0.7, detail = "Finalizing")
+        district_rotation_data(result)
+      })
+    })
+    
     # basin_rotation_data with caching for performance
-    basin_rotation_data <- reactive({
-      # Add invalidation trigger for Area_range_areas and Crops_kreis
-      req(input$Area_range_areas, input$Crop_spec)
-      transform_rotation_data(
-        All_rot_big      = EZG_CropRotViz_intersection,
-        distribution_df  = distribution_df,
-        choices          = Crop_choices,
-        selected_crops   = input$Crops_kreis,
-        input_area_range = input$Area_range_areas,
-        type             = "basin",
-        EZG              = input$EZG_sel
-      )
+    basin_rotation_data <- reactiveVal(NULL)
+
+    observeEvent(input$update_plot_areas, {
+      req(input$Area_range_areas, input$Crops_kreis)
+
+      withProgress(message = 'Updating basin visualization...', value = 0, {
+        incProgress(0.3, detail = "Processing data")
+
+        result <- transform_rotation_data(
+          All_rot_big      = EZG_CropRotViz_intersection,
+          distribution_df  = distribution_df,
+          choices          = Crop_choices,
+          selected_crops   = input$Crops_kreis,
+          input_area_range = input$Area_range_areas,
+          type             = "basin",
+          EZG              = input$EZG_sel
+        )
+
+        incProgress(0.7, detail = "Finalizing")
+        basin_rotation_data(result)
+      })
     })
     
     #--------------------------------------------------------------------------------------------
@@ -1563,14 +1589,14 @@ viz_server <- function(input, output, session, app_data, input_dir) {
       create_spec_perc_plot()
     }, height = 65, bg = "transparent")
     
-
+    
     #--------------------------------------------------------------------------------------------
     
     # Create reactive expression for the plot
     create_district_perc_plot <- reactive({
       req(district_rotation_data())
       cropping_area <- sum(district_CropRotViz_intersection[[input$District_sel]]$freq)
-
+      
       # Create a data frame for the plot
       plot_data <- data.frame(
         Category = c("Selected Cropping Area", "Remaining Cropping Area"),
@@ -1615,7 +1641,7 @@ viz_server <- function(input, output, session, app_data, input_dir) {
     create_basin_perc_plot <- reactive({
       req(basin_rotation_data())
       cropping_area <- sum(EZG_CropRotViz_intersection[[input$EZG_sel]]$freq)
-
+      
       # Create a data frame for the plot
       plot_data <- data.frame(
         Category = c("Selected Cropping Area", "Remaining Cropping Area"),
@@ -1723,8 +1749,8 @@ viz_server <- function(input, output, session, app_data, input_dir) {
       
       # make basic transition graph
       specific <- ggplot(spec_rotation_data()[[1]], aes(x = year, y = Area,
-                                                   stratum = key, fill = key,
-                                                   alluvium = id, label = key)) +
+                                                        stratum = key, fill = key,
+                                                        alluvium = id, label = key)) +
         geom_stratum(alpha = .90 , show.legend = T, color=NA) +
         theme_linedraw()+
         theme(axis.text = element_text(color = "white", size = 15, face="bold"),
@@ -1776,11 +1802,11 @@ viz_server <- function(input, output, session, app_data, input_dir) {
     create_district_sankey_plot <- reactive({
       req(district_rotation_data())
       req(crop_colors())
-
+      
       # make basic transition graph
       specific <- ggplot(district_rotation_data()[[1]], aes(x = year, y = Area,
                                                             stratum = key, fill = key,
-                                                   alluvium = id, label = key)) +
+                                                            alluvium = id, label = key)) +
         geom_stratum(alpha = .90 , show.legend = T, color=NA) +
         theme_linedraw()+
         theme(axis.text = element_text(color = "white", size = 15, face="bold"),
@@ -1831,11 +1857,11 @@ viz_server <- function(input, output, session, app_data, input_dir) {
     create_basin_sankey_plot <- reactive({
       req(basin_rotation_data())
       req(crop_colors())
-
+      
       # make basic transition graph
       specific <- ggplot(basin_rotation_data()[[1]], aes(x = year, y = Area,
-                                                       stratum = key, fill = key,
-                                                       alluvium = id, label = key)) +
+                                                         stratum = key, fill = key,
+                                                         alluvium = id, label = key)) +
         geom_stratum(alpha = .90 , show.legend = T, color=NA) +
         theme_linedraw()+
         theme(axis.text = element_text(color = "white", size = 15, face="bold"),
@@ -1950,7 +1976,7 @@ viz_server <- function(input, output, session, app_data, input_dir) {
       )
       
       All_rot_clean <- st_drop_geometry(All_rot_clean)
-
+      
       # Generate datatable with performance optimizations
       datatable(All_rot_clean,
                 options = list(
@@ -1989,7 +2015,7 @@ viz_server <- function(input, output, session, app_data, input_dir) {
           
           # Calculate number of unique items (crops + groups)
           n_items <- length(sankey_data$node$label)
-  
+          
           # Calculate height based on number of items
           # Assuming we want roughly 100px per item, with some minimum height
           plot_height <- max(800, n_items * 15)  
@@ -2070,7 +2096,7 @@ viz_server <- function(input, output, session, app_data, input_dir) {
     #--------------------------------------------------------------------------------------------
     output$sankey_plotly_specific <- renderPlotly({
       Sys.sleep(1.5)
-
+      
       summarized_transitions <- process_specific_transitions(CropRotViz_intersection, input$Crop_spec)
       
       
@@ -2113,19 +2139,19 @@ viz_server <- function(input, output, session, app_data, input_dir) {
           paper_bgcolor = 'lightgrey',  
           plot_bgcolor = 'lightgrey',
           height = 1450
-          )%>%
-          config(
-            toImageButtonOptions = list(
-              format = "png",
-              filename = "combined_rotation",
-              width = 1000,
-              height = 1450
-            )
+        )%>%
+        config(
+          toImageButtonOptions = list(
+            format = "png",
+            filename = "combined_rotation",
+            width = 1000,
+            height = 1450
           )
- 
+        )
+      
     })
     #--------------------------------------------------------------------------------------------
-
+    
     output$leaflet_district <- renderLeaflet({
       District_sel <- subset(Districts, NAME_3 == input$District_sel)
       # Transform to WGS84 if needed (Leaflet requires WGS84)
@@ -2169,14 +2195,14 @@ viz_server <- function(input, output, session, app_data, input_dir) {
       
     })
     #--------------------------------------------------------------------------------------------
-
+    
     # Leaflet map for crop-specific area distribution
     output$leaflet_crop_spec <- renderLeaflet({
       req(spec_rotation_data(), input$Crop_spec, input$map_type_spec)
-
+      
       # Get the selected crop from the spec_rotation_data
       selected_crop <- input$Crop_spec
-
+      
       # Calculate crop area percentages by district or catchment
       if (input$map_type_spec == "districts") {
         # Check if Districts and district_CropRotViz_intersection exist
@@ -2186,11 +2212,11 @@ viz_server <- function(input, output, session, app_data, input_dir) {
                    addControl(html = "<div style='background: white; padding: 10px;'>District data not available</div>",
                               position = "topright"))
         }
-
+        
         spatial_data <- Districts
         data_list <- district_CropRotViz_intersection
         name_col <- "NAME_3"
-
+        
       } else {
         # Catchments/EZGs
         if (!exists("EZGs") || is.null(EZGs) || identical(EZGs, NA) ||
@@ -2199,36 +2225,36 @@ viz_server <- function(input, output, session, app_data, input_dir) {
                    addControl(html = "<div style='background: white; padding: 10px;'>Catchment data not available</div>",
                               position = "topright"))
         }
-
+        
         spatial_data <- EZGs
         data_list <- EZG_CropRotViz_intersection
         name_col <- "EZG"
       }
-
+      
       # Transform to WGS84 if needed (Leaflet requires WGS84)
       if (st_crs(spatial_data) != 4326) {
         spatial_data <- st_transform(spatial_data, 4326)
       }
-
+      
       # Calculate crop area percentages for each district/catchment
       crop_percentages <- list()
-
+      
       for (name in names(data_list)) {
         region_data <- data_list[[name]]
-
+        
         # Find crop columns (either Aggregated_ or Name_ columns)
         crop_cols <- grep("^(Aggregated_|Name_)[0-9]{4}$", names(region_data), value = TRUE)
-
+        
         if (length(crop_cols) > 0 && nrow(region_data) > 0) {
           # Calculate the mean percentage across all years
           # For each year, calculate: (area with selected crop) / (total area in that year)
           year_percentages <- sapply(crop_cols, function(col) {
             # Total area for this year (all crops)
             total_area_year <- sum(region_data$freq, na.rm = TRUE)
-
+            
             # Area with selected crop in this year
             crop_area_year <- sum(region_data$freq[region_data[[col]] == selected_crop], na.rm = TRUE)
-
+            
             # Calculate percentage for this year
             if (total_area_year > 0) {
               (crop_area_year / total_area_year) * 100
@@ -2236,14 +2262,14 @@ viz_server <- function(input, output, session, app_data, input_dir) {
               0
             }
           })
-
+          
           # Calculate mean percentage across all years
           crop_percentages[[name]] <- mean(year_percentages, na.rm = TRUE)
         } else {
           crop_percentages[[name]] <- 0
         }
       }
-
+      
       # Add percentages to spatial data
       spatial_data$crop_percentage <- sapply(spatial_data[[name_col]], function(x) {
         if (x %in% names(crop_percentages)) {
@@ -2252,7 +2278,7 @@ viz_server <- function(input, output, session, app_data, input_dir) {
           0
         }
       })
-
+      
       # Create color palette
       if (max(spatial_data$crop_percentage, na.rm = TRUE) > 0) {
         pal <- colorNumeric(
@@ -2269,7 +2295,7 @@ viz_server <- function(input, output, session, app_data, input_dir) {
           na.color = "transparent"
         )
       }
-
+      
       # Create popup text
       spatial_data$popup_text <- paste0(
         "<div style='font-family: Arial, sans-serif; font-size: 14px; line-height: 1.4; min-width: 200px;'>",
@@ -2285,7 +2311,7 @@ viz_server <- function(input, output, session, app_data, input_dir) {
         "</div>",
         "</div>"
       )
-
+      
       # Create leaflet map
       map <- leaflet(spatial_data) %>%
         addTiles() %>%
@@ -2309,11 +2335,11 @@ viz_server <- function(input, output, session, app_data, input_dir) {
           title = paste0(selected_crop, "<br>Area (%)"),
           opacity = 0.7
         )
-
+      
       return(map)
     })
     #--------------------------------------------------------------------------------------------
-
+    
     output$district_ridges <- renderPlot({
       data <- district_rotation_data()[[2]]
       if (any(grepl("Aggregated_", names(data)))) {
@@ -2338,6 +2364,7 @@ viz_server <- function(input, output, session, app_data, input_dir) {
         geom_boxplot(alpha = 0.7, width = 0.5) +
         theme_minimal() +
         theme(axis.text = element_text(color = "white", size = 15, face="bold"),
+              axis.title.x = element_text(color = "white", size = 16, face="bold", margin = margin(t = 10)),
               axis.title.y = element_text(color = "white", size = 16, face="bold", margin = margin(r = 10)),
               legend.background = element_rect(fill = "lightgrey", color = "black"),
               panel.background = element_rect(fill = 'lightgrey', color = 'black'),
@@ -2380,6 +2407,7 @@ viz_server <- function(input, output, session, app_data, input_dir) {
         geom_boxplot(alpha = 0.7, width = 0.5) +
         theme_minimal() +
         theme(axis.text = element_text(color = "white", size = 15, face="bold"),
+              axis.title.x = element_text(color = "white", size = 16, face="bold", margin = margin(t = 10)),
               axis.title.y = element_text(color = "white", size = 16, face="bold", margin = margin(r = 10)),
               legend.background = element_rect(fill = "lightgrey", color = "black"),
               panel.background = element_rect(fill = 'lightgrey', color = 'black'),
@@ -2456,7 +2484,7 @@ viz_server <- function(input, output, session, app_data, input_dir) {
         plotly::plot_ly() %>%
           plotly::layout(
             title = list(text = "Soil Potential Data Unavailable",
-                        font = list(size = 16, color = "#d9534f")),
+                         font = list(size = 16, color = "#d9534f")),
             xaxis = list(visible = FALSE),
             yaxis = list(visible = FALSE),
             annotations = list(
@@ -2473,17 +2501,17 @@ viz_server <- function(input, output, session, app_data, input_dir) {
           )
       })
     })
-
-
+    
+    
     # ==============================================================================
     # ROTATION RANKING TAB LOGIC
     # ==============================================================================
-
+    
     # Reactive values for ranking analysis
     ranking_rotation_results <- reactiveVal(NULL)
     ranking_available_years <- reactiveVal(NULL)
     ranking_spatial_label <- reactiveVal("Full Area")
-
+    
     # Extract available years from CropRotViz_intersection
     observe({
       if (!is.null(CropRotViz_intersection)) {
@@ -2492,7 +2520,7 @@ viz_server <- function(input, output, session, app_data, input_dir) {
         ranking_available_years(sort(years))
       }
     })
-
+    
     # Dynamic UI for year range selection
     output$ranking_year_range_ui <- renderUI({
       if (is.null(ranking_available_years())) {
@@ -2504,7 +2532,7 @@ viz_server <- function(input, output, session, app_data, input_dir) {
         years <- ranking_available_years()
         min_year <- min(years)
         max_year <- max(years)
-
+        
         sliderInput(
           "ranking_year_range",
           "Select Year Range:",
@@ -2516,6 +2544,58 @@ viz_server <- function(input, output, session, app_data, input_dir) {
         )
       }
     })
+    
+    # Reactive expression to calculate area range from aggregated rotations
+    rotation_area_range <- reactive({
+      req(CropRotViz_intersection)
+      req(input$ranking_rotation_length)
+      req(input$ranking_year_range)
+
+      tryCatch({
+        # Determine which dataset to use based on spatial filter
+        data_to_analyze <- CropRotViz_intersection
+
+        if (!is.null(input$ranking_spatial_type) && input$ranking_spatial_type != "full") {
+          if (input$ranking_spatial_type == "District" && !is.null(input$ranking_district_sel)) {
+            data_to_analyze <- district_CropRotViz_intersection[[input$ranking_district_sel]]
+            if (!inherits(data_to_analyze, "data.table")) {
+              data_to_analyze <- data.table::as.data.table(data_to_analyze)
+            }
+          } else if (input$ranking_spatial_type == "Catchment/Basin" && !is.null(input$ranking_catchment_sel)) {
+            data_to_analyze <- EZG_CropRotViz_intersection[[input$ranking_catchment_sel]]
+            if (!inherits(data_to_analyze, "data.table")) {
+              data_to_analyze <- data.table::as.data.table(data_to_analyze)
+            }
+          }
+        }
+
+        # Calculate rotations without area filter to get the full range
+        start_year <- input$ranking_year_range[1]
+        end_year <- input$ranking_year_range[2]
+
+        results <- extract_rotations_ranking(
+          data_to_analyze,
+          input$ranking_rotation_length,
+          start_year,
+          end_year,
+          min_area = NULL,
+          max_area = NULL,
+          excluded_crops = NULL,
+          specific_crop = NULL
+        )
+
+        if (nrow(results) > 0) {
+          list(
+            min = floor(min(results$area_ha, na.rm = TRUE)),
+            max = ceiling(max(results$area_ha, na.rm = TRUE))
+          )
+        } else {
+          list(min = 0, max = 100)
+        }
+      }, error = function(e) {
+        list(min = 0, max = 100)
+      })
+    })
 
     # Dynamic UI for area filter
     output$ranking_area_filter_ui <- renderUI({
@@ -2525,27 +2605,20 @@ viz_server <- function(input, output, session, app_data, input_dir) {
             style = "color: gray; font-style: italic;")
         )
       } else {
-        area_col <- "freq"
-        if (area_col %in% names(CropRotViz_intersection)) {
-          area_values <- CropRotViz_intersection[[area_col]]
-          min_area <- floor(min(area_values, na.rm = TRUE))
-          max_area <- ceiling(max(area_values, na.rm = TRUE))
+        range <- rotation_area_range()
 
-          sliderInput(
-            "ranking_area_range",
-            "Filter by Area (ha):",
-            min = min_area,
-            max = max_area,
-            value = c(min_area, max_area),
-            step = 0.1,
-            round = FALSE
-          )
-        } else {
-          p("No area column found", style = "color: gray; font-style: italic;")
-        }
+        sliderInput(
+          "ranking_area_range",
+          "Filter by Area (km²):",
+          min = range$min,
+          max = range$max,
+          value = c(range$min, range$max),
+          step = 0.1,
+          round = FALSE
+        )
       }
     })
-
+    
     # Dynamic UI for crop filter
     output$ranking_crop_filter_ui <- renderUI({
       if (is.null(CropRotViz_intersection)) {
@@ -2555,11 +2628,11 @@ viz_server <- function(input, output, session, app_data, input_dir) {
         )
       } else {
         crop_cols <- grep("^(Aggregated|Name)_[0-9]{4}$", names(CropRotViz_intersection), value = TRUE)
-
+        
         if (length(crop_cols) > 0) {
           all_crops <- unique(unlist(CropRotViz_intersection[, ..crop_cols]))
           all_crops <- sort(all_crops[!is.na(all_crops)])
-
+          
           selectInput(
             "ranking_excluded_crops",
             "Exclude Crops:",
@@ -2572,7 +2645,7 @@ viz_server <- function(input, output, session, app_data, input_dir) {
         }
       }
     })
-
+    
     # Dynamic UI for specific crop requirement
     output$ranking_specific_crop_ui <- renderUI({
       if (is.null(CropRotViz_intersection)) {
@@ -2582,11 +2655,11 @@ viz_server <- function(input, output, session, app_data, input_dir) {
         )
       } else {
         crop_cols <- grep("^(Aggregated|Name)_[0-9]{4}$", names(CropRotViz_intersection), value = TRUE)
-
+        
         if (length(crop_cols) > 0) {
           all_crops <- unique(unlist(CropRotViz_intersection[, ..crop_cols]))
           all_crops <- sort(all_crops[!is.na(all_crops)])
-
+          
           pickerInput(
             "ranking_specific_crop",
             "Require Specific Crop(s):",
@@ -2605,20 +2678,20 @@ viz_server <- function(input, output, session, app_data, input_dir) {
         }
       }
     })
-
+    
     # Dynamic UI for spatial filter (district/catchment)
     output$ranking_spatial_filter_ui <- renderUI({
       if (is.null(district_CropRotViz_intersection) && is.null(EZG_CropRotViz_intersection)) {
         return(NULL)
       }
-
+      
       has_districts <- !is.null(district_CropRotViz_intersection) && length(district_CropRotViz_intersection) > 0
       has_catchments <- !is.null(EZG_CropRotViz_intersection) && length(EZG_CropRotViz_intersection) > 0
-
+      
       if (!has_districts && !has_catchments) {
         return(NULL)
       }
-
+      
       tagList(
         br(),
         h5("Spatial Filter (Optional)"),
@@ -2651,14 +2724,14 @@ viz_server <- function(input, output, session, app_data, input_dir) {
         )
       )
     })
-
+    
     # Analyze rotations when button is clicked
     observeEvent(input$ranking_analyze_btn, {
       req(CropRotViz_intersection, input$ranking_year_range, input$ranking_rotation_length)
-
+      
       start_year <- input$ranking_year_range[1]
       end_year <- input$ranking_year_range[2]
-
+      
       # Validate year range
       if (start_year >= end_year) {
         showNotification(
@@ -2668,7 +2741,7 @@ viz_server <- function(input, output, session, app_data, input_dir) {
         )
         return()
       }
-
+      
       # Validate rotation length vs year range
       year_span <- end_year - start_year + 1
       if (input$ranking_rotation_length > year_span) {
@@ -2681,15 +2754,15 @@ viz_server <- function(input, output, session, app_data, input_dir) {
         )
         return()
       }
-
+      
       tryCatch({
         withProgress(message = 'Analyzing rotations...', value = 0, {
           incProgress(0.3, detail = "Extracting rotation sequences")
-
+          
           # Determine which dataset to use based on spatial filter
           data_to_analyze <- CropRotViz_intersection
           spatial_label <- "Full Area"
-
+          
           if (!is.null(input$ranking_spatial_type) && input$ranking_spatial_type != "full") {
             if (input$ranking_spatial_type == "District" && !is.null(input$ranking_district_sel)) {
               data_to_analyze <- district_CropRotViz_intersection[[input$ranking_district_sel]]
@@ -2707,13 +2780,13 @@ viz_server <- function(input, output, session, app_data, input_dir) {
               spatial_label <- paste("Catchment:", input$ranking_catchment_sel)
             }
           }
-
+          
           # Get filter values
           min_area_val <- if (!is.null(input$ranking_area_range)) input$ranking_area_range[1] else NULL
           max_area_val <- if (!is.null(input$ranking_area_range)) input$ranking_area_range[2] else NULL
           excluded_crops_val <- if (!is.null(input$ranking_excluded_crops)) input$ranking_excluded_crops else NULL
           specific_crop_val <- if (!is.null(input$ranking_specific_crop) && length(input$ranking_specific_crop) > 0) input$ranking_specific_crop else NULL
-
+          
           results <- extract_rotations_ranking(
             data_to_analyze,
             input$ranking_rotation_length,
@@ -2724,12 +2797,12 @@ viz_server <- function(input, output, session, app_data, input_dir) {
             excluded_crops = excluded_crops_val,
             specific_crop = specific_crop_val
           )
-
+          
           incProgress(0.7, detail = "Calculating statistics")
-
+          
           ranking_rotation_results(results)
           ranking_spatial_label(spatial_label)
-
+          
           showNotification(
             paste("Analysis complete!", nrow(results), "unique rotations found for", spatial_label),
             type = "message",
@@ -2744,35 +2817,35 @@ viz_server <- function(input, output, session, app_data, input_dir) {
         )
       })
     })
-
+    
     # Summary Metrics
     output$ranking_total_rotations <- renderText({
       req(ranking_rotation_results())
       format(nrow(ranking_rotation_results()), big.mark = ",")
     })
-
+    
     output$ranking_total_area <- renderText({
       req(ranking_rotation_results())
-      format(round(sum(ranking_rotation_results()$area_ha, na.rm = TRUE), 1), big.mark = ",")
+      format(round(sum(ranking_rotation_results()$area_ha, na.rm = TRUE), 2), big.mark = ",")
     })
-
+    
     output$ranking_total_fields <- renderText({
       req(ranking_rotation_results())
       format(sum(ranking_rotation_results()$n_fields, na.rm = TRUE), big.mark = ",")
     })
-
+    
     output$ranking_avg_area <- renderText({
       req(ranking_rotation_results())
       avg <- sum(ranking_rotation_results()$area_ha) / nrow(ranking_rotation_results())
       format(round(avg, 1), big.mark = ",")
     })
-
+    
     # Ranking Table
     output$ranking_rotation_table <- DT::renderDataTable({
       req(ranking_rotation_results())
-
+      
       results <- ranking_rotation_results()
-
+      
       if (nrow(results) == 0) {
         return(DT::datatable(
           data.frame(Message = "No rotations found with current filters"),
@@ -2780,26 +2853,26 @@ viz_server <- function(input, output, session, app_data, input_dir) {
           rownames = FALSE
         ))
       }
-
+      
       if (!"rank" %in% names(results)) {
         results <- results %>%
           mutate(rank = row_number())
       }
-
+      
       # Get crop color mapping
       crop_color_mapping_df <- as.data.frame(crop_colors())
       crop_color_mapping_df$crop <- names(crop_colors())
       crop_color_mapping_df <- crop_color_mapping_df[complete.cases(crop_color_mapping_df),]
       names(crop_color_mapping_df) <- c("color", "crop")
-
+      
       # Split rotation string into separate crop columns
       rotation_split <- stringr::str_split(results$rotation, " -> ", simplify = TRUE)
       n_crops <- ncol(rotation_split)
-
+      
       # Create column names for crops
       crop_col_names <- paste0("Crop_", 1:n_crops)
       colnames(rotation_split) <- crop_col_names
-
+      
       # Combine with other data
       table_data <- cbind(
         rank = results$rank,
@@ -2808,11 +2881,11 @@ viz_server <- function(input, output, session, app_data, input_dir) {
         n_fields = results$n_fields,
         percentage = results$percentage
       )
-
+      
       # Rename columns for display
-      display_col_names <- c("Rank", paste0("Crop ", 1:n_crops), "Area (ha)", "Number of Fields", "Percentage (%)")
+      display_col_names <- c("Rank", paste0("Crop ", 1:n_crops), "Area (km²)", "Number of Fields", "Percentage (%)")
       names(table_data) <- c("rank", crop_col_names, "area_ha", "n_fields", "percentage")
-
+      
       # Create datatable
       dt <- DT::datatable(
         table_data,
@@ -2828,15 +2901,15 @@ viz_server <- function(input, output, session, app_data, input_dir) {
         colnames = display_col_names,
         rownames = FALSE
       )
-
+      
       # Get column indices for formatting (1-indexed for DT)
       area_col_idx <- which(names(table_data) == "area_ha")
       percentage_col_idx <- which(names(table_data) == "percentage")
-
+      
       # Format numeric columns
       dt <- dt %>%
         DT::formatRound(columns = c(area_col_idx, percentage_col_idx), digits = 2, mark = ",")
-
+      
       # Apply color formatting to each crop column
       for (i in seq_along(crop_col_names)) {
         crop_col <- crop_col_names[i]
@@ -2847,29 +2920,29 @@ viz_server <- function(input, output, session, app_data, input_dir) {
                                                    crop_color_mapping_df$color),
                       color = "black")
       }
-
+      
       # Style the numeric columns
       rank_col_idx <- which(names(table_data) == "rank")
       n_fields_col_idx <- which(names(table_data) == "n_fields")
-
+      
       dt <- dt %>%
         formatStyle(columns = c(rank_col_idx, area_col_idx, n_fields_col_idx, percentage_col_idx),
                     color = "black",
                     backgroundColor = "lightgrey")
-
+      
       dt
     })
-
+    
     # Area Bar Chart (Top 20)
     output$ranking_area_chart <- renderPlotly({
       req(ranking_rotation_results())
-
+      
       top_n_data <- ranking_rotation_results() %>%
         head(20)
-
+      
       p <- ggplot(top_n_data, aes(x = reorder(rotation, area_ha), y = area_ha,
-                                   text = paste0("Rotation: ", rotation, "<br>",
-                                                "Area: ", round(area_ha, 1), " ha<br>",
+                                  text = paste0("Rotation: ", rotation, "<br>",
+                                                "Area: ", round(area_ha, 1), " km²<br>",
                                                 "Percentage: ", round(percentage, 1), "%"))) +
         geom_bar(stat = "identity", fill = "#74961E") +
         coord_flip() +
@@ -2878,7 +2951,7 @@ viz_server <- function(input, output, session, app_data, input_dir) {
                         input$ranking_rotation_length, "-year rotations)"),
           subtitle = paste(ranking_spatial_label(), "| Year Range:", input$ranking_year_range[1], "-", input$ranking_year_range[2]),
           x = "Rotation Sequence",
-          y = "Area (hectares)"
+          y = "Area (km²)"
         ) +
         theme_minimal(base_size = 13) +
         theme(
@@ -2894,7 +2967,7 @@ viz_server <- function(input, output, session, app_data, input_dir) {
           panel.background = element_rect(fill = "#222222", color = NA)
         ) +
         scale_y_continuous(expand = expansion(mult = c(0, 0.15)))
-
+      
       ggplotly(p, tooltip = "text") %>%
         layout(
           paper_bgcolor = "#222222",
@@ -2902,19 +2975,19 @@ viz_server <- function(input, output, session, app_data, input_dir) {
           font = list(color = "white")
         )
     })
-
+    
     # Pie Chart for Top 20
     output$ranking_pie_chart <- renderPlotly({
       req(ranking_rotation_results())
-
+      
       # Get all rotation data
       all_data <- ranking_rotation_results()
       total_area_all <- sum(all_data$area_ha, na.rm = TRUE)
-
+      
       # Get top 20 rotations
       top_20_data <- all_data %>%
         head(20)
-
+      
       # Create clean data frame with only needed columns
       top_20 <- data.frame(
         rotation_full = top_20_data$rotation,
@@ -2926,11 +2999,11 @@ viz_server <- function(input, output, session, app_data, input_dir) {
         area_ha = top_20_data$area_ha,
         stringsAsFactors = FALSE
       )
-
+      
       # Calculate "Others" area if there are more than 20 rotations
       if (nrow(all_data) > 20) {
         others_area <- sum(all_data$area_ha[21:nrow(all_data)], na.rm = TRUE)
-
+        
         if (others_area > 0) {
           top_20 <- rbind(
             top_20,
@@ -2943,10 +3016,10 @@ viz_server <- function(input, output, session, app_data, input_dir) {
           )
         }
       }
-
+      
       # Calculate percentages based on the total area of ALL rotations
       top_20$percentage <- round((top_20$area_ha / total_area_all) * 100, 2)
-
+      
       plot_ly(
         data = top_20,
         labels = ~rotation_full,
@@ -2956,8 +3029,8 @@ viz_server <- function(input, output, session, app_data, input_dir) {
         textinfo = 'percent',
         hoverinfo = 'text',
         text = ~paste0("<b>", rotation_full, "</b><br>",
-                      "Area: ", round(area_ha, 1), " ha<br>",
-                      "Percentage: ", round(percentage, 1), "%"),
+                       "Area: ", round(area_ha, 1), " km²<br>",
+                       "Percentage: ", round(percentage, 1), "%"),
         marker = list(
           line = list(color = '#FFFFFF', width = 2)
         )
@@ -2965,8 +3038,8 @@ viz_server <- function(input, output, session, app_data, input_dir) {
         layout(
           title = list(
             text = paste0("Top 20 Rotation Distribution (",
-                         input$ranking_rotation_length, "-year rotations)<br>",
-                         "<sub>", ranking_spatial_label(), " | Year Range: ", input$ranking_year_range[1], " - ", input$ranking_year_range[2], "</sub>"),
+                          input$ranking_rotation_length, "-year rotations)<br>",
+                          "<sub>", ranking_spatial_label(), " | Year Range: ", input$ranking_year_range[1], " - ", input$ranking_year_range[2], "</sub>"),
             font = list(size = 16, color = "white")
           ),
           margin = list(t = 100),
@@ -2981,15 +3054,15 @@ viz_server <- function(input, output, session, app_data, input_dir) {
           plot_bgcolor = "#222222"
         )
     })
-
+    
     # Leaflet map for selected spatial area showing dominant rotations
     output$ranking_spatial_map <- renderLeaflet({
       req(input$ranking_spatial_type)
-
+      
       if (is.null(input$ranking_spatial_type) || input$ranking_spatial_type == "full") {
         return(NULL)
       }
-
+      
       tryCatch({
         # Get parameters
         rotation_length <- input$ranking_rotation_length
@@ -2999,23 +3072,23 @@ viz_server <- function(input, output, session, app_data, input_dir) {
         max_area_val <- if (!is.null(input$ranking_area_range)) input$ranking_area_range[2] else NULL
         excluded_crops_val <- if (!is.null(input$ranking_excluded_crops)) input$ranking_excluded_crops else NULL
         specific_crop_val <- if (!is.null(input$ranking_specific_crop) && length(input$ranking_specific_crop) > 0) input$ranking_specific_crop else NULL
-
+        
         spatial_data <- NULL
         dominant_rotations <- data.frame()
-
+        
         if (input$ranking_spatial_type == "District") {
           # Calculate dominant rotation for each district
           if (exists("Districts") && !is.null(Districts) && exists("district_CropRotViz_intersection")) {
             spatial_data <- Districts
-
+            
             for (district_name in names(district_CropRotViz_intersection)) {
               district_data <- district_CropRotViz_intersection[[district_name]]
-
+              
               # Ensure it's a data.table
               if (!inherits(district_data, "data.table")) {
                 district_data <- data.table::as.data.table(district_data)
               }
-
+              
               # Get rotations for this district
               results <- extract_rotations_ranking(
                 district_data,
@@ -3027,7 +3100,7 @@ viz_server <- function(input, output, session, app_data, input_dir) {
                 excluded_crops = excluded_crops_val,
                 specific_crop = specific_crop_val
               )
-
+              
               if (nrow(results) > 0) {
                 # Get the dominant (top) rotation
                 dominant_rotations <- rbind(
@@ -3042,26 +3115,26 @@ viz_server <- function(input, output, session, app_data, input_dir) {
                 )
               }
             }
-
+            
             # Merge with spatial data
             if (nrow(dominant_rotations) > 0) {
               spatial_data <- merge(spatial_data, dominant_rotations,
-                                   by.x = "NAME_3", by.y = "area_name", all.x = TRUE)
+                                    by.x = "NAME_3", by.y = "area_name", all.x = TRUE)
             }
           }
         } else if (input$ranking_spatial_type == "Catchment/Basin") {
           # Calculate dominant rotation for each catchment
           if (exists("EZGs") && !is.null(EZGs) && exists("EZG_CropRotViz_intersection")) {
             spatial_data <- EZGs
-
+            
             for (ezg_name in names(EZG_CropRotViz_intersection)) {
               ezg_data <- EZG_CropRotViz_intersection[[ezg_name]]
-
+              
               # Ensure it's a data.table
               if (!inherits(ezg_data, "data.table")) {
                 ezg_data <- data.table::as.data.table(ezg_data)
               }
-
+              
               # Get rotations for this catchment
               results <- extract_rotations_ranking(
                 ezg_data,
@@ -3073,7 +3146,7 @@ viz_server <- function(input, output, session, app_data, input_dir) {
                 excluded_crops = excluded_crops_val,
                 specific_crop = specific_crop_val
               )
-
+              
               if (nrow(results) > 0) {
                 # Get the dominant (top) rotation
                 dominant_rotations <- rbind(
@@ -3088,28 +3161,28 @@ viz_server <- function(input, output, session, app_data, input_dir) {
                 )
               }
             }
-
+            
             # Merge with spatial data
             if (nrow(dominant_rotations) > 0) {
               spatial_data <- merge(spatial_data, dominant_rotations,
-                                   by.x = "EZG", by.y = "area_name", all.x = TRUE)
+                                    by.x = "EZG", by.y = "area_name", all.x = TRUE)
             }
           }
         }
-
+        
         if (is.null(spatial_data) || nrow(spatial_data) == 0) {
           return(NULL)
         }
-
+        
         # Transform to WGS84 if needed (Leaflet requires WGS84)
         if (sf::st_crs(spatial_data) != 4326) {
           spatial_data <- sf::st_transform(spatial_data, 4326)
         }
-
+        
         # Create color palette for dominant rotations
         if ("dominant_rotation" %in% names(spatial_data)) {
           unique_rotations <- unique(spatial_data$dominant_rotation[!is.na(spatial_data$dominant_rotation)])
-
+          
           if (length(unique_rotations) > 0) {
             # Use a color palette
             pal <- colorFactor(
@@ -3117,28 +3190,28 @@ viz_server <- function(input, output, session, app_data, input_dir) {
               domain = unique_rotations,
               na.color = "#808080"
             )
-
+            
             # Create labels for hover
             labels <- sprintf(
-              "<strong>%s</strong><br/>Dominant Rotation: %s<br/>Area: %.1f ha<br/>Percentage: %.1f%%",
+              "<strong>%s</strong><br/>Dominant Rotation: %s<br/>Area: %.1f km²<br/>Percentage: %.1f%%",
               if (input$ranking_spatial_type == "District") spatial_data$NAME_3 else spatial_data$EZG,
               ifelse(!is.na(spatial_data$dominant_rotation), spatial_data$dominant_rotation, "No data"),
               ifelse(!is.na(spatial_data$area_ha), spatial_data$area_ha, 0),
               ifelse(!is.na(spatial_data$percentage), spatial_data$percentage, 0)
             ) %>% lapply(htmltools::HTML)
-
+            
             # Get the selected area for red border highlight
             selected_area <- NULL
             if (input$ranking_spatial_type == "District" && !is.null(input$ranking_district_sel)) {
               selected_area <- spatial_data[if (input$ranking_spatial_type == "District")
-                                            spatial_data$NAME_3 == input$ranking_district_sel
-                                            else FALSE, ]
+                spatial_data$NAME_3 == input$ranking_district_sel
+                else FALSE, ]
             } else if (input$ranking_spatial_type == "Catchment/Basin" && !is.null(input$ranking_catchment_sel)) {
               selected_area <- spatial_data[if (input$ranking_spatial_type == "Catchment/Basin")
-                                            spatial_data$EZG == input$ranking_catchment_sel
-                                            else FALSE, ]
+                spatial_data$EZG == input$ranking_catchment_sel
+                else FALSE, ]
             }
-
+            
             # Create leaflet map with color-coded areas
             map <- leaflet(spatial_data) %>%
               addTiles(group = "Base Map") %>%
@@ -3164,11 +3237,11 @@ viz_server <- function(input, output, session, app_data, input_dir) {
                 position = "bottomright",
                 na.label = "No data"
               )
-
+            
             # Add soil potential (BS) layer if available
             # Check if BS_mean column exists in the spatial data
             has_BS <- "BS_mean" %in% names(spatial_data)
-
+            
             if (has_BS) {
               tryCatch({
                 # Create color palette for BS values (using domain from data directly like diversity_mapper)
@@ -3177,7 +3250,7 @@ viz_server <- function(input, output, session, app_data, input_dir) {
                   domain = spatial_data$BS_mean,
                   na.color = "transparent"
                 )
-
+                
                 # Add BS polygon layer (using same polygons as spatial_data)
                 map <- map %>%
                   addPolygons(
@@ -3213,7 +3286,7 @@ viz_server <- function(input, output, session, app_data, input_dir) {
                 warning("Could not add BS layer to map: ", e$message)
               })
             }
-
+            
             # Add red border for selected area
             if (!is.null(selected_area) && nrow(selected_area) > 0) {
               map <- map %>%
@@ -3228,7 +3301,7 @@ viz_server <- function(input, output, session, app_data, input_dir) {
                   group = "Selected Area"
                 )
             }
-
+            
             # Add layers control - conditional based on BS availability
             if (has_BS) {
               map <- map %>%
@@ -3238,11 +3311,11 @@ viz_server <- function(input, output, session, app_data, input_dir) {
                   position = "topleft"
                 )
             }
-
+            
             return(map)
           }
         }
-
+        
         # Fallback: show simple boundaries if no rotation data
         leaflet(spatial_data) %>%
           addTiles() %>%
@@ -3253,13 +3326,13 @@ viz_server <- function(input, output, session, app_data, input_dir) {
             color = "rgb(0,86,157)",
             dashArray = "5,5"
           )
-
+        
       }, error = function(e) {
         # Return NULL on error
         return(NULL)
       })
     })
-
+    
     # Download Handler
     output$ranking_download_data <- downloadHandler(
       filename = function() {
@@ -3273,6 +3346,6 @@ viz_server <- function(input, output, session, app_data, input_dir) {
         write.csv(ranking_rotation_results(), file, row.names = FALSE)
       }
     )
-
+    
   })
 }
