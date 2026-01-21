@@ -81,10 +81,13 @@
 #' 
 #' @keywords internal
 processing_ui <- function(app_data, output_dir = NA, start_year = NA, vector_file = TRUE) {
-  
+
+  # Disable s2 spherical geometry globally to avoid CRS transformation issues
+  sf::sf_use_s2(FALSE)
+
   # Add Bootstrap dependencies
   shiny::addResourcePath(
-    "shinyBS", 
+    "shinyBS",
     system.file("www", package = "shinyBS")
   )
   
@@ -289,6 +292,42 @@ processing_ui <- function(app_data, output_dir = NA, start_year = NA, vector_fil
         .status-success {
             background-color: rgb(116, 150, 30) !important;
         }
+
+        /* Disabled settings styling after Continue to Processing */
+        .settings-disabled {
+            pointer-events: none;
+            opacity: 0.6;
+        }
+        .settings-disabled input,
+        .settings-disabled select,
+        .settings-disabled button {
+            pointer-events: none !important;
+        }
+      ")),
+      # JavaScript to disable settings after Continue to Processing is clicked
+      # and to handle Process Files button state during processing
+      tags$script(HTML("
+        $(document).ready(function() {
+          // Disable settings section when Continue to Processing is clicked
+          $(document).on('click', '#btn_continue', function() {
+            $('#settings-section').addClass('settings-disabled');
+          });
+
+          // Hide Process Files button and show Processing indicator when clicked
+          $(document).on('click', '#btn_process', function() {
+            $('#btn_process').hide();
+            $('#processing_indicator').show();
+          });
+
+          // Listen for custom event to show DONE state
+          Shiny.addCustomMessageHandler('processingDone', function(message) {
+            $('#processing_indicator').html('<i class=\"fa fa-check\"></i> DONE');
+            $('#processing_indicator').css({
+              'background-color': '#5cb85c',
+              'border-color': '#4cae4c'
+            });
+          });
+        });
       "))
     ),
     theme = shinytheme("cyborg"),
@@ -309,68 +348,72 @@ processing_ui <- function(app_data, output_dir = NA, start_year = NA, vector_fil
     #-------------------------------------------------------------------------------
     # Step 1: File Selection and Configuration
     #-------------------------------------------------------------------------------
-    fluidRow(
-      column(4,
-             # Counter display
-             tags$span(
-               textOutput("file_counter"),
-               style = "font-size: 20px; color: #ffffff; font-weight: bold"
-             ), br()),
-      column(2,
-             radioButtons("id_or_name", label = "Select Crop Column Type", choices = c("Code", "Name"), inline = TRUE)
-      ),
-      column(1,
-             shinyBS::bsButton(
-               "id-info",
-               label = "",
-               icon = icon("info"),
-               style = "default",
-               size = "extra-small"
-             ),
-             shinyBS::bsPopover(
-               "id-info",
-               "Crop Column",
-               "Here you can select the column which describes your crop. Use Code if you want to use the national coding or/and you want to use the aggregation, which summarizes some smaller classes to bigger groups.",
-               placement = "left",
-               trigger = "toggle",
-               options = list(
-                 container = 'body',
-                 html = TRUE
-               )
-             )
-      ),
-      column(2,
-             radioButtons("aggregation",
-                          label = "Aggregation of crop classes",
-                          choices = c("Yes", "No"),
-                          inline = TRUE)
-             
-      ),
-      column(2,
-             radioButtons("radio_process", "Type of field intersection",
-                          c("Complete" = "complete",
-                            "Fast" = "fast"), inline = TRUE)
-      ),
-      column(1,
-             shinyBS::bsButton(
-               "radio-info",
-               label = "",
-               icon = icon("info"),
-               style = "default",
-               size = "extra-small"
-             ),
-             shinyBS::bsPopover(
-               "radio-info",
-               "Type of intersection",
-               "Here you can select the type of the intersection framework. The fast intersect just intersects your fields over the years and leaves out fields not present in a year. The comprehensive method is much slower but contains each area you put in with comprehensive union functions.",
-               placement = "left",
-               trigger = "toggle",
-               options = list(
-                 container = 'body',
-                 html = TRUE
-               )
-             )
-      )
+    # Wrapper div that gets disabled class after clicking Continue to Processing
+    div(id = "settings-section",
+        class = "settings-section",
+        fluidRow(
+          column(4,
+                 # Counter display
+                 tags$span(
+                   textOutput("file_counter"),
+                   style = "font-size: 20px; color: #ffffff; font-weight: bold"
+                 ), br()),
+          column(2,
+                 radioButtons("id_or_name", label = "Select Crop Column Type", choices = c("Code", "Name"), inline = TRUE)
+          ),
+          column(1,
+                 shinyBS::bsButton(
+                   "id-info",
+                   label = "",
+                   icon = icon("info"),
+                   style = "default",
+                   size = "extra-small"
+                 ),
+                 shinyBS::bsPopover(
+                   "id-info",
+                   "Crop Column",
+                   "Here you can select the column which describes your crop. Use Code if you want to use the national coding or/and you want to use the aggregation, which summarizes some smaller classes to bigger groups.",
+                   placement = "left",
+                   trigger = "toggle",
+                   options = list(
+                     container = 'body',
+                     html = TRUE
+                   )
+                 )
+          ),
+          column(2,
+                 radioButtons("aggregation",
+                              label = "Aggregation of crop classes",
+                              choices = c("Yes", "No"),
+                              inline = TRUE)
+
+          ),
+          column(2,
+                 radioButtons("radio_process", "Type of field intersection",
+                              c("Complete" = "complete",
+                                "Fast" = "fast"), inline = TRUE)
+          ),
+          column(1,
+                 shinyBS::bsButton(
+                   "radio-info",
+                   label = "",
+                   icon = icon("info"),
+                   style = "default",
+                   size = "extra-small"
+                 ),
+                 shinyBS::bsPopover(
+                   "radio-info",
+                   "Type of intersection",
+                   "Here you can select the type of the intersection framework. The fast intersect just intersects your fields over the years and leaves out fields not present in a year. The comprehensive method is much slower but contains each area you put in with comprehensive union functions.",
+                   placement = "left",
+                   trigger = "toggle",
+                   options = list(
+                     container = 'body',
+                     html = TRUE
+                   )
+                 )
+          )
+        )
     ),
     
     # Crop Translation File Upload Section (only shown if a raster file has been uploaded)
@@ -741,9 +784,19 @@ processing_ui <- function(app_data, output_dir = NA, start_year = NA, vector_fil
         column(4,
                conditionalPanel(
                  condition = "output.show_process_button",
-                 actionButton("btn_process", "Process Files", 
+                 actionButton("btn_process", "Process Files",
                               class = "btn-primary btn-lg",
-                              style = "margin-top: 20px; background-color: rgb(116, 150, 30); border-color: rgb(116, 150, 30);")
+                              style = "margin-top: 20px; background-color: rgb(116, 150, 30); border-color: rgb(116, 150, 30);"),
+                 # Processing indicator (initially hidden, shown via JavaScript when btn_process is clicked)
+                 tags$button(
+                   id = "processing_indicator",
+                   type = "button",
+                   class = "btn btn-primary btn-lg",
+                   disabled = "disabled",
+                   style = "display: none; margin-top: 20px; background-color: #337ab7; border-color: #2e6da4; cursor: not-allowed; pointer-events: none;",
+                   icon("spinner", class = "fa-spin"),
+                   " Processing..."
+                 )
                )
         )
       )
@@ -795,6 +848,13 @@ processing_ui <- function(app_data, output_dir = NA, start_year = NA, vector_fil
                                   wellPanel(
                                     h4("Available Crops / User Specific Single Crop Classes"),
                                     uiOutput("available_crops_ui")
+                                  ),
+                                  wellPanel(
+                                    h4("Ignored Crops (Excluded from Processing)"),
+                                    div(style = "color: #d9534f; font-weight: bold; margin-bottom: 10px;",
+                                        textOutput("ignored_count_display")
+                                    ),
+                                    uiOutput("ignore_crops_ui")
                                   )
                            ),
                            column(9,
@@ -1101,7 +1161,19 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
   
   # Reactive value to track if any raster file has been uploaded
   has_raster_file <- reactiveVal(FALSE)
-  
+
+  # Reactive value to track if processing is in progress
+  is_processing <- reactiveVal(FALSE)
+
+  # Reactive value to remember the first selected column for auto-selection in subsequent files
+  remembered_column <- reactiveVal(NULL)
+
+  # Output for conditional panel to show/hide Process Files button (hidden during processing)
+  output$is_processing <- reactive({
+    return(is_processing())
+  })
+  outputOptions(output, "is_processing", suspendWhenHidden = FALSE)
+
   # Output for conditional panel to show/hide crop translation file upload
   output$has_raster_file <- reactive({
     return(has_raster_file())
@@ -1432,10 +1504,16 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
             
             # Convert raster to vector (inline conversion)
             vectorized <- terra::as.polygons(raster_layer, dissolve = TRUE)
-            
+
             # Convert to sf
             vectorized_sf <- sf::st_as_sf(vectorized)
-            
+
+            # Verify and standardize CRS
+            if(is.na(sf::st_crs(vectorized_sf))) {
+              warning(paste("Raster file", i, "has no CRS defined. Assuming EPSG:4326 (WGS84)."))
+              sf::st_crs(vectorized_sf) <- 4326
+            }
+
             # Apply translation to the raster values
             raster_col_name <- names(vectorized_sf)[1]
             if(!is.null(value_to_name) && length(value_to_name) > 0) {
@@ -1610,14 +1688,22 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
             # Convert raster to vector
             file_loading_states[[paste0("file", file_num, "_progress")]] <- 60
             vectorized <- terra::as.polygons(raster_data, dissolve = TRUE)
-            
+
             # Convert to sf
             file_loading_states[[paste0("file", file_num, "_status")]] <- "Finalizing conversion..."
-            file_loading_states[[paste0("file", file_num, "_progress")]] <- 80
-            
+            file_loading_states[[paste0("file", file_num, "_progress")]] <- 70
+
             vectorized_sf <- sf::st_as_sf(vectorized)
             vectorized_sf <- sf::st_cast(vectorized_sf, "POLYGON")
-            
+
+            # Verify and standardize CRS
+            if(is.na(sf::st_crs(vectorized_sf))) {
+              warning(paste("Raster file has no CRS defined. Assuming EPSG:4326 (WGS84)."))
+              sf::st_crs(vectorized_sf) <- 4326
+            }
+
+            file_loading_states[[paste0("file", file_num, "_progress")]] <- 80
+
             # Apply translation to create crop_name column (consistent with batch upload)
             raster_col_name <- names(vectorized_sf)[1]
             if (!is.null(value_to_name) && length(value_to_name) > 0) {
@@ -1636,7 +1722,7 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
             
             # Update column selector - exclude geometry column
             available_columns <- setdiff(names(vectorized_sf), attr(vectorized_sf, "sf_column"))
-            
+
             # Auto-select crop_name column if it exists (for translated rasters)
             if("crop_name" %in% available_columns) {
               updateSelectInput(session, column_selector_id,
@@ -1647,6 +1733,11 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
               updateSelectInput(session, column_selector_id,
                                 choices = available_columns,
                                 selected = common_column)
+            } else if(!is.null(remembered_column()) && remembered_column() %in% available_columns) {
+              # Use remembered column from first file if available
+              updateSelectInput(session, column_selector_id,
+                                choices = available_columns,
+                                selected = remembered_column())
             } else {
               updateSelectInput(session, column_selector_id,
                                 choices = available_columns)
@@ -1698,16 +1789,22 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
             
             file_reactive$sf_data(sf_obj)
             file_reactive$is_valid(TRUE)
-            
-            if(is.null(common_column) || is.na(common_column)){
+
+            available_columns <- setdiff(names(sf_obj), attr(sf_obj, "sf_column"))
+
+            if(!is.null(common_column) && !is.na(common_column) && common_column %in% available_columns){
+              # Use common_column if specified and available
               updateSelectInput(session, column_selector_id,
-                                choices = setdiff(names(sf_obj),
-                                                  attr(sf_obj, "sf_column")))
-            }else{
-              updateSelectInput(session, column_selector_id,
-                                choices = setdiff(names(sf_obj),
-                                                  attr(sf_obj, "sf_column")),
+                                choices = available_columns,
                                 selected = common_column)
+            } else if(!is.null(remembered_column()) && remembered_column() %in% available_columns) {
+              # Use remembered column from first file if available
+              updateSelectInput(session, column_selector_id,
+                                choices = available_columns,
+                                selected = remembered_column())
+            } else {
+              updateSelectInput(session, column_selector_id,
+                                choices = available_columns)
             }
             
             # Update bounding box if this is the first file
@@ -1983,14 +2080,19 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
     
     # Observer for column and year selection
     observeEvent(input[[sprintf("column_selector%d", i)]], {
-      req(file_reactives[[i]]$sf_data(), 
+      req(file_reactives[[i]]$sf_data(),
           input[[sprintf("column_selector%d", i)]],
           input[[sprintf("year_selector%d", i)]])
-      
+
       if(input[[sprintf("column_selector%d", i)]] != "") {
         file_reactives[[i]]$is_complete(TRUE)
         file_reactives[[i]]$selected_year(input[[sprintf("year_selector%d", i)]])
-        
+
+        # Remember the first column selection for auto-selection in subsequent files
+        if(is.null(remembered_column())) {
+          remembered_column(input[[sprintf("column_selector%d", i)]])
+        }
+
         current_files <- processed_files()
         current_files[[i]] <- list(
           sf_object = file_reactives[[i]]$sf_data(),
@@ -1999,7 +2101,7 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
           filepath = file_reactives[[i]]$selected_file()
         )
         processed_files(current_files)
-        
+
         if(i < 10) {
           current_file_count(i + 1)
         }
@@ -2103,12 +2205,28 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
     } else {
       # Create a simple features polygon from the bounding box
       bbox_polygon <- st_as_sfc(st_bbox(bbox))
-      
-      # Transform to WGS84 if needed (Leaflet requires WGS84)
-      if (st_crs(bbox_polygon) != 4326) {
-        bbox_polygon <- st_transform(bbox_polygon, 4326)
+
+      # Set CRS from bbox if available
+      if (!is.null(attr(bbox, "crs")) && !is.na(attr(bbox, "crs"))) {
+        st_crs(bbox_polygon) <- attr(bbox, "crs")
+      } else if (!is.na(st_crs(bbox))) {
+        st_crs(bbox_polygon) <- st_crs(bbox)
       }
-      
+
+      # Transform to WGS84 if needed (Leaflet requires WGS84)
+      if (!is.na(st_crs(bbox_polygon)) && st_crs(bbox_polygon)$epsg != 4326) {
+        tryCatch({
+          bbox_polygon <- st_transform(bbox_polygon, 4326)
+        }, error = function(e) {
+          warning(paste("Could not transform bbox to WGS84:", e$message))
+          # If transformation fails, assume it's already in WGS84
+          st_crs(bbox_polygon) <- 4326
+        })
+      } else if (is.na(st_crs(bbox_polygon))) {
+        # No CRS defined, assume WGS84
+        st_crs(bbox_polygon) <- 4326
+      }
+
       # Create map with the bounding box
       leaflet() %>%
         addTiles() %>%
@@ -2331,7 +2449,15 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
   # Initialize reactive values
   class_state <- reactiveVal(NULL)
   available_crops <- reactiveVal(character(0))
+  ignored_crops <- reactiveVal(character(0))
   class_counter <- reactiveVal(0)
+  
+  # Observer to update ignored_crops when user drags crops to the bin
+  observeEvent(input$ignored_crops, {
+    if(!is.null(input$ignored_crops)) {
+      ignored_crops(input$ignored_crops)
+    }
+  }, ignoreNULL = FALSE, ignoreInit = TRUE)
   
   # Initialize all_unique_crops reactive value to store all crops from files
   all_unique_crops <- reactiveVal(NULL)
@@ -2508,8 +2634,18 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
       }
     }
     
-    # Set available crops as all unique crops minus assigned crops
-    available_crops(setdiff(all_unique_crops(), assigned_crops))
+    # Get ignored crops
+    ignored <- ignored_crops()
+    
+    # Set available crops as all unique crops minus assigned crops minus ignored crops
+    all_available <- setdiff(all_unique_crops(), assigned_crops)
+    
+    # Further remove ignored crops
+    if(length(ignored) > 0) {
+      all_available <- setdiff(all_available, ignored)
+    }
+    
+    available_crops(all_available)
   })
   
   
@@ -2554,7 +2690,31 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
       )
     )
   })
+
+  # Generate UI for ignored/excluded crops bin
+  output$ignore_crops_ui <- renderUI({
+    bucket_list(
+      header = NULL,
+      group_name = "crop_groups",
+      orientation = "vertical",
+      add_rank_list(
+        text = "Drag crops here to exclude",
+        labels = ignored_crops(),
+        input_id = "ignored_crops"
+      )
+    )
+  })
   
+  # Display count of ignored crops
+  output$ignored_count_display <- renderText({
+    count <- length(ignored_crops())
+    if(count > 0) {
+      paste0("🗑️ ", count, " crop type(s) will be excluded from processing")
+    } else {
+      "No crops excluded - drag crops here to exclude them"
+    }
+  })
+
   # Generate UI for aggregation classes
   output$aggregation_classes <- renderUI({
     req(class_state())
@@ -2600,21 +2760,62 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
     })
   })
   
-  # Handle class removal
+  # Handle class removal - create observers for each remove button dynamically
   observe({
     current_state <- class_state()
-    lapply(current_state, function(class) {
-      observeEvent(input[[paste0(class$id, "_remove")]], {
-        crops_to_return <- input[[class$id]]
-        if(!is.null(crops_to_return)) {
-          available_crops(c(available_crops(), crops_to_return))
-        }
-        updated_state <- current_state[sapply(current_state, function(x) x$id != class$id)]
-        class_state(updated_state)
+    if (!is.null(current_state)) {
+      lapply(current_state, function(class) {
+        local({
+          class_id <- class$id
+          observeEvent(input[[paste0(class_id, "_remove")]], {
+            # Get the current state at the time of button click
+            state_snapshot <- class_state()
+            crops_to_return <- input[[class_id]]
+
+            # Return crops to available pool
+            if(!is.null(crops_to_return) && length(crops_to_return) > 0) {
+              available_crops(c(available_crops(), crops_to_return))
+            }
+
+            # Remove the class from state
+            updated_state <- state_snapshot[sapply(state_snapshot, function(x) x$id != class_id)]
+            class_state(updated_state)
+          }, ignoreInit = TRUE)
+        })
       })
-    })
+    }
   })
-  
+
+  # Handle individual crop deletion from aggregation classes
+  observe({
+    current_state <- class_state()
+    if (!is.null(current_state)) {
+      lapply(current_state, function(class) {
+        local({
+          class_id <- class$id
+          delete_input_id <- paste0(class_id, "_delete_crop")
+
+          observeEvent(input[[delete_input_id]], {
+            crop_to_delete <- input[[delete_input_id]]
+
+            if (!is.null(crop_to_delete) && crop_to_delete != "") {
+              # Get current crops in this class
+              current_crops <- input[[class_id]]
+
+              if (!is.null(current_crops) && crop_to_delete %in% current_crops) {
+                # Remove the crop from the class
+                updated_crops <- current_crops[current_crops != crop_to_delete]
+
+                # Return the deleted crop to available pool
+                available_crops(c(available_crops(), crop_to_delete))
+              }
+            }
+          }, ignoreInit = TRUE)
+        })
+      })
+    }
+  })
+
   # Prepare Sankey data
   prepare_sankey_data <- reactive({
     current_state <- class_state()
@@ -2817,6 +3018,9 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
   #----------------------------------------------------------------------------------------------------------
   # processor
   processor <- function(current_dir){
+    # Set processing state to TRUE to disable button
+    is_processing(TRUE)
+
     # Start timing and memory tracking
     start_time <- Sys.time()
     initial_mem <- gc(reset = TRUE)
@@ -2851,6 +3055,54 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
         
         # pre-process the layers
         all_files <- add_names(all_files, codierung_all, input$id_or_name, input$language)
+        
+        # FILTER OUT IGNORED CROPS
+        ignored <- ignored_crops()
+        if(length(ignored) > 0 && length(all_files) > 0) {
+          incProgress(0.02, detail = paste("Filtering", length(ignored), "ignored crops"))
+          
+          total_removed <- 0
+          all_files <- lapply(all_files, function(f) {
+            if(is.null(f)) return(NULL)
+            
+            # Find the Name column for this year
+            year_cols <- grep("^Name_", names(f), value = TRUE)
+            if(length(year_cols) == 0) return(f)
+            
+            name_col <- year_cols[1]
+            pre_filter_count <- nrow(f)
+            
+            # Filter out ignored crops
+            f <- f[!f[[name_col]] %in% ignored, ]
+            
+            removed <- pre_filter_count - nrow(f)
+            total_removed <<- total_removed + removed
+            
+            if(removed > 0) {
+              message(paste0("Removed ", removed, " features with ignored crops from ", name_col))
+            }
+            
+            # Return NULL if all features were removed
+            if(nrow(f) == 0) {
+              warning(paste0("All features removed from ", name_col, " due to ignored crops filter"))
+              return(NULL)
+            }
+            
+            return(f)
+          })
+          
+          # Remove NULL entries
+          all_files <- all_files[!sapply(all_files, is.null)]
+          
+          if(total_removed > 0) {
+            showNotification(
+              paste0("Excluded ", total_removed, " features across all years belonging to ", 
+                    length(ignored), " ignored crop type(s)"),
+              type = "message",
+              duration = 5
+            )
+          }
+        }
         
         # start intersection
         incProgress(0.1, detail = "Intersecting")
@@ -3205,6 +3457,9 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
             message(sprintf("Generating %d images in parallel...", length(image_tasks)))
             incProgress(0.02, detail = sprintf("Generating %d images in parallel...", length(image_tasks)))
             
+            # Get ignored crops to pass to parallel workers
+            ignored_crop_list <- ignored_crops()
+            
             # Process tasks in parallel using foreach
             if(length(image_tasks) > 0) {
               results <- foreach::foreach(task = image_tasks, .packages = c('ggplot2', 'ggalluvial', 'dplyr', 'stringr', 'forcats')) %dopar% {
@@ -3215,12 +3470,12 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
                   # Create the output path
                   output_path <- paste0(current_dir, "/images/", sanitized_name, ".png")
                   
-                  # Generate the Sankey diagram
+                  # Generate the Sankey diagram with excluded crops
                   create_crop_rotation_sankey(
                     data = task$data,
                     output_path = output_path,
                     min_area = 0,
-                    exclude_crops = c(),
+                    exclude_crops = ignored_crop_list,
                     color = color_palette
                   )
                   
@@ -3336,18 +3591,26 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
         showNotification(
           paste("Processing completed successfully!",
                 "\nTotal time:", format(difftime(end_time, start_time, units = "auto")),
-                "\nPeak memory usage:", round(max(sapply(c(list(initial_mem), mem_checkpoints, list(final_mem)), 
+                "\nPeak memory usage:", round(max(sapply(c(list(initial_mem), mem_checkpoints, list(final_mem)),
                                                          function(x) sum(x[,2]))) / 1024, 2), "MB"),
           type = "message",
           duration = 10
         )
         message("Processing completed successfully!")
-        
+
+        # Update button to show DONE state
+        session$sendCustomMessage('processingDone', list())
+
+        # Re-enable the Process Files button
+        is_processing(FALSE)
+
       }, error = function(e) {
         end_time <- Sys.time()
         showNotification(paste("Error during processing:", e$message,
                                "\nTime elapsed:", format(difftime(end_time, start_time, units = "auto"))),
                          type = "error")
+        # Re-enable the Process Files button on error
+        is_processing(FALSE)
       })
     })
   }

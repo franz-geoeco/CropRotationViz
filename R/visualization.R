@@ -140,7 +140,7 @@ viz_ui <- function(input_dir = NA){
                            # Step 1: Settings
                            #-------------------------------------------------------------------------------
                            column(2,
-                                  numericRangeInput("Area_range_sec", "Sequence Area Range (km²):",
+                                  shinyWidgets::numericRangeInput("Area_range_sec", "Sequence Area Range (km²):",
                                                     min = 0, max = 4000,
                                                     value = c(0, 1000))
                            ),
@@ -165,12 +165,12 @@ viz_ui <- function(input_dir = NA){
                                   ),
                            ),
                            column(2, 
-                                  pickerInput(
+                                  shinyWidgets::pickerInput(
                                     inputId = "Crops_sec", 
                                     label = "Show/hide crops:", 
                                     choices = Crop_choices, 
                                     selected = Crop_choices, 
-                                    options = pickerOptions(
+                                    options = shinyWidgets::pickerOptions(
                                       actionsBox = TRUE, 
                                       size = 15,
                                       selectedTextFormat = "count > 3"
@@ -291,7 +291,7 @@ viz_ui <- function(input_dir = NA){
                          ),
                          br(),
                          fluidRow(column(2,
-                                         numericRangeInput("Area_range_spec", "Sequence Area Range (km²):",
+                                         shinyWidgets::numericRangeInput("Area_range_spec", "Sequence Area Range (km²):",
                                                            min = 0, max = 4000,
                                                            value = c(0, 1000))
                          ),
@@ -313,12 +313,12 @@ viz_ui <- function(input_dir = NA){
                                 )
                          ),
                          column(2, 
-                                pickerInput(
+                                shinyWidgets::pickerInput(
                                   inputId = "Crop_spec", 
                                   label = "Specific crop:", 
                                   choices = Crop_choices, 
                                   selected = "protein plants", 
-                                  options = pickerOptions(
+                                  options = shinyWidgets::pickerOptions(
                                     actionsBox = TRUE, 
                                     size = 15,
                                     selectedTextFormat = "count > 3"
@@ -388,6 +388,26 @@ viz_ui <- function(input_dir = NA){
                                     selected = "districts",
                                     inline = TRUE
                                   )
+                           ),
+                           column(3,
+                                  radioButtons(
+                                    inputId = "year_mode_spec",
+                                    label = "Display Mode:",
+                                    choices = c("Complete Average" = "average", "Annual" = "annual"),
+                                    selected = "average",
+                                    inline = TRUE
+                                  )
+                           ),
+                           column(4,
+                                  sliderInput(
+                                    inputId = "year_select_spec",
+                                    label = "Select Year:",
+                                    min = 2000,
+                                    max = 2024,
+                                    value = 2008,
+                                    step = 1,
+                                    sep = ""
+                                  )
                            )
                          ),
                          fluidRow(
@@ -443,10 +463,12 @@ viz_ui <- function(input_dir = NA){
                            column(1),
                            column(10,
                                   shinycssloaders::withSpinner(
-                                    plotlyOutput("sankey_plotly_specific")
-                                  ), br(), br(), br(),br(), br()
-                           ),
-                         )
+                                    plotlyOutput("sankey_plotly_specific", height = "1500px")
+                                  )
+                           )
+                         ),
+                         br(), br(), br(), br(), br(), br(), br(), br(), br(), br(),
+                         br(), br(), br(), br(), br(), br(), br(), br(), br(), br()
                          
                 ),
                 tabPanel("Plot Sequence per Area",
@@ -468,12 +490,12 @@ viz_ui <- function(input_dir = NA){
                            conditionalPanel(
                              condition = "input.district_or_ezg != 'River Basin'",
                              column(2,
-                                    pickerInput(
+                                    shinyWidgets::pickerInput(
                                       inputId = "District_sel", 
                                       label = "District you wanna display", 
                                       choices = District_choices, 
                                       selected = District_choices[1],
-                                      options = pickerOptions(
+                                      options = shinyWidgets::pickerOptions(
                                         actionsBox = TRUE, 
                                         size = 15,
                                         selectedTextFormat = "count > 3"
@@ -483,12 +505,12 @@ viz_ui <- function(input_dir = NA){
                            conditionalPanel(
                              condition = "input.district_or_ezg == 'River Basin'",
                              column(2, 
-                                    pickerInput(
+                                    shinyWidgets::pickerInput(
                                       inputId = "EZG_sel", 
                                       label = "RIver basin you wanna display", 
                                       choices = EZG_choices, 
                                       selected = EZG_choices[1], 
-                                      options = pickerOptions(
+                                      options = shinyWidgets::pickerOptions(
                                         actionsBox = TRUE, 
                                         size = 15,
                                         selectedTextFormat = "count > 3"
@@ -496,17 +518,17 @@ viz_ui <- function(input_dir = NA){
                              )
                            ),
                            column(2,
-                                  numericRangeInput("Area_range_areas", "Sequence Area Range (km²):",
+                                  shinyWidgets::numericRangeInput("Area_range_areas", "Sequence Area Range (km²):",
                                                     min = 0, max = 4000,
                                                     value = c(0, 1000))
                            ),
                            column(2, 
-                                  pickerInput(
+                                  shinyWidgets::pickerInput(
                                     inputId = "Crops_kreis", 
                                     label = "Show/hide crops:", 
                                     choices = Crop_choices, 
                                     selected = Crop_choices, 
-                                    options = pickerOptions(
+                                    options = shinyWidgets::pickerOptions(
                                       actionsBox = TRUE, 
                                       size = 15,
                                       selectedTextFormat = "count > 3"
@@ -1255,9 +1277,9 @@ viz_server <- function(input, output, session, app_data, input_dir) {
     req(data_loaded())
     
     CropRotViz_intersection <- data.table::rbindlist(district_CropRotViz_intersection)
-    
+
     # Then add the id column
-    CropRotViz_intersection[, id := seq_len(.N)]
+    data.table::set(CropRotViz_intersection, j = "id", value = seq_len(nrow(CropRotViz_intersection)))
     
     # Initialize choices after loading data
     # Get crop choices - more efficiently
@@ -1293,7 +1315,7 @@ viz_server <- function(input, output, session, app_data, input_dir) {
     #--------------------------------------------------------------------------------------------
     
     # Update the pickerInput Crops_sec
-    updatePickerInput(
+    shinyWidgets::updatePickerInput(
       session,
       inputId = "Crops_sec",
       choices = setNames(as.character(Crop_choices), Crop_choices),
@@ -1301,7 +1323,7 @@ viz_server <- function(input, output, session, app_data, input_dir) {
     )
     
     # Update the pickerInput Crop_spec
-    updatePickerInput(
+    shinyWidgets::updatePickerInput(
       session,
       inputId = "Crop_spec",
       choices = setNames(as.character(Crop_choices), Crop_choices),
@@ -1309,7 +1331,7 @@ viz_server <- function(input, output, session, app_data, input_dir) {
     )
     
     # Update the pickerInput Crops_kreis
-    updatePickerInput(
+    shinyWidgets::updatePickerInput(
       session,
       inputId = "Crops_kreis",
       choices = setNames(as.character(Crop_choices), Crop_choices),
@@ -1317,7 +1339,7 @@ viz_server <- function(input, output, session, app_data, input_dir) {
     )
     
     # Update the pickerInput District_sel
-    updatePickerInput(
+    shinyWidgets::updatePickerInput(
       session,
       inputId = "District_sel",
       choices = setNames(as.character(District_choices), District_choices),
@@ -1325,7 +1347,7 @@ viz_server <- function(input, output, session, app_data, input_dir) {
     )
     
     # Update the pickerInput EZG_sel
-    updatePickerInput(
+    shinyWidgets::updatePickerInput(
       session,
       inputId = "EZG_sel",
       choices = setNames(as.character(EZG_choices), EZG_choices),
@@ -1339,6 +1361,21 @@ viz_server <- function(input, output, session, app_data, input_dir) {
       min = min(years),
       max = max(years)
     )
+
+    # Update the sliderInput year_select_spec with available years
+    crop_cols_spec <- grep("^(Aggregated_|Name_)[0-9]{4}$", names(CropRotViz_intersection), value = TRUE)
+    if (length(crop_cols_spec) > 0) {
+      available_years_spec <- sort(unique(as.numeric(gsub("^(Aggregated_|Name_)", "", crop_cols_spec))))
+      if (length(available_years_spec) > 0) {
+        updateSliderInput(
+          session,
+          inputId = "year_select_spec",
+          min = min(available_years_spec),
+          max = max(available_years_spec),
+          value = min(available_years_spec)
+        )
+      }
+    }
     #--------------------------------------------------------------------------------------------
     
     
@@ -1438,10 +1475,10 @@ viz_server <- function(input, output, session, app_data, input_dir) {
     
     observeEvent(input$update_crop_specific, {
       req(input$Area_range_spec, input$Crop_spec)
-      
+
       withProgress(message = 'Updating visualization...', value = 0, {
         incProgress(0.3, detail = "Processing data")
-        
+
         result <- transform_rotation_data(
           All_rot_big      = CropRotViz_intersection,
           distribution_df  = distribution_df,
@@ -1449,9 +1486,27 @@ viz_server <- function(input, output, session, app_data, input_dir) {
           type             = "specific",
           specific_crop    = input$Crop_spec
         )
-        
+
         incProgress(0.7, detail = "Finalizing")
         spec_rotation_data(result)
+
+        # Extract available years from the data and update year slider
+        if (!is.null(CropRotViz_intersection) && nrow(CropRotViz_intersection) > 0) {
+          crop_cols <- grep("^(Aggregated_|Name_)[0-9]{4}$", names(CropRotViz_intersection), value = TRUE)
+          if (length(crop_cols) > 0) {
+            available_years <- sort(unique(as.numeric(gsub("^(Aggregated_|Name_)", "", crop_cols))))
+            if (length(available_years) > 0) {
+              updateSliderInput(session, "year_select_spec",
+                              min = min(available_years),
+                              max = max(available_years),
+                              value = if (input$year_select_spec %in% available_years) {
+                                input$year_select_spec
+                              } else {
+                                min(available_years)
+                              })
+            }
+          }
+        }
       })
     })
     
@@ -1959,17 +2014,22 @@ viz_server <- function(input, output, session, app_data, input_dir) {
     
     # table specific
     output$table_spec <- renderDT({
+      req(spec_rotation_data())
       Sys.sleep(1.5)
       # coloring
       crop_color_mapping_df <- as.data.frame(crop_colors())
       crop_color_mapping_df$crop <- names(crop_colors())
       crop_color_mapping_df <- crop_color_mapping_df[complete.cases(crop_color_mapping_df),]
       names(crop_color_mapping_df) <- c("color", "crop")
-      
+
+      # Use isolate to prevent reactive updates when crop changes
+      selected_crop <- isolate(input$Crop_spec)
+      area_range <- isolate(input$Area_range_spec)
+
       All_rot_clean <- transform_rotation_summary(
         All_rot_big = CropRotViz_intersection,
-        area_range = input$Area_range_spec,
-        specific_crop = input$Crop_spec,
+        area_range = area_range,
+        specific_crop = selected_crop,
         type = "specific",
         max_rows = 3000,
         years = years
@@ -2095,9 +2155,12 @@ viz_server <- function(input, output, session, app_data, input_dir) {
     
     #--------------------------------------------------------------------------------------------
     output$sankey_plotly_specific <- renderPlotly({
+      req(spec_rotation_data())
       Sys.sleep(1.5)
-      
-      summarized_transitions <- process_specific_transitions(CropRotViz_intersection, input$Crop_spec)
+
+      # Get the selected crop from spec_rotation_data to ensure it only updates after button press
+      selected_crop <- isolate(input$Crop_spec)
+      summarized_transitions <- process_specific_transitions(CropRotViz_intersection, selected_crop)
       
       
       # Get unique node names and their colors
@@ -2131,7 +2194,7 @@ viz_server <- function(input, output, session, app_data, input_dir) {
       ) %>%
         layout(
           title = list(
-            text = paste("Crop proportion before and after", input$Crop_spec),
+            text = paste("Crop proportion before and after", selected_crop),
             x = 0.5,
             y = 0.95
           ),
@@ -2198,10 +2261,12 @@ viz_server <- function(input, output, session, app_data, input_dir) {
     
     # Leaflet map for crop-specific area distribution
     output$leaflet_crop_spec <- renderLeaflet({
-      req(spec_rotation_data(), input$Crop_spec, input$map_type_spec)
-      
-      # Get the selected crop from the spec_rotation_data
-      selected_crop <- input$Crop_spec
+      req(spec_rotation_data(), input$map_type_spec, input$year_mode_spec)
+
+      # Get the selected crop and year mode using isolate to prevent reactive updates
+      selected_crop <- isolate(input$Crop_spec)
+      year_mode <- input$year_mode_spec
+      selected_year <- input$year_select_spec
       
       # Calculate crop area percentages by district or catchment
       if (input$map_type_spec == "districts") {
@@ -2238,33 +2303,63 @@ viz_server <- function(input, output, session, app_data, input_dir) {
       
       # Calculate crop area percentages for each district/catchment
       crop_percentages <- list()
-      
+
       for (name in names(data_list)) {
         region_data <- data_list[[name]]
-        
+
         # Find crop columns (either Aggregated_ or Name_ columns)
         crop_cols <- grep("^(Aggregated_|Name_)[0-9]{4}$", names(region_data), value = TRUE)
-        
+
         if (length(crop_cols) > 0 && nrow(region_data) > 0) {
-          # Calculate the mean percentage across all years
-          # For each year, calculate: (area with selected crop) / (total area in that year)
-          year_percentages <- sapply(crop_cols, function(col) {
-            # Total area for this year (all crops)
-            total_area_year <- sum(region_data$freq, na.rm = TRUE)
-            
-            # Area with selected crop in this year
-            crop_area_year <- sum(region_data$freq[region_data[[col]] == selected_crop], na.rm = TRUE)
-            
-            # Calculate percentage for this year
-            if (total_area_year > 0) {
-              (crop_area_year / total_area_year) * 100
-            } else {
-              0
+          if (year_mode == "annual") {
+            # Annual mode: calculate percentage for selected year only
+            year_col <- grep(paste0("_(Aggregated_|Name_)", selected_year, "$"), crop_cols, value = TRUE)
+
+            if (length(year_col) == 0) {
+              # Try alternative pattern
+              year_col <- grep(paste0(selected_year, "$"), crop_cols, value = TRUE)
             }
-          })
-          
-          # Calculate mean percentage across all years
-          crop_percentages[[name]] <- mean(year_percentages, na.rm = TRUE)
+
+            if (length(year_col) > 0) {
+              # Use first matching column
+              col <- year_col[1]
+
+              # Total area for this year (all crops)
+              total_area_year <- sum(region_data$freq, na.rm = TRUE)
+
+              # Area with selected crop in this year
+              crop_area_year <- sum(region_data$freq[region_data[[col]] == selected_crop], na.rm = TRUE)
+
+              # Calculate percentage for this year
+              if (total_area_year > 0) {
+                crop_percentages[[name]] <- (crop_area_year / total_area_year) * 100
+              } else {
+                crop_percentages[[name]] <- 0
+              }
+            } else {
+              crop_percentages[[name]] <- 0
+            }
+          } else {
+            # Average mode: calculate mean percentage across all years
+            # For each year, calculate: (area with selected crop) / (total area in that year)
+            year_percentages <- sapply(crop_cols, function(col) {
+              # Total area for this year (all crops)
+              total_area_year <- sum(region_data$freq, na.rm = TRUE)
+
+              # Area with selected crop in this year
+              crop_area_year <- sum(region_data$freq[region_data[[col]] == selected_crop], na.rm = TRUE)
+
+              # Calculate percentage for this year
+              if (total_area_year > 0) {
+                (crop_area_year / total_area_year) * 100
+              } else {
+                0
+              }
+            })
+
+            # Calculate mean percentage across all years
+            crop_percentages[[name]] <- mean(year_percentages, na.rm = TRUE)
+          }
         } else {
           crop_percentages[[name]] <- 0
         }
@@ -2296,7 +2391,19 @@ viz_server <- function(input, output, session, app_data, input_dir) {
         )
       }
       
-      # Create popup text
+      # Create popup text with year information
+      year_info <- if (year_mode == "annual") {
+        paste0("<div style='margin: 5px 0;'>",
+               "<span style='color: #34495e;'><strong>Year:</strong></span> ",
+               "<span style='color: #34495e; font-weight: bold;'>", selected_year, "</span>",
+               "</div>")
+      } else {
+        paste0("<div style='margin: 5px 0;'>",
+               "<span style='color: #34495e;'><strong>Period:</strong></span> ",
+               "<span style='color: #34495e; font-weight: bold;'>Complete Average</span>",
+               "</div>")
+      }
+
       spatial_data$popup_text <- paste0(
         "<div style='font-family: Arial, sans-serif; font-size: 14px; line-height: 1.4; min-width: 200px;'>",
         "<strong style='color: #2c3e50; font-size: 16px;'>", spatial_data[[name_col]], "</strong><br>",
@@ -2305,6 +2412,7 @@ viz_server <- function(input, output, session, app_data, input_dir) {
         "<span style='color: #34495e;'><strong>Crop:</strong></span> ",
         "<span style='color: #34495e; font-weight: bold;'>", selected_crop, "</span>",
         "</div>",
+        year_info,
         "<div style='margin: 5px 0;'>",
         "<span style='color: #34495e;'><strong>Area Percentage:</strong></span> ",
         "<span style='color: #34495e; font-weight: bold;'>", round(spatial_data$crop_percentage, 2), "%</span>",
@@ -2332,7 +2440,11 @@ viz_server <- function(input, output, session, app_data, input_dir) {
           position = "bottomright",
           pal = pal,
           values = ~crop_percentage,
-          title = paste0(selected_crop, "<br>Area (%)"),
+          title = if (year_mode == "annual") {
+            paste0(selected_crop, " (", selected_year, ")<br>Area (%)")
+          } else {
+            paste0(selected_crop, " (Avg)<br>Area (%)")
+          },
           opacity = 0.7
         )
       
@@ -2426,7 +2538,7 @@ viz_server <- function(input, output, session, app_data, input_dir) {
     
     
     output$district_donut_plot <- renderPlotly({
-      req(crop_colors())
+      req(district_rotation_data(), crop_colors())
       data <- district_rotation_data()[[2]]
       
       if (any(grepl("Aggregated_", names(data)))) {
@@ -2444,7 +2556,7 @@ viz_server <- function(input, output, session, app_data, input_dir) {
     })
     
     output$basin_donut_plot <- renderPlotly({
-      req(crop_colors())
+      req(basin_rotation_data(), crop_colors())
       data <- basin_rotation_data()[[2]]
       
       if (any(grepl("Aggregated_", names(data)))) {
@@ -2660,13 +2772,13 @@ viz_server <- function(input, output, session, app_data, input_dir) {
           all_crops <- unique(unlist(CropRotViz_intersection[, ..crop_cols]))
           all_crops <- sort(all_crops[!is.na(all_crops)])
           
-          pickerInput(
+          shinyWidgets::pickerInput(
             "ranking_specific_crop",
             "Require Specific Crop(s):",
             choices = all_crops,
             selected = NULL,
             multiple = TRUE,
-            options = pickerOptions(
+            options = shinyWidgets::pickerOptions(
               noneSelectedText = "No specific crop required",
               selectedTextFormat = "count > 2",
               actionsBox = TRUE,

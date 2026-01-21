@@ -1,5 +1,5 @@
 #' Field-Level Crop Rotation Server Function
-#' 
+#'
 #' @description Server-side function that handles the core logic for visualizing field-level crop rotations.
 #' The function processes uploaded spatial data files, manages interactive map displays, and generates
 #' crop rotation visualizations. It includes features such as:
@@ -8,14 +8,17 @@
 #' - District-based filtering of field data
 #' - Click-based field selection and rotation pattern display
 #' - Dynamic plot generation for crop sequences
-#' 
+#'
 #' @param input Shiny input object containing user inputs
 #' @param output Shiny output object for rendering UI elements
 #' @param session Shiny session object for managing the current session
 #' @param app_data Additional application data passed to the server
-#' 
+#'
 #' @return None (modifies Shiny reactive context)
-field_level_server <- function(input, output, session, app_data) {
+#' @importFrom shinyalert shinyalert
+#' @export
+#' @rdname field_level_viz
+viz_server <- field_level_server <- function(input, output, session, app_data) {
   options(shiny.maxRequestSize = 10000*1024^2)
   
   # Initialize reactive values
@@ -106,7 +109,7 @@ field_level_server <- function(input, output, session, app_data) {
         # For non-shapefile formats (gpkg, fgb), read directly
         data <- st_read(input$vector_file$datapath[1], quiet = TRUE)
         # Update district selector choices
-        updatePickerInput(session, "district", 
+        shinyWidgets::updatePickerInput(session, "district", 
                           choices = sort(unique(data$District)), 
                           selected = sort(unique(data$District))[1])
       }
@@ -248,7 +251,7 @@ field_level_server <- function(input, output, session, app_data) {
 }
 
 #' Field-Level Crop Rotation UI Function
-#' 
+#'
 #' @description User interface function that creates the layout for the field-level crop rotation
 #' visualization tool. The UI includes:
 #' - File upload interface for vector data
@@ -257,11 +260,13 @@ field_level_server <- function(input, output, session, app_data) {
 #' - Conditional panels for displaying crop rotation patterns
 #' - Responsive layout with bootstrap grid system
 #' - Footer with author and institutional information
-#' 
+#'
 #' @param app_data Application data passed to the UI for initialization
-#' 
+#'
 #' @return A Shiny UI definition that creates a fluid page layout with multiple components
-field_level_ui <- function(app_data) {
+#' @export
+#' @rdname field_level_viz
+viz_ui <- field_level_ui <- function(app_data) {
   fluidPage(
     theme = shinytheme("cyborg"),
     
@@ -280,9 +285,9 @@ field_level_ui <- function(app_data) {
                           accept = c(".shp", ".dbf", ".shx", ".prj", ".cpg", ".gpkg", ".fgb"),
                           multiple = TRUE)
              ),
-      column(4, pickerInput("district", "Select District:", 
+      column(4, shinyWidgets::pickerInput("district", "Select District:", 
                             choices = NULL,
-                            options = pickerOptions(
+                            options = shinyWidgets::pickerOptions(
                               actionsBox = TRUE, 
                               size = 15,
                               selectedTextFormat = "count > 3"

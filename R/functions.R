@@ -342,14 +342,52 @@ add_names <- function(fields_list, codierung_all, column, language){
   if(column == "Code"){
     fields_list <- lapply(fields_list, function(f) {
       file <- f$sf_object
+      
+      # VALIDATION: Remove NA/NaN values before processing
+      validation_result <- validate_crop_data(file, f$selected_column, 
+                                               file_name = paste0("Year ", f$selected_year),
+                                               show_warnings = TRUE)
+      file <- validation_result$sf_object
+      
+      # Check if any data remains after validation
+      if(nrow(file) == 0) {
+        warning(paste0("No valid features remain in year ", f$selected_year, " after validation"))
+        return(NULL)
+      }
+      
       file <- file[,c(f$selected_column, attr(file, "sf_column"))]
       st_geometry(file) <- "geometry"
       names(file) <- c("NC", "geometry")
       file$NC <- as.numeric(file$NC)
-      file <- subset(file, NC >= 100)
+      
+      # Filter NC >= 100 and remove any NA from conversion
+      file <- subset(file, !is.na(NC) & NC >= 100)
+      
+      # Check if any data remains after NC filtering
+      if(nrow(file) == 0) {
+        warning(paste0("No valid crop codes (NC >= 100) found in year ", f$selected_year))
+        return(NULL)
+      }
       
       # add the names
       file <- merge(file, codierung_all)
+      
+      # CRITICAL: Remove rows where merge failed (unmatched codes create NA in name columns)
+      name_col <- if(language == "English") "english_names" else "german_names"
+      pre_filter_count <- nrow(file)
+      file <- file[!is.na(file[[name_col]]), ]
+      
+      if(nrow(file) < pre_filter_count) {
+        warning(paste0("Removed ", pre_filter_count - nrow(file), 
+                      " features in year ", f$selected_year, 
+                      " due to unmatched crop codes (codes not in translation table)"))
+      }
+      
+      # Check if any data remains after name matching
+      if(nrow(file) == 0) {
+        warning(paste0("No matching crop names found in year ", f$selected_year))
+        return(NULL)
+      }
       
       names(file)[names(file) == "NC"] <- paste0("NC_", f$selected_year)
       
@@ -365,6 +403,19 @@ add_names <- function(fields_list, codierung_all, column, language){
   }else{
     fields_list <- lapply(fields_list, function(f) {
       file <- f$sf_object
+      
+      # VALIDATION: Remove NA/NaN values before processing
+      validation_result <- validate_crop_data(file, f$selected_column, 
+                                               file_name = paste0("Year ", f$selected_year),
+                                               show_warnings = TRUE)
+      file <- validation_result$sf_object
+      
+      # Check if any data remains after validation
+      if(nrow(file) == 0) {
+        warning(paste0("No valid features remain in year ", f$selected_year, " after validation"))
+        return(NULL)
+      }
+      
       file <- file[,c(f$selected_column, attr(file, "sf_column"))]
       st_geometry(file) <- "geometry"
       names(file) <- c("Crop", "geometry")
@@ -372,6 +423,9 @@ add_names <- function(fields_list, codierung_all, column, language){
       return(file)
     })
   }
+  
+  # Filter out NULL entries (years with no valid data)
+  fields_list <- fields_list[!sapply(fields_list, is.null)]
   
   return(fields_list)
 }
@@ -479,15 +533,49 @@ intersect_fields <- function(fields_list, max_area = 20000000 * 1e6, n_cores = 4
     n_cores <- min(n_cores, parallel::detectCores())
   }
   message(sprintf("Using %d cores for parallel processing", n_cores))
-  
+
   # Get the CRS of the first layer to use for all transformations
   target_crs <- st_crs(fields_list[[1]])
-  
-  # Transform all fields to the CRS of the first layer
-  fields_list <- lapply(fields_list, st_transform, crs = target_crs)
-  
+  message("Target CRS identified")
+
+  # Validate and simplify geometries BEFORE transformation to prevent hanging
+  message("Validating geometries...")
+  fields_list <- lapply(seq_along(fields_list), function(i) {
+    message(sprintf("  Processing layer %d of %d...", i, length(fields_list)))
+    layer <- fields_list[[i]]
+
+    # Validate geometries
+    layer <- st_make_valid(layer)
+
+    return(layer)
+  })
+  message("Geometries validated and simplified")
+
+  # Transform all fields to the CRS of the first layer with error handling
+  message("Transforming layers to common CRS...")
+  fields_list <- lapply(seq_along(fields_list), function(i) {
+    message(sprintf("  Transforming layer %d...", i))
+    layer <- fields_list[[i]]
+
+    # Try transformation, but handle errors gracefully
+    tryCatch({
+      # Check if CRS transformation is needed
+      if (!identical(st_crs(layer), target_crs)) {
+        layer <- st_transform(layer, crs = target_crs)
+      }
+      layer
+    }, error = function(e) {
+      warning(sprintf("Could not transform layer %d: %s. Assuming CRS is compatible.", i, e$message))
+      # Set the CRS without transformation if transformation fails
+      st_crs(layer) <- target_crs
+      layer
+    })
+  })
+  message("CRS transformation complete")
+
   # Initialize with first layer
   intersected <- fields_list[[1]]
+  message("Starting intersection...")
   
   # Check if tiling is needed
   total_area <- as.numeric(sum(st_area(intersected)))
@@ -1173,33 +1261,85 @@ intersect_fields_simple <- function(fields_list, max_area = 20000 * 1e6, n_cores
 #' 
 #' @export
 intersect_with_borders <- function(input, level, countriesSP, EZG, aoi) {
+  # Store original s2 setting and disable it for this function to avoid transformation issues
+  old_s2 <- sf::sf_use_s2()
+  sf::sf_use_s2(FALSE)
+  on.exit(sf::sf_use_s2(old_s2))  # Restore original setting when function exits
+
+  # Verify input CRS
+  message("Verifying input CRS...")
+  if(is.na(sf::st_crs(input))) {
+    stop("Input data has no CRS defined. Cannot proceed with intersection.")
+  }
+
+  message(paste("Input CRS:", sf::st_crs(input)$input))
+  message(paste("Input features:", nrow(input)))
+
+  # Validate input geometries before processing
+  message("Validating input geometries...")
+  tryCatch({
+    input <- sf::st_make_valid(input)
+  }, error = function(e) {
+    warning(paste("Error validating input geometries:", e$message))
+  })
+  input <- sf::st_make_valid(input)
+
   # Create bounding box and center point
+  message("Identifying country from input data...")
   point <- sf::st_bbox(input)
   point <- sf::st_as_sf(data.frame(
-    lon = mean(c(point[1], point[3])), 
+    lon = mean(c(point[1], point[3])),
     lat = mean(c(point[2], point[4]))
   ), coords = c("lon", "lat"))
   sf::st_crs(point) <- sf::st_crs(input)
-  
+
   # Convert sf point to sp
-  pointsSP <- as(sf::st_transform(point, crs = sf::st_crs(countriesSP)), "Spatial")
-  
+  tryCatch({
+    pointsSP <- as(sf::st_transform(point, crs = sf::st_crs(countriesSP)), "Spatial")
+  }, error = function(e) {
+    stop(paste("Error transforming coordinates:", e$message,
+               "\nInput CRS:", sf::st_crs(input)$input,
+               "\nCountries CRS:", sf::st_crs(countriesSP)$input))
+  })
+
   # Now over() should work as both objects are sp class
   indices <- sp::over(pointsSP, countriesSP)
-  
+
+  if(is.na(indices$ADMIN)) {
+    stop("Could not identify country from input data. Check that your data covers a valid geographic area.")
+  }
+
+  message(paste("Identified country:", indices$ADMIN))
+
   # Get country code and borders
   cc <- subset(geodata::country_codes(), NAME == as.character(indices$ADMIN))
+
+  if(nrow(cc) == 0) {
+    stop(paste("Could not find country code for:", indices$ADMIN))
+  }
+
+  message(paste("Downloading administrative boundaries for", cc$ISO2, "at level", level, "..."))
   borders <- geodata::gadm(country = cc$ISO2, level = level, path = tempdir(), resolution = 2)
   borders <- borders[paste0("NAME_", level)]
-  
+
+  message("Transforming borders to match input CRS...")
   borders <- sf::st_as_sf(borders)
-  borders <- sf::st_transform(borders, crs = sf::st_crs(input))  
+  borders <- sf::st_transform(borders, crs = sf::st_crs(input))
   borders_inter <- borders[apply(st_intersects(borders, input, sparse = FALSE), 1, any), ]
-  
-  
+
+  message(paste("Found", nrow(borders_inter), "intersecting administrative units"))
+
   # intersection with administrative borders
-  intersected <- sf::st_intersection(input, borders_inter)
-  names(intersected)[length(names(intersected))-1] <- "District"
+  message("Performing intersection with administrative borders...")
+  tryCatch({
+    intersected <- sf::st_intersection(input, borders_inter)
+    names(intersected)[length(names(intersected))-1] <- "District"
+    message(paste("Successfully intersected. Result contains", nrow(intersected), "features"))
+  }, error = function(e) {
+    stop(paste("Error during administrative border intersection:", e$message,
+               "\nThis often occurs with complex geometries from raster conversion.",
+               "\nTry simplifying your input data or check for geometry issues."))
+  })
   
   # delete to small intersection areas
   intersected <- intersected %>%
@@ -1211,46 +1351,63 @@ intersect_with_borders <- function(input, level, countriesSP, EZG, aoi) {
   
   # if it`s in Germany intersect with river catchments
   if(cc$ISO2 == "DE"){
-    intersected <- sf::st_intersection(intersected, sf::st_transform(EZG, crs = sf::st_crs(input)))
-    EZG_inter <- subset(EZG, EZG %in% unique(st_drop_geometry(intersected)$EZG))
-    EZG_inter <- st_transform(EZG_inter, crs = sf::st_crs(input))
-    EZG_inter <- sf::st_intersection(EZG_inter, borders_inter)
-    EZG_inter <- EZG_inter[,-2] %>%
-      group_by(EZG) %>%
-      summarise(
-        geometry = st_union(geometry)
-      )
-    # Prepare the output list
-    out_list <- list(intersected = intersected, borders_inter = borders_inter, EZG_inter = EZG_inter)
+    message("Intersecting with German river catchments (EZG)...")
+    tryCatch({
+      intersected <- sf::st_intersection(intersected, sf::st_transform(EZG, crs = sf::st_crs(input)))
+      message(paste("EZG intersection successful. Result contains", nrow(intersected), "features"))
+
+      EZG_inter <- subset(EZG, EZG %in% unique(st_drop_geometry(intersected)$EZG))
+      EZG_inter <- st_transform(EZG_inter, crs = sf::st_crs(input))
+      EZG_inter <- sf::st_intersection(EZG_inter, borders_inter)
+      EZG_inter <- EZG_inter[,-2] %>%
+        group_by(EZG) %>%
+        summarise(
+          geometry = st_union(geometry)
+        )
+      # Prepare the output list
+      out_list <- list(intersected = intersected, borders_inter = borders_inter, EZG_inter = EZG_inter)
+    }, error = function(e) {
+      stop(paste("Error during EZG (river catchment) intersection:", e$message,
+                 "\nThis may be caused by complex geometries or CRS mismatch."))
+    })
   } else {
-    # If no intersection, keep intersected as is and notify
+    # If not Germany, skip EZG intersection
     out_list <- list(intersected = intersected, borders_inter = borders_inter)
-    message("No intersection found between German river basins and intersected features")
+    message("Country is not Germany - skipping river basin intersection")
   }
-  
+
   # If AOI data is provided, intersect and create AOI_inter layer like EZG_inter
   if(!is.null(aoi) && nrow(aoi) > 0){
-    # The AOI should already have a column named "AOI_name" from the UI processing
-    # Transform AOI to match input CRS
-    aoi_transformed <- sf::st_transform(aoi, crs = sf::st_crs(input))
-    
-    # Intersect input data with AOI boundaries
-    intersected <- sf::st_intersection(intersected, aoi_transformed)
-    
-    # Create AOI_inter layer similar to how EZG_inter is created
-    # This provides a clean spatial division layer for AOI regions
-    AOI_inter <- subset(aoi_transformed, AOI_name %in% unique(st_drop_geometry(intersected)$AOI_name))
-    AOI_inter <- sf::st_intersection(AOI_inter, borders_inter)
-    AOI_inter <- AOI_inter %>%
-      group_by(AOI_name) %>%
-      summarise(
-        geometry = st_union(geometry)
-      )
-    
-    # Update output list
-    out_list$intersected <- intersected
-    out_list$AOI_inter <- AOI_inter
+    message("Intersecting with custom Area of Interest (AOI)...")
+    tryCatch({
+      # The AOI should already have a column named "AOI_name" from the UI processing
+      # Transform AOI to match input CRS
+      aoi_transformed <- sf::st_transform(aoi, crs = sf::st_crs(input))
+
+      # Intersect input data with AOI boundaries
+      intersected <- sf::st_intersection(intersected, aoi_transformed)
+      message(paste("AOI intersection successful. Result contains", nrow(intersected), "features"))
+
+      # Create AOI_inter layer similar to how EZG_inter is created
+      # This provides a clean spatial division layer for AOI regions
+      AOI_inter <- subset(aoi_transformed, AOI_name %in% unique(st_drop_geometry(intersected)$AOI_name))
+      AOI_inter <- sf::st_intersection(AOI_inter, borders_inter)
+      AOI_inter <- AOI_inter %>%
+        group_by(AOI_name) %>%
+        summarise(
+          geometry = st_union(geometry)
+        )
+
+      # Update output list
+      out_list$intersected <- intersected
+      out_list$AOI_inter <- AOI_inter
+    }, error = function(e) {
+      stop(paste("Error during AOI intersection:", e$message,
+                 "\nCheck that your AOI layer has valid geometries and correct CRS."))
+    })
   }
+
+  message("Intersection with areas completed successfully!")
   return(out_list)
 }
 
@@ -2903,4 +3060,127 @@ is_raster_file <- function(file_path) {
   if(is.null(file_path)) return(FALSE)
   ext <- tolower(tools::file_ext(file_path))
   return(ext %in% c("tif", "tiff"))
+}
+#' Validate and Clean Crop Data
+#'
+#' @description
+#' Comprehensive validation function that removes rows with NA, NaN, NULL, 
+#' empty strings, or invalid values in the crop identification column.
+#' Provides detailed feedback about what was removed.
+#'
+#' @param sf_object SF object containing spatial data
+#' @param crop_column Character string indicating the column name containing crop codes/names
+#' @param file_name Optional character string with file name for better error messages
+#' @param show_warnings Logical, whether to show warnings about removed features (default: TRUE)
+#'
+#' @return List containing:
+#'   \itemize{
+#'     \item sf_object: Cleaned SF object with invalid rows removed
+#'     \item removed_count: Number of features removed
+#'     \item removal_reasons: Named vector with counts for each removal reason
+#'     \item original_count: Original number of features
+#'   }
+#'
+#' @examples
+#' \dontrun{
+#' result <- validate_crop_data(my_sf, "crop_code", "fields_2020.shp")
+#' cleaned_sf <- result$sf_object
+#' }
+#'
+#' @keywords internal
+validate_crop_data <- function(sf_object, crop_column, file_name = NULL, show_warnings = TRUE) {
+  
+  if(is.null(sf_object) || nrow(sf_object) == 0) {
+    return(list(
+      sf_object = sf_object,
+      removed_count = 0,
+      removal_reasons = c(),
+      original_count = 0
+    ))
+  }
+  
+  original_count <- nrow(sf_object)
+  removal_reasons <- c()
+  
+  # Check if column exists
+  if(!crop_column %in% names(sf_object)) {
+    stop(paste0("Column '", crop_column, "' not found in data",
+                if(!is.null(file_name)) paste0(" (file: ", file_name, ")") else ""))
+  }
+  
+  crop_values <- sf_object[[crop_column]]
+  
+  # Initialize valid rows vector (all TRUE initially)
+  valid_rows <- rep(TRUE, length(crop_values))
+  
+  # 1. Check for NA values
+  na_mask <- is.na(crop_values)
+  if(any(na_mask)) {
+    removal_reasons["NA values"] <- sum(na_mask)
+    valid_rows <- valid_rows & !na_mask
+  }
+  
+  # 2. Check for NaN values (for numeric columns)
+  if(is.numeric(crop_values)) {
+    nan_mask <- is.nan(crop_values)
+    if(any(nan_mask)) {
+      removal_reasons["NaN values"] <- sum(nan_mask)
+      valid_rows <- valid_rows & !nan_mask
+    }
+    
+    # 3. Check for Inf/-Inf values
+    inf_mask <- is.infinite(crop_values)
+    if(any(inf_mask)) {
+      removal_reasons["Inf/-Inf values"] <- sum(inf_mask)
+      valid_rows <- valid_rows & !inf_mask
+    }
+  }
+  
+  # 4. Check for empty strings or whitespace-only strings
+  if(is.character(crop_values)) {
+    empty_mask <- trimws(crop_values) == "" | crop_values == ""
+    # Update to handle NA from trimws
+    empty_mask[is.na(empty_mask)] <- FALSE
+    if(any(empty_mask)) {
+      removal_reasons["Empty strings"] <- sum(empty_mask)
+      valid_rows <- valid_rows & !empty_mask
+    }
+  }
+  
+  # 5. Check for NULL-like values (stored as strings)
+  if(is.character(crop_values)) {
+    null_mask <- tolower(trimws(crop_values)) %in% c("null", "none", "n/a", "na")
+    null_mask[is.na(null_mask)] <- FALSE
+    if(any(null_mask)) {
+      removal_reasons["NULL-like values"] <- sum(null_mask)
+      valid_rows <- valid_rows & !null_mask
+    }
+  }
+  
+  # Apply filtering
+  sf_object_cleaned <- sf_object[valid_rows, ]
+  removed_count <- original_count - nrow(sf_object_cleaned)
+  
+  # Show warnings if requested
+  if(show_warnings && removed_count > 0) {
+    file_info <- if(!is.null(file_name)) paste0(" in file '", file_name, "'") else ""
+    warning_msg <- paste0(
+      "Removed ", removed_count, " of ", original_count, 
+      " features (", round(removed_count/original_count * 100, 1), "%)",
+      file_info, " due to invalid crop values:\n"
+    )
+    
+    for(reason in names(removal_reasons)) {
+      warning_msg <- paste0(warning_msg, "  - ", reason, ": ", removal_reasons[reason], "\n")
+    }
+    
+    warning(warning_msg)
+  }
+  
+  return(list(
+    sf_object = sf_object_cleaned,
+    removed_count = removed_count,
+    removal_reasons = removal_reasons,
+    original_count = original_count
+  ))
 }

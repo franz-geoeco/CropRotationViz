@@ -170,7 +170,7 @@ run_visualization_app <- function(input_dir = NA) {
   
   # Launch the application
   shiny::shinyApp(
-    ui = ui(app_data), 
+    ui = CropRotationViz:::ui(app_data),
     server = function(input, output, session) {
       viz_server(input, output, session, app_data, input_dir)
     }

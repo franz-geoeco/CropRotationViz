@@ -303,7 +303,7 @@ fast_ui <- function(app_data) {
 #' @import leaflet
 #' @importFrom sf st_transform st_coordinates st_centroid
 #' @importFrom shiny reactiveVal observeEvent renderUI showNotification
-#'
+#' @importFrom shinyalert shinyalert
 #'
 #' @examples
 #' \dontrun{
