@@ -6,7 +6,7 @@
 
 <!-- badges: start -->
 
-[![R-check-dev](https://github.com/franz-geoeco/CropRotationViz/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/franz-geoeco/CropRotationViz/actions/workflows/R-CMD-check.yaml) [![codecov](https://codecov.io/gh/franz-geoeco/repo/branch/main/graph/badge.svg)](https://codecov.io/gh/franz-geoeco/CropRotationViz) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 <!-- badges: end -->
 
