@@ -2,7 +2,7 @@
 <img src="inst/www/GeoECO_MLU_LANG_2.png" alt="Descriptive Alt Text" width="100%"/>
 :::
 
-# CropRotationViz 🌾 :corn:
+# CropRotationViz 🌾 :corn: 🫜
 
 <!-- badges: start -->
 
