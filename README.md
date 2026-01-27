@@ -26,9 +26,8 @@ The package consists of three main components:
 -   A full visualization application for detailed analysis
 -   A fast visualization application for quick insights and area comparison
 
-::: {align="center"}
+
 <img src="images/example.png" alt="Descriptive Alt Text" width="100%"/>
-:::
 
 ## Table of Contents
 
