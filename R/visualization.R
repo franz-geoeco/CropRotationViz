@@ -130,7 +130,7 @@ viz_ui <- function(input_dir = NA){
                            #-------------------------------------------------------------------------------
                            # Header Section
                            #-------------------------------------------------------------------------------
-                           column(style = "margin-top: -30px; margin-bottom: 0px;", width = 4, h2("Crop Sequences")), 
+                           column(style = "margin-top: -30px; margin-bottom: 0px;", width = 4, h2("Crop Sequences"), p("Analyze the Rotation Sequences of the Complete Processed Area")), 
                            column(5),
                            column(width = 2, style = "margin-top: 2vh;", tags$img(src = "www/GeoECO_MLU_LANG_2.png", height = "70px", width = "265px"))
                          ),
@@ -235,7 +235,7 @@ viz_ui <- function(input_dir = NA){
                          fluidRow(
                            column(1),
                            column(3,
-                                  h4("Unique SequenceS and Sizes")),
+                                  h4("Unique Sequences and Sizes")),
                            column(1, bsButton("table-info",
                                               label = "",
                                               icon = icon("info"),
@@ -263,6 +263,17 @@ viz_ui <- function(input_dir = NA){
                                   )
                            )
                          ),
+                         fluidRow(
+                           column(1),
+                           column(10,
+                                  div(style = "margin-top: 15px;",
+                                      downloadButton("export_table_csv", "Export as CSV",
+                                                     style = "margin-right: 10px;margin-top: 10px; color: #fff; background-color: rgb(0,86,157); border-color: rgb(0,86,157)"),
+                                      downloadButton("export_table_xlsx", "Export as Excel",
+                                                     style = "margin-top: 10px; color: #fff; background-color: rgb(0,86,157); border-color: rgb(0,86,157)")
+                                  )
+                           )
+                         ),
                          # Horizontal line
                          tags$hr(style = "border-top: 1px solid white; margin-top: 20px; margin-bottom: 20px;"),
                          #-------------------------------------------------------------------------------
@@ -285,7 +296,7 @@ viz_ui <- function(input_dir = NA){
                 tabPanel("Plot Crop Specific Sequence",
                          br(),
                          fluidRow(
-                           column(width = 4, h2("Crop Sequences")), 
+                           column(style = "margin-top: -30px; margin-bottom: 0px;", width = 4, h2("Crop Specific Sequences"), p("Analyze the Rotation with a Specific Fokus Crop")), 
                            column(5),
                            column(width = 2, style = "margin-top: 2vh;", tags$img(src = "www/GeoECO_MLU_LANG_2.png", height = "70px", width = "265px"))
                          ),
@@ -453,6 +464,17 @@ viz_ui <- function(input_dir = NA){
                                   )
                            )
                          ),
+                         fluidRow(
+                           column(1),
+                           column(10,
+                                  div(style = "margin-top: 15px;",
+                                      downloadButton("export_table_spec_csv", "Export as CSV",
+                                                     style = "margin-right: 10px; margin-top: 10px; color: #fff; background-color: rgb(0,86,157); border-color: rgb(0,86,157)"),
+                                      downloadButton("export_table_spec_xlsx", "Export as Excel",
+                                                    style = "margin-top: 10px; color: #fff; background-color: rgb(0,86,157); border-color: rgb(0,86,157)")
+                                  )
+                           )
+                         ),
                          tags$hr(style = "border-top: 1px solid white; margin-top: 20px; margin-bottom: 20px;"),
                          fluidRow(
                            column(1),
@@ -474,13 +496,13 @@ viz_ui <- function(input_dir = NA){
                 tabPanel("Plot Sequence per Area",
                          br(),
                          fluidRow(
-                           column(width = 4, h2("Crop Sequences Per Area")), 
+                           column(width = 4, style = "margin-top: -30px; margin-bottom: 0px;", h2("Crop Sequences Per Area"), p("Analyze the Rotation Situation in Specific Area")), 
                            column(5),
                            column(width = 2, style = "margin-top: 2vh;", tags$img(src = "www/GeoECO_MLU_LANG_2.png", height = "70px", width = "265px"))
                          ),
                          fluidRow(
                            if(sum(is.na(EZGs))==0){
-                             column(2,
+                             column(1,
                                     radioButtons(inputId = "district_or_ezg",
                                                  label = "Select",
                                                  selected = "District",
@@ -519,7 +541,7 @@ viz_ui <- function(input_dir = NA){
                            ),
                            column(2,
                                   shinyWidgets::numericRangeInput("Area_range_areas", "Sequence Area Range (km²):",
-                                                    min = 0, max = 4000,
+                                                    min = 0, max = 5000,
                                                     value = c(0, 1000))
                            ),
                            column(2, 
@@ -534,19 +556,19 @@ viz_ui <- function(input_dir = NA){
                                       selectedTextFormat = "count > 3"
                                     ), multiple = TRUE)
                            ),
-                           column(2,
+                           column(1,
                                   actionButton("update_plot_areas",
-                                               "Load Visualization",
+                                               "Reload",
                                                width = '100%',
                                                style = "color: #fff; background-color: rgb(0,86,157); border-color: rgb(0,86,157); margin-top: 25px")
                            ),
                            conditionalPanel(
                              condition = "input.district_or_ezg != 'River Basin'",
-                             column(2, plotOutput("perc_district_plot", height = 80))
+                             column(3, plotOutput("perc_district_plot", height = 80))
                            ),
                            conditionalPanel(
                              condition = "input.district_or_ezg == 'River Basin'",
-                             column(2, plotOutput("perc_basin_plot", height = 80))
+                             column(3, plotOutput("perc_basin_plot", height = 80))
                            )
                          ),
                          fluidRow(
@@ -587,15 +609,49 @@ viz_ui <- function(input_dir = NA){
                            br(),br(),
                            conditionalPanel(
                              condition = "input.district_or_ezg != 'River Basin'",
-                             column(1,
-                                    downloadButton("Save_sankey_district_plot", label = "Save Plot"
+                             fluidRow(
+                              column(1,
+                                    downloadButton("Save_sankey_district_plot", label = "Save Plot", style = "margin-left: 10px;")
+                              )
+                            )
+                           )
+                         ),
+                         fluidRow(
+                          conditionalPanel(
+                             condition = "input.district_or_ezg != 'River Basin'",
+                             column(3,
+                                    div(style = "margin-left: 0px;",
+                                        downloadButton("export_district_csv", "Export as CSV",
+                                                       style = "margin-right: 10px; margin-top: 10px; color: #fff; background-color: rgb(0,86,157); border-color: rgb(0,86,157)"),
+                                        downloadButton("export_district_xlsx", "Export as Excel",
+                                                       style = "margin-top: 10px; color: #fff; background-color: rgb(0,86,157); border-color: rgb(0,86,157)")
                                     )
                              )
-                           ),
+                           )
+                         ),
+                         
+                         fluidRow(
+                           br(),br(),
                            conditionalPanel(
                              condition = "input.district_or_ezg == 'River Basin'",
-                             column(1,
-                                    downloadButton("Save_sankey_basin_plot", label = "Save Plot"
+                             fluidRow(
+                              column(1,
+                                    downloadButton("Save_sankey_basin_plot", label = "Save Plot", style = "margin-left: 10px;")
+                              )
+                            )
+                           )
+                         ),
+                         fluidRow(
+                          conditionalPanel(
+                             condition = "input.district_or_ezg == 'River Basin'",
+                             column(3,
+                                    div(style = "margin-left: 0px;",
+                                        downloadButton("export_basin_csv", "Export as CSV",
+                                                       style = "margin-right: 10px; margin-top: 10px; color: #fff; background-color: rgb(0,86,157); border-color: rgb(0,86,157"
+                                                        ),
+                                        downloadButton("export_basin_xlsx", "Export as Excel",
+                                                       style = "margin-top: 10px; color: #fff; background-color: rgb(0,86,157); border-color: rgb(0,86,157)"
+                                                        )
                                     )
                              )
                            )
@@ -649,7 +705,15 @@ viz_ui <- function(input_dir = NA){
                 ),
                 if (exists("diversity_data") && is.list(diversity_data) && length(diversity_data) > 0) {
                   tabPanel("Plot Diversity",
-                           titlePanel("Interactive District/River Catchment Crop Diversity Map"),
+                           br(),
+                           fluidRow(
+                            column(width = 8,
+                              style = "margin-top: -30px; margin-bottom: 0px;",
+                              h2("Interactive District/River Catchment Crop Diversity Map"),
+                              p("Map and Compare the Structural Rotation Diversity compared th Soil Potential ")), 
+                            column(1),
+                            column(width = 2, style = "margin-top: 2vh;", tags$img(src = "www/GeoECO_MLU_LANG_2.png", height = "70px", width = "265px"))
+                           ),
                            fluidRow(column(3,
                                            radioButtons("AreaType",
                                                         "Select Map Type:", inline = TRUE,
@@ -678,23 +742,24 @@ viz_ui <- function(input_dir = NA){
                            
                   )
                 },
-                
                 # Rotation Ranking Tab
                 tabPanel("Rotation Ranking",
                          br(),
                          fluidRow(
-                           column(width = 12,
-                                  h2("Crop Rotation Ranking Analysis"),
-                                  p("Analyze and rank crop rotation patterns by length and year range")
-                           )
+                          column(width = 6,
+                            style = "margin-top: -30px; margin-bottom: 0px;",
+                            h2("Crop Rotation Ranking Analysis"),
+                            p("Analyze and rank crop rotation patterns by length and year range")
+                           ),
+                          column(3),
+                          column(width = 2, style = "margin-top: 2vh;", tags$img(src = "www/GeoECO_MLU_LANG_2.png", height = "70px", width = "265px"))
                          ),
                          br(),
                          fluidRow(
                            # Sidebar controls
                            column(width = 3,
                                   wellPanel(
-                                    h4("Analysis Parameters"),
-                                    
+                                    h4("Analysis Parameters"),               
                                     sliderInput(
                                       "ranking_rotation_length",
                                       "Rotation Length (Years):",
@@ -711,7 +776,7 @@ viz_ui <- function(input_dir = NA){
                                     uiOutput("ranking_year_range_ui"),
                                     
                                     hr(),
-                                    
+
                                     h4("Filter Options"),
                                     
                                     uiOutput("ranking_area_filter_ui"),
@@ -824,10 +889,365 @@ viz_ui <- function(input_dir = NA){
                          ),
                          br(), br(), br()
                 ),
-                
+                # Rotation Analysis Tab - Monoculture Detection & Pattern Clustering
+                tabPanel("Rotation Analysis",
+                         br(),
+                         fluidRow(
+                           column(width = 6,
+                                  style = "margin-top: -30px; margin-bottom: 0px;",
+                                  h2("Rotation Pattern Analysis"),
+                                  p("Detect monocultures and cluster similar rotation patterns")
+                           ),
+                           column(3),
+                           column(width = 2, style = "margin-top: 2vh;", tags$img(src = "www/GeoECO_MLU_LANG_2.png", height = "70px", width = "265px"))
+                         ),
+                         br(),
+                         fluidRow(
+                           # Sidebar controls
+                           column(width = 3,
+                                  wellPanel(
+                                    h4("Analysis Settings"),
+
+                                    radioButtons(
+                                      "analysis_spatial_type",
+                                      "Spatial Scope:",
+                                      choices = c("Full Area" = "full",
+                                                  "District" = "district",
+                                                  "Catchment/Basin" = "catchment"),
+                                      selected = "full"
+                                    ),
+
+                                    conditionalPanel(
+                                      condition = "input.analysis_spatial_type == 'district'",
+                                      uiOutput("analysis_district_ui")
+                                    ),
+
+                                    conditionalPanel(
+                                      condition = "input.analysis_spatial_type == 'catchment'",
+                                      uiOutput("analysis_catchment_ui")
+                                    ),
+
+                                    hr(),
+
+                                    fluidRow(
+                                      column(9, h4("Clustering Parameters")),
+                                      column(3,
+                                             bsButton("cluster-params-info",
+                                                      label = "",
+                                                      icon = icon("info"),
+                                                      style = "default", size = "extra-small"),
+                                             bsPopover(
+                                               id = "cluster-params-info",
+                                               title = "Clustering Parameters",
+                                               content = paste(
+                                                 "<b>Number of Clusters:</b><br>",
+                                                 "How many groups to divide patterns into. More clusters = finer distinctions.<br><br>",
+                                                 "<b>Min. Cluster Area:</b><br>",
+                                                 "Only include rotation patterns with at least this much area. Filters out rare/small patterns for cleaner results."
+                                               ),
+                                               placement = "right",
+                                               trigger = "hover",
+                                               options = list(container = 'body', html = TRUE)
+                                             )
+                                      )
+                                    ),
+
+                                    sliderInput(
+                                      "n_clusters",
+                                      "Number of Clusters:",
+                                      min = 2,
+                                      max = 15,
+                                      value = 5,
+                                      step = 1
+                                    ),
+
+                                    sliderInput(
+                                      "min_cluster_area",
+                                      "Min. Cluster Area (km²):",
+                                      min = 0,
+                                      max = 100,
+                                      value = 1,
+                                      step = 1
+                                    ),
+
+                                    hr(),
+
+                                    h4("Crop Filters"),
+
+                                    uiOutput("analysis_exclude_crops_ui"),
+
+                                    uiOutput("analysis_include_crops_ui"),
+
+                                    hr(),
+
+                                    actionButton(
+                                      "run_rotation_analysis",
+                                      "Run Analysis",
+                                      class = "btn-primary btn-block",
+                                      icon = icon("search")
+                                    ),
+
+                                    hr(),
+
+                                    downloadButton(
+                                      "download_monoculture_data",
+                                      "Download Monoculture Data",
+                                      style = "margin-right: 10px; margin-top: 10px; color: #fff; background-color: rgb(0,86,157); border-color: rgb(0,86,157)",
+                                      class = "btn-success btn-block"
+                                    ),
+                                    br(),
+                                    downloadButton(
+                                      "download_cluster_data",
+                                      "Download Cluster Data",
+                                      style = "margin-right: 10px; margin-top: 10px; color: #fff; background-color: rgb(0,86,157); border-color: rgb(0,86,157)",
+                                      class = "btn-info btn-block"
+                                    )
+                                  )
+                           ),
+
+                           # Main content area
+                           column(width = 9,
+                                  # Summary Metrics Row
+                                  fluidRow(
+                                    column(3,
+                                           div(class = "metric-box",
+                                               div(class = "metric-value", textOutput("total_fields_analyzed")),
+                                               div(class = "metric-label", "Total Fields")
+                                           )
+                                    ),
+                                    column(3,
+                                           div(class = "metric-box",
+                                               div(class = "metric-value", textOutput("monoculture_count")),
+                                               div(class = "metric-label", "Monoculture Fields")
+                                           )
+                                    ),
+                                    column(3,
+                                           div(class = "metric-box",
+                                               div(class = "metric-value", textOutput("monoculture_percentage")),
+                                               div(class = "metric-label", "Monoculture %")
+                                           )
+                                    ),
+                                    column(3,
+                                           div(class = "metric-box",
+                                               div(class = "metric-value", textOutput("monoculture_area")),
+                                               div(class = "metric-label", "Monoculture Area (km²)")
+                                           )
+                                    )
+                                  ),
+
+                                  # Tabs for different analysis views
+                                  tabsetPanel(
+                                    type = "tabs",
+                                    id = "analysis_tabs",
+
+                                    tabPanel(
+                                      "Monoculture Detection",
+                                      icon = icon("seedling"),
+                                      br(),
+                                      fluidRow(
+                                        column(11, h4("Monoculture Summary by Crop")),
+                                        column(1,
+                                               bsButton("monoculture-info",
+                                                        label = "",
+                                                        icon = icon("info"),
+                                                        style = "default", size = "extra-small"),
+                                               bsPopover(
+                                                 id = "monoculture-info",
+                                                 title = "Monoculture Detection",
+                                                 content = paste(
+                                                   "<b>What it detects:</b> Fields where the SAME crop is grown every year (zero transitions).<br><br>",
+                                                   "<b>Why it matters:</b> Continuous monoculture can lead to:<br>",
+                                                   "- Soil degradation<br>",
+                                                   "- Pest/disease buildup<br>",
+                                                   "- Reduced biodiversity<br><br>",
+                                                   "<b>Metrics shown:</b><br>",
+                                                   "- Number of monoculture fields<br>",
+                                                   "- Total area under monoculture<br>",
+                                                   "- Breakdown by crop type"
+                                                 ),
+                                                 placement = "left",
+                                                 trigger = "hover",
+                                                 options = list(container = 'body', html = TRUE)
+                                               )
+                                        )
+                                      ),
+                                      p(class = "text-muted",
+                                        "Monocultures are fields where the same crop is grown continuously across all analyzed years (zero transitions)."),
+                                      br(),
+                                      fluidRow(
+                                        column(6,
+                                               shinycssloaders::withSpinner(
+                                                 plotlyOutput("monoculture_bar_chart", height = "400px")
+                                               )
+                                        ),
+                                        column(6,
+                                               shinycssloaders::withSpinner(
+                                                 plotlyOutput("monoculture_pie_chart", height = "400px")
+                                               )
+                                        )
+                                      ),
+                                      br(),
+                                      h4("Monoculture Details"),
+                                      shinycssloaders::withSpinner(
+                                        DT::dataTableOutput("monoculture_table")
+                                      )
+                                    ),
+
+                                    tabPanel(
+                                      "Pattern Clustering",
+                                      icon = icon("project-diagram"),
+                                      br(),
+                                      fluidRow(
+                                        column(11, h4("Rotation Pattern Clusters")),
+                                        column(1,
+                                               bsButton("clustering-info",
+                                                        label = "",
+                                                        icon = icon("info"),
+                                                        style = "default", size = "extra-small"),
+                                               bsPopover(
+                                                 id = "clustering-info",
+                                                 title = "Pattern Clustering",
+                                                 content = paste(
+                                                   "<b>What it does:</b> Groups rotation patterns by structural diversity using hierarchical clustering.<br><br>",
+                                                   "<b>Clustering features:</b><br>",
+                                                   "- <b>Number of transitions</b> (crop changes)<br>",
+                                                   "- <b>Number of unique crops</b><br><br>",
+                                                   "<b>Interpretation categories:</b><br>",
+                                                   "- <i>Monoculture:</i> ~0 trans, 1 crop<br>",
+                                                   "- <i>Very low diversity:</i> <2 trans, <=2 crops<br>",
+                                                   "- <i>Low diversity:</i> <4 trans, <=3 crops<br>",
+                                                   "- <i>Medium diversity:</i> <6 trans, <=4 crops<br>",
+                                                   "- <i>High diversity:</i> 6+ trans, 5+ crops<br><br>",
+                                                   "<b>Scatter plot:</b> Shows cluster separation in the 2D feature space"
+                                                 ),
+                                                 placement = "left",
+                                                 trigger = "hover",
+                                                 options = list(container = 'body', html = TRUE)
+                                               )
+                                        )
+                                      ),
+                                      p(class = "text-muted",
+                                        "Rotation patterns are clustered based on structural diversity: number of transitions and unique crops."),
+                                      br(),
+                                      fluidRow(
+                                        column(6,
+                                               shinycssloaders::withSpinner(
+                                                 plotlyOutput("cluster_distribution_chart", height = "400px")
+                                               )
+                                        ),
+                                        column(6,
+                                               shinycssloaders::withSpinner(
+                                                 plotlyOutput("cluster_area_chart", height = "400px")
+                                               )
+                                        )
+                                      ),
+                                      br(),
+                                      fluidRow(
+                                        column(11, h4("Cluster Separability")),
+                                        column(1,
+                                               bsButton("separability-info",
+                                                        label = "",
+                                                        icon = icon("info"),
+                                                        style = "default", size = "extra-small"),
+                                               bsPopover(
+                                                 id = "separability-info",
+                                                 title = "Cluster Separability Plot",
+                                                 content = paste(
+                                                   "<b>What it shows:</b> How well clusters are separated in feature space.<br><br>",
+                                                   "<b>Axes:</b><br>",
+                                                   "- X: Number of transitions (rotation diversity)<br>",
+                                                   "- Y: Number of unique crops<br><br>",
+                                                   "<b>Points:</b> Each point is a rotation pattern<br>",
+                                                   "<b>Color:</b> Cluster assignment<br>",
+                                                   "<b>Size:</b> Area of that pattern<br><br>",
+                                                   "<b>Good clustering:</b> Points of same color are grouped together<br>",
+                                                   "<b>Poor clustering:</b> Colors are mixed/overlapping"
+                                                 ),
+                                                 placement = "left",
+                                                 trigger = "hover",
+                                                 options = list(container = 'body', html = TRUE)
+                                               )
+                                        )
+                                      ),
+                                      p(class = "text-muted",
+                                        "Scatter plot showing how well clusters separate based on transitions and crop diversity."),
+                                      shinycssloaders::withSpinner(
+                                        plotlyOutput("cluster_scatter_plot", height = "500px")
+                                      ),
+                                      br(),
+                                      h4("Cluster Details"),
+                                      shinycssloaders::withSpinner(
+                                        DT::dataTableOutput("cluster_table")
+                                      ),
+                                      br(),
+                                      h4("Top Patterns per Cluster"),
+                                      shinycssloaders::withSpinner(
+                                        DT::dataTableOutput("cluster_patterns_table")
+                                      )
+                                    ),
+
+                                    tabPanel(
+                                      "Transition Analysis",
+                                      icon = icon("exchange-alt"),
+                                      br(),
+                                      fluidRow(
+                                        column(11, h4("Transition Distribution")),
+                                        column(1,
+                                               bsButton("transition-info",
+                                                        label = "",
+                                                        icon = icon("info"),
+                                                        style = "default", size = "extra-small"),
+                                               bsPopover(
+                                                 id = "transition-info",
+                                                 title = "Transition Analysis",
+                                                 content = paste(
+                                                   "<b>What it measures:</b> Number of crop changes between consecutive years per field.<br><br>",
+                                                   "<b>Example (7 years):</b><br>",
+                                                   "wheat-wheat-wheat-wheat = 0 transitions<br>",
+                                                   "wheat-barley-wheat-barley = 3 transitions<br>",
+                                                   "wheat-rapeseed-barley-maize = 3 transitions<br><br>",
+                                                   "<b>Categories:</b><br>",
+                                                   "- <i>0 transitions:</i> Monoculture<br>",
+                                                   "- <i>1 transition:</i> Low rotation<br>",
+                                                   "- <i>2 transitions:</i> Medium rotation<br>",
+                                                   "- <i>3+ transitions:</i> High rotation<br><br>",
+                                                   "<b>Interpretation:</b><br>",
+                                                   "Higher transitions = more diverse rotations = generally better for soil health"
+                                                 ),
+                                                 placement = "left",
+                                                 trigger = "hover",
+                                                 options = list(container = 'body', html = TRUE)
+                                               )
+                                        )
+                                      ),
+                                      p(class = "text-muted",
+                                        "Distribution of the number of crop transitions (changes) across all fields."),
+                                      br(),
+                                      fluidRow(
+                                        column(8,
+                                               shinycssloaders::withSpinner(
+                                                 plotlyOutput("transition_histogram", height = "400px")
+                                               )
+                                        ),
+                                        column(4,
+                                               div(style = "margin-top: 50px;",
+                                                   h5("Transition Statistics"),
+                                                   tableOutput("transition_stats_table")
+                                               )
+                                        )
+                                      ),
+                                      br(),
+                                      h4("Transition Categories"),
+                                      shinycssloaders::withSpinner(
+                                        DT::dataTableOutput("transition_categories_table")
+                                      )
+                                    )
+                                  )
+                           )
+                         ),
+                         br(), br(), br()
+                ),
                 div(style = "padding-bottom: 100px;"), # Add padding for footer
-                
-                
                 # Custom footer
                 tags$footer(
                   style = "position: fixed; 
@@ -839,7 +1259,6 @@ viz_ui <- function(input_dir = NA){
                            border-top: 1px solid #e7e7e7;
                            left: 0;
                            z-index: 2000;",  # Added z-index to ensure visibility
-                  
                   div(
                     style = "display: inline-block;",
                     p(
@@ -1393,6 +1812,12 @@ viz_server <- function(input, output, session, app_data, input_dir) {
       }else if(input$tabs == "Plot Diversity"){
         text_1 <- "Plot Crop Diversity Map"
         text_2 <- "Here you can plot and inspect the structural crop diversity per catchment or district. The diversity coloring is defined by the number of transition and the number of unique crops per area."
+      }else if(input$tabs == "Rotation Ranking"){
+        text_1 <- "Rotation Ranking"
+        text_2 <- "Analyze and rank crop rotation patterns by length and year range. Filter by area, crops, and spatial units."
+      }else if(input$tabs == "Rotation Analysis"){
+        text_1 <- "Rotation Pattern Analysis"
+        text_2 <- "Detect monoculture patterns (fields with zero crop transitions) and cluster similar rotation sequences. Use this to identify continuous cropping and group similar rotation strategies."
       } else {
         text_1 <- "Information"
         text_2 <- "Navigate through the tabs to explore different visualization options."
@@ -1963,7 +2388,101 @@ viz_server <- function(input, output, session, app_data, input_dir) {
         ggsave(file, plot = create_basin_sankey_plot(), width = 590, height = 365, units = "mm", device = "png")
       }
     )
-    
+
+    #--------------------------------------------------------------------------------------------
+    # Export handlers for Tab 3 (Plot Sequence per Area)
+    #--------------------------------------------------------------------------------------------
+
+    # CSV export for District
+    output$export_district_csv <- downloadHandler(
+      filename = function() {
+        district_name <- gsub(" ", "_", input$District_sel)
+        paste0("district_sequences_", district_name, "_", format(Sys.Date(), "%Y%m%d"), ".csv")
+      },
+      content = function(file) {
+        req(district_rotation_data())
+
+        export_data <- district_rotation_data()[[2]]
+
+        if (inherits(export_data, "sf")) {
+          export_data <- sf::st_drop_geometry(export_data)
+        }
+
+        write.csv(export_data, file, row.names = FALSE)
+      }
+    )
+
+    # Excel export for District
+    output$export_district_xlsx <- downloadHandler(
+      filename = function() {
+        district_name <- gsub(" ", "_", input$District_sel)
+        paste0("district_sequences_", district_name, "_", format(Sys.Date(), "%Y%m%d"), ".xlsx")
+      },
+      content = function(file) {
+        req(district_rotation_data())
+
+        export_data <- district_rotation_data()[[2]]
+
+        if (inherits(export_data, "sf")) {
+          export_data <- sf::st_drop_geometry(export_data)
+        }
+
+        if (requireNamespace("openxlsx", quietly = TRUE)) {
+          openxlsx::write.xlsx(export_data, file, rowNames = FALSE)
+        } else if (requireNamespace("writexl", quietly = TRUE)) {
+          writexl::write_xlsx(export_data, file)
+        } else {
+          write.csv(export_data, file, row.names = FALSE)
+          showNotification("Excel packages not available. File saved as CSV format.", type = "warning")
+        }
+      }
+    )
+
+    # CSV export for River Basin
+    output$export_basin_csv <- downloadHandler(
+      filename = function() {
+        basin_name <- gsub(" ", "_", input$EZG_sel)
+        paste0("basin_sequences_", basin_name, "_", format(Sys.Date(), "%Y%m%d"), ".csv")
+      },
+      content = function(file) {
+        req(basin_rotation_data())
+
+        export_data <- basin_rotation_data()[[2]]
+
+        if (inherits(export_data, "sf")) {
+          export_data <- sf::st_drop_geometry(export_data)
+        }
+
+        write.csv(export_data, file, row.names = FALSE)
+      }
+    )
+
+    # Excel export for River Basin
+    output$export_basin_xlsx <- downloadHandler(
+      filename = function() {
+        basin_name <- gsub(" ", "_", input$EZG_sel)
+        paste0("basin_sequences_", basin_name, "_", format(Sys.Date(), "%Y%m%d"), ".xlsx")
+      },
+      content = function(file) {
+        req(basin_rotation_data())
+
+        export_data <- basin_rotation_data()[[2]]
+
+        if (inherits(export_data, "sf")) {
+          export_data <- sf::st_drop_geometry(export_data)
+        }
+
+        if (requireNamespace("openxlsx", quietly = TRUE)) {
+          openxlsx::write.xlsx(export_data, file, rowNames = FALSE)
+        } else if (requireNamespace("writexl", quietly = TRUE)) {
+          writexl::write_xlsx(export_data, file)
+        } else {
+          write.csv(export_data, file, row.names = FALSE)
+          showNotification("Excel packages not available. File saved as CSV format.", type = "warning")
+        }
+      }
+    )
+
     #--------------------------------------------------------------------------------------------
     # table
     output$table <- renderDT({
@@ -2007,11 +2526,75 @@ viz_server <- function(input, output, session, app_data, input_dir) {
                                                                  crop_color_mapping_df$color))) %>%
         formatStyle('area_km2', color = "black",
                     backgroundColor = "lightgrey")
-      
-      
+
+
     })
+
     #--------------------------------------------------------------------------------------------
-    
+    # Export handlers for Tab 1 (Plot Sequence)
+    #--------------------------------------------------------------------------------------------
+
+    # CSV export for Tab 1
+    output$export_table_csv <- downloadHandler(
+      filename = function() {
+        paste0("crop_sequences_", format(Sys.Date(), "%Y%m%d"), ".csv")
+      },
+      content = function(file) {
+        req(input$Area_range_sec, input$Crops_sec)
+
+        export_data <- transform_rotation_summary(
+          All_rot_big = CropRotViz_intersection,
+          area_range = input$Area_range_sec,
+          choices = Crop_choices,
+          selected_crops = input$Crops_sec,
+          max_rows = 10000,
+          years = years
+        )
+
+        if (inherits(export_data, "sf")) {
+          export_data <- sf::st_drop_geometry(export_data)
+        }
+
+        write.csv(export_data, file, row.names = FALSE)
+      }
+    )
+
+    # Excel export for Tab 1
+    output$export_table_xlsx <- downloadHandler(
+      filename = function() {
+        paste0("crop_sequences_", format(Sys.Date(), "%Y%m%d"), ".xlsx")
+      },
+      content = function(file) {
+        req(input$Area_range_sec, input$Crops_sec)
+
+        export_data <- transform_rotation_summary(
+          All_rot_big = CropRotViz_intersection,
+          area_range = input$Area_range_sec,
+          choices = Crop_choices,
+          selected_crops = input$Crops_sec,
+          max_rows = 10000,
+          years = years
+        )
+
+        if (inherits(export_data, "sf")) {
+          export_data <- sf::st_drop_geometry(export_data)
+        }
+
+        # Use openxlsx if available, otherwise fall back to CSV with xlsx extension warning
+        if (requireNamespace("openxlsx", quietly = TRUE)) {
+          openxlsx::write.xlsx(export_data, file, rowNames = FALSE)
+        } else if (requireNamespace("writexl", quietly = TRUE)) {
+          writexl::write_xlsx(export_data, file)
+        } else {
+          # Fallback: save as CSV but warn user
+          write.csv(export_data, file, row.names = FALSE)
+          showNotification("Excel packages not available. File saved as CSV format.", type = "warning")
+        }
+      }
+    )
+
+    #--------------------------------------------------------------------------------------------
+
     # table specific
     output$table_spec <- renderDT({
       req(spec_rotation_data())
@@ -2061,9 +2644,72 @@ viz_server <- function(input, output, session, app_data, input_dir) {
                                                                  crop_color_mapping_df$color))) %>%
         formatStyle('area_km2', color = "black",
                     backgroundColor = "lightgrey")
-      
+
     })
-    
+
+    #--------------------------------------------------------------------------------------------
+    # Export handlers for Tab 2 (Plot Crop Specific Sequence)
+    #--------------------------------------------------------------------------------------------
+
+    # CSV export for Tab 2
+    output$export_table_spec_csv <- downloadHandler(
+      filename = function() {
+        crop_name <- gsub(" ", "_", input$Crop_spec)
+        paste0("crop_specific_sequences_", crop_name, "_", format(Sys.Date(), "%Y%m%d"), ".csv")
+      },
+      content = function(file) {
+        req(input$Area_range_spec, input$Crop_spec)
+
+        export_data <- transform_rotation_summary(
+          All_rot_big = CropRotViz_intersection,
+          area_range = input$Area_range_spec,
+          specific_crop = input$Crop_spec,
+          type = "specific",
+          max_rows = 10000,
+          years = years
+        )
+
+        if (inherits(export_data, "sf")) {
+          export_data <- sf::st_drop_geometry(export_data)
+        }
+
+        write.csv(export_data, file, row.names = FALSE)
+      }
+    )
+
+    # Excel export for Tab 2
+    output$export_table_spec_xlsx <- downloadHandler(
+      filename = function() {
+        crop_name <- gsub(" ", "_", input$Crop_spec)
+        paste0("crop_specific_sequences_", crop_name, "_", format(Sys.Date(), "%Y%m%d"), ".xlsx")
+      },
+      content = function(file) {
+        req(input$Area_range_spec, input$Crop_spec)
+
+        export_data <- transform_rotation_summary(
+          All_rot_big = CropRotViz_intersection,
+          area_range = input$Area_range_spec,
+          specific_crop = input$Crop_spec,
+          type = "specific",
+          max_rows = 10000,
+          years = years
+        )
+
+        if (inherits(export_data, "sf")) {
+          export_data <- sf::st_drop_geometry(export_data)
+        }
+
+        if (requireNamespace("openxlsx", quietly = TRUE)) {
+          openxlsx::write.xlsx(export_data, file, rowNames = FALSE)
+        } else if (requireNamespace("writexl", quietly = TRUE)) {
+          writexl::write_xlsx(export_data, file)
+        } else {
+          write.csv(export_data, file, row.names = FALSE)
+          showNotification("Excel packages not available. File saved as CSV format.", type = "warning")
+        }
+      }
+    )
+
     #--------------------------------------------------------------------------------------------
     observe({
       req(data_loaded())
@@ -2453,6 +3099,7 @@ viz_server <- function(input, output, session, app_data, input_dir) {
     #--------------------------------------------------------------------------------------------
     
     output$district_ridges <- renderPlot({
+      req(district_rotation_data())
       data <- district_rotation_data()[[2]]
       if (any(grepl("Aggregated_", names(data)))) {
         column <- paste0("Aggregated_" , input$year_select)
@@ -2496,6 +3143,7 @@ viz_server <- function(input, output, session, app_data, input_dir) {
     #--------------------------------------------------------------------------------------------
     
     output$basin_ridges <- renderPlot({
+      req(basin_rotation_data())
       data <- basin_rotation_data()[[2]]
       if (any(grepl("Aggregated_", names(data)))) {
         column <- paste0("Aggregated_" , input$year_select)
@@ -2673,7 +3321,7 @@ viz_server <- function(input, output, session, app_data, input_dir) {
             if (!inherits(data_to_analyze, "data.table")) {
               data_to_analyze <- data.table::as.data.table(data_to_analyze)
             }
-          } else if (input$ranking_spatial_type == "Catchment/Basin" && !is.null(input$ranking_catchment_sel)) {
+          } else if (input$ranking_spatial_type == "Catchment" && !is.null(input$ranking_catchment_sel)) {
             data_to_analyze <- EZG_CropRotViz_intersection[[input$ranking_catchment_sel]]
             if (!inherits(data_to_analyze, "data.table")) {
               data_to_analyze <- data.table::as.data.table(data_to_analyze)
@@ -3233,6 +3881,14 @@ viz_server <- function(input, output, session, app_data, input_dir) {
               spatial_data <- merge(spatial_data, dominant_rotations,
                                     by.x = "NAME_3", by.y = "area_name", all.x = TRUE)
             }
+
+            # Merge BS_mean from diversity_data if available
+            if (exists("diversity_data") && is.list(diversity_data) && length(diversity_data) >= 1 &&
+                !is.null(diversity_data[[1]]) && is.list(diversity_data[[1]]) &&
+                !is.null(diversity_data[[1]][[1]]) && "BS_mean" %in% names(diversity_data[[1]][[1]])) {
+              bs_data <- sf::st_drop_geometry(diversity_data[[1]][[1]])[, c("District", "BS_mean")]
+              spatial_data <- merge(spatial_data, bs_data, by.x = "NAME_3", by.y = "District", all.x = TRUE)
+            }
           }
         } else if (input$ranking_spatial_type == "Catchment/Basin") {
           # Calculate dominant rotation for each catchment
@@ -3279,9 +3935,17 @@ viz_server <- function(input, output, session, app_data, input_dir) {
               spatial_data <- merge(spatial_data, dominant_rotations,
                                     by.x = "EZG", by.y = "area_name", all.x = TRUE)
             }
+
+            # Merge BS_mean from diversity_data if available
+            if (exists("diversity_data") && is.list(diversity_data) && length(diversity_data) >= 2 &&
+                !is.null(diversity_data[[2]]) && is.list(diversity_data[[2]]) &&
+                !is.null(diversity_data[[2]][[1]]) && "BS_mean" %in% names(diversity_data[[2]][[1]])) {
+              bs_data <- sf::st_drop_geometry(diversity_data[[2]][[1]])[, c("EZG", "BS_mean")]
+              spatial_data <- merge(spatial_data, bs_data, by = "EZG", all.x = TRUE)
+            }
           }
         }
-        
+
         if (is.null(spatial_data) || nrow(spatial_data) == 0) {
           return(NULL)
         }
@@ -3458,6 +4122,888 @@ viz_server <- function(input, output, session, app_data, input_dir) {
         write.csv(ranking_rotation_results(), file, row.names = FALSE)
       }
     )
-    
+
+    # ==============================================================================
+    # ROTATION ANALYSIS TAB LOGIC - Monoculture Detection & Pattern Clustering
+    # ==============================================================================
+
+    # Reactive values for rotation analysis
+    analysis_results <- reactiveVal(NULL)
+    monoculture_data <- reactiveVal(NULL)
+    cluster_data <- reactiveVal(NULL)
+    transition_data <- reactiveVal(NULL)
+
+    # UI for district selection in analysis tab
+    output$analysis_district_ui <- renderUI({
+      req(exists("district_CropRotViz_intersection"))
+      selectInput(
+        "analysis_district_sel",
+        "Select District:",
+        choices = names(district_CropRotViz_intersection),
+        selected = names(district_CropRotViz_intersection)[1]
+      )
+    })
+
+    # UI for catchment selection in analysis tab
+    output$analysis_catchment_ui <- renderUI({
+      req(exists("EZG_CropRotViz_intersection"))
+      selectInput(
+        "analysis_catchment_sel",
+        "Select Catchment:",
+        choices = names(EZG_CropRotViz_intersection),
+        selected = names(EZG_CropRotViz_intersection)[1]
+      )
+    })
+
+    # UI for excluding crops in analysis tab
+    output$analysis_exclude_crops_ui <- renderUI({
+      req(CropRotViz_intersection)
+
+      # Get all unique crops from the data
+      agg_cols <- grep("^Aggregated_", names(CropRotViz_intersection), value = TRUE)
+      if (length(agg_cols) == 0) {
+        agg_cols <- grep("^Name_", names(CropRotViz_intersection), value = TRUE)
+      }
+
+      if (length(agg_cols) > 0) {
+        all_crops <- unique(unlist(lapply(agg_cols, function(col) {
+          unique(CropRotViz_intersection[[col]])
+        })))
+        all_crops <- sort(all_crops[!is.na(all_crops)])
+
+        selectInput(
+          "analysis_exclude_crops",
+          "Exclude Crops:",
+          choices = all_crops,
+          multiple = TRUE,
+          selected = NULL
+        )
+      }
+    })
+
+    # UI for including specific crops in analysis tab
+    output$analysis_include_crops_ui <- renderUI({
+      req(CropRotViz_intersection)
+
+      # Get all unique crops from the data
+      agg_cols <- grep("^Aggregated_", names(CropRotViz_intersection), value = TRUE)
+      if (length(agg_cols) == 0) {
+        agg_cols <- grep("^Name_", names(CropRotViz_intersection), value = TRUE)
+      }
+
+      if (length(agg_cols) > 0) {
+        all_crops <- unique(unlist(lapply(agg_cols, function(col) {
+          unique(CropRotViz_intersection[[col]])
+        })))
+        all_crops <- sort(all_crops[!is.na(all_crops)])
+
+        selectInput(
+          "analysis_include_crops",
+          "Must Include Crop:",
+          choices = c("All patterns" = "", all_crops),
+          multiple = TRUE,
+          selected = ""
+        )
+      }
+    })
+
+    # Main analysis observer
+    observeEvent(input$run_rotation_analysis, {
+      req(CropRotViz_intersection)
+
+      tryCatch({
+        withProgress(message = 'Running rotation analysis...', value = 0, {
+
+          # Determine which dataset to use based on spatial filter
+          incProgress(0.1, detail = "Selecting data...")
+
+          data_to_analyze <- CropRotViz_intersection
+
+          if (!is.null(input$analysis_spatial_type) && input$analysis_spatial_type != "full") {
+            if (input$analysis_spatial_type == "district" && !is.null(input$analysis_district_sel)) {
+              data_to_analyze <- district_CropRotViz_intersection[[input$analysis_district_sel]]
+              if (!inherits(data_to_analyze, "data.table")) {
+                data_to_analyze <- data.table::as.data.table(data_to_analyze)
+              }
+            } else if (input$analysis_spatial_type == "catchment" && !is.null(input$analysis_catchment_sel)) {
+              data_to_analyze <- EZG_CropRotViz_intersection[[input$analysis_catchment_sel]]
+              if (!inherits(data_to_analyze, "data.table")) {
+                data_to_analyze <- data.table::as.data.table(data_to_analyze)
+              }
+            }
+          }
+
+          # Get crop columns (Aggregated_ or Name_)
+          agg_cols <- grep("^Aggregated_", names(data_to_analyze), value = TRUE)
+          if (length(agg_cols) == 0) {
+            agg_cols <- grep("^Name_", names(data_to_analyze), value = TRUE)
+          }
+
+          if (length(agg_cols) == 0) {
+            showNotification("No crop columns found in data!", type = "error")
+            return()
+          }
+
+          incProgress(0.2, detail = "Computing transitions...")
+
+          # Get data frame without geometry
+          df <- if (inherits(data_to_analyze, "sf")) {
+            sf::st_drop_geometry(data_to_analyze)
+          } else {
+            as.data.frame(data_to_analyze)
+          }
+
+          # Calculate transitions and unique counts for each field
+          df$transitions <- apply(df[, agg_cols, drop = FALSE], 1, function(row) {
+            if (length(row) < 2) return(0)
+            sum(row[-length(row)] != row[-1])
+          })
+
+          df$unique_count <- apply(df[, agg_cols, drop = FALSE], 1, function(x) {
+            length(unique(x))
+          })
+
+          # Create rotation string
+          df$rotation <- apply(df[, agg_cols, drop = FALSE], 1, function(x) {
+            paste(x, collapse = " -> ")
+          })
+
+          # Apply crop filters
+          excluded_crops <- input$analysis_exclude_crops
+          include_crops <- input$analysis_include_crops
+
+          # Filter out rows containing excluded crops
+          if (!is.null(excluded_crops) && length(excluded_crops) > 0 && any(excluded_crops != "")) {
+            exclude_pattern <- paste(excluded_crops, collapse = "|")
+            rows_to_keep <- !grepl(exclude_pattern, df$rotation, ignore.case = TRUE)
+            df <- df[rows_to_keep, ]
+          }
+
+          # Filter to only include rows with required crops
+          if (!is.null(include_crops) && length(include_crops) > 0 && any(include_crops != "")) {
+            include_crops <- include_crops[include_crops != ""]
+            if (length(include_crops) > 0) {
+              for (crop in include_crops) {
+                df <- df[grepl(crop, df$rotation, ignore.case = TRUE), ]
+              }
+            }
+          }
+
+          # Check if any data remains after filtering
+          if (nrow(df) == 0) {
+            showNotification("No data remaining after applying crop filters!", type = "warning")
+            return()
+          }
+
+          # Get the dominant crop for monocultures
+          df$dominant_crop <- apply(df[, agg_cols, drop = FALSE], 1, function(x) {
+            tbl <- table(x)
+            names(tbl)[which.max(tbl)]
+          })
+
+          # Store full analysis results
+          analysis_results(df)
+
+          incProgress(0.4, detail = "Detecting monocultures...")
+
+          # ==== MONOCULTURE DETECTION ====
+          # Monoculture = fields with 0 transitions (same crop every year)
+          monocultures <- df[df$transitions == 0, ]
+
+          if (nrow(monocultures) > 0) {
+            mono_summary <- monocultures %>%
+              group_by(dominant_crop) %>%
+              summarise(
+                n_fields = n(),
+                total_area = sum(freq, na.rm = TRUE),
+                .groups = "drop"
+              ) %>%
+              arrange(desc(total_area)) %>%
+              mutate(
+                percentage = round(total_area / sum(total_area) * 100, 2)
+              )
+
+            monoculture_data(list(
+              summary = mono_summary,
+              details = monocultures,
+              total_fields = nrow(df),
+              mono_fields = nrow(monocultures),
+              mono_area = sum(monocultures$freq, na.rm = TRUE)
+            ))
+          } else {
+            monoculture_data(list(
+              summary = data.frame(),
+              details = data.frame(),
+              total_fields = nrow(df),
+              mono_fields = 0,
+              mono_area = 0
+            ))
+          }
+
+          incProgress(0.6, detail = "Clustering rotation patterns...")
+
+          # ==== PATTERN CLUSTERING ====
+          # Aggregate rotations first
+          rotation_agg <- df %>%
+            group_by(rotation) %>%
+            summarise(
+              n_fields = n(),
+              total_area = sum(freq, na.rm = TRUE),
+              avg_transitions = mean(transitions, na.rm = TRUE),
+              avg_unique_crops = mean(unique_count, na.rm = TRUE),
+              dominant_crop = first(dominant_crop),
+              .groups = "drop"
+            ) %>%
+            filter(total_area >= input$min_cluster_area)
+
+          # Calculate unique crops for each pattern
+          rotation_agg$unique_crops <- sapply(rotation_agg$rotation, function(rot) {
+            crops <- strsplit(rot, " -> ")[[1]]
+            length(unique(crops))
+          })
+
+          if (nrow(rotation_agg) >= input$n_clusters) {
+            # =======================================================
+            # CLUSTERING BASED ON STRUCTURAL DIVERSITY ONLY:
+            # 1. Number of transitions (rotation frequency)
+            # 2. Number of unique crops (crop diversity)
+            # =======================================================
+
+            # Prepare features for clustering (normalize to 0-1 scale)
+            max_trans <- max(rotation_agg$avg_transitions, na.rm = TRUE)
+            max_crops <- max(rotation_agg$unique_crops, na.rm = TRUE)
+
+            # Create normalized feature matrix
+            features <- data.frame(
+              transitions_norm = rotation_agg$avg_transitions / max(max_trans, 1),
+              unique_crops_norm = rotation_agg$unique_crops / max(max_crops, 1)
+            )
+
+            # Use hierarchical clustering on the 2D feature space
+            dist_matrix <- dist(features, method = "euclidean")
+            hc <- hclust(dist_matrix, method = "ward.D2")
+            clusters <- cutree(hc, k = min(input$n_clusters, nrow(rotation_agg)))
+
+            rotation_agg$cluster <- clusters
+
+            # Function to get dominant crops from patterns in a cluster
+            get_dominant_crops <- function(patterns, n = 3) {
+              all_crops <- unlist(strsplit(patterns, " -> "))
+              crop_freq <- sort(table(all_crops), decreasing = TRUE)
+              head(names(crop_freq), n)
+            }
+
+            # Function to generate cluster interpretation based on structural diversity
+            generate_interpretation <- function(avg_trans, avg_crops, dominant_crops) {
+              top_crops <- paste(head(dominant_crops, 2), collapse = "/")
+
+              # Classification based on structural diversity (transitions + unique crops)
+              if (avg_trans < 0.5 && avg_crops <= 1.5) {
+                paste0("Monoculture (", top_crops, ")")
+              } else if (avg_trans < 2 && avg_crops <= 2) {
+                paste0("Very low diversity (", round(avg_trans, 1), " trans, ", round(avg_crops, 1), " crops)")
+              } else if (avg_trans < 4 && avg_crops <= 3) {
+                paste0("Low diversity (", round(avg_trans, 1), " trans, ", round(avg_crops, 1), " crops)")
+              } else if (avg_trans < 6 && avg_crops <= 4) {
+                paste0("Medium diversity (", round(avg_trans, 1), " trans, ", round(avg_crops, 1), " crops)")
+              } else {
+                paste0("High diversity (", round(avg_trans, 1), " trans, ", round(avg_crops, 1), " crops)")
+              }
+            }
+
+            # Summarize clusters with interpretation
+            cluster_summary <- rotation_agg %>%
+              group_by(cluster) %>%
+              summarise(
+                n_patterns = n(),
+                n_fields = sum(n_fields, na.rm = TRUE),
+                total_area = sum(total_area, na.rm = TRUE),
+                avg_transitions = mean(avg_transitions, na.rm = TRUE),
+                avg_unique_crops = mean(unique_crops, na.rm = TRUE),
+                top_pattern = rotation[which.max(total_area)],
+                dominant_crops = list(get_dominant_crops(rotation)),
+                .groups = "drop"
+              ) %>%
+              arrange(desc(total_area)) %>%
+              rowwise() %>%
+              mutate(
+                percentage = round(total_area / sum(.$total_area) * 100, 2),
+                interpretation = generate_interpretation(
+                  avg_transitions,
+                  avg_unique_crops,
+                  dominant_crops
+                ),
+                dominant_crops_str = paste(dominant_crops, collapse = ", ")
+              ) %>%
+              ungroup() %>%
+              select(-dominant_crops)
+
+            cluster_data(list(
+              summary = cluster_summary,
+              patterns = rotation_agg
+            ))
+          } else {
+            # Not enough patterns for clustering - create single cluster with interpretation
+            avg_trans <- if (nrow(rotation_agg) > 0) mean(rotation_agg$avg_transitions, na.rm = TRUE) else 0
+            avg_crops <- if (nrow(rotation_agg) > 0) mean(rotation_agg$unique_crops, na.rm = TRUE) else 0
+            dom_crops <- if (nrow(rotation_agg) > 0) {
+              all_crops <- unlist(strsplit(rotation_agg$rotation, " -> "))
+              crop_freq <- sort(table(all_crops), decreasing = TRUE)
+              head(names(crop_freq), 3)
+            } else {
+              c("N/A")
+            }
+
+            interp <- if (avg_trans < 0.5 && avg_crops <= 1.5) {
+              paste0("Monoculture (", dom_crops[1], ")")
+            } else {
+              paste0("Mixed (", round(avg_trans, 1), " trans, ", round(avg_crops, 1), " crops)")
+            }
+
+            cluster_data(list(
+              summary = data.frame(
+                cluster = 1,
+                n_patterns = nrow(rotation_agg),
+                n_fields = sum(rotation_agg$n_fields, na.rm = TRUE),
+                total_area = sum(rotation_agg$total_area, na.rm = TRUE),
+                avg_transitions = avg_trans,
+                avg_unique_crops = avg_crops,
+                top_pattern = if (nrow(rotation_agg) > 0) rotation_agg$rotation[1] else NA,
+                percentage = 100,
+                interpretation = interp,
+                dominant_crops_str = paste(dom_crops, collapse = ", ")
+              ),
+              patterns = if (nrow(rotation_agg) > 0) rotation_agg %>% mutate(cluster = 1) else data.frame()
+            ))
+          }
+
+          incProgress(0.8, detail = "Computing transition statistics...")
+
+          # ==== TRANSITION ANALYSIS ====
+          transition_summary <- df %>%
+            group_by(transitions) %>%
+            summarise(
+              n_fields = n(),
+              total_area = sum(freq, na.rm = TRUE),
+              .groups = "drop"
+            ) %>%
+            mutate(
+              percentage = round(n_fields / sum(n_fields) * 100, 2),
+              area_percentage = round(total_area / sum(total_area) * 100, 2),
+              category = case_when(
+                transitions == 0 ~ "Monoculture (0)",
+                transitions == 1 ~ "Low (1)",
+                transitions == 2 ~ "Medium (2)",
+                transitions >= 3 ~ paste0("High (", transitions, ")")
+              )
+            )
+
+          transition_data(list(
+            summary = transition_summary,
+            stats = list(
+              mean = round(mean(df$transitions, na.rm = TRUE), 2),
+              median = median(df$transitions, na.rm = TRUE),
+              max = max(df$transitions, na.rm = TRUE),
+              min = min(df$transitions, na.rm = TRUE),
+              sd = round(sd(df$transitions, na.rm = TRUE), 2)
+            )
+          ))
+
+          incProgress(1.0, detail = "Complete!")
+
+          showNotification(
+            paste("Analysis complete!", nrow(df), "fields analyzed."),
+            type = "message",
+            duration = 3
+          )
+        })
+      }, error = function(e) {
+        showNotification(
+          paste("Error during analysis:", e$message),
+          type = "error",
+          duration = 5
+        )
+      })
+    })
+
+    # ==== SUMMARY METRICS ====
+    output$total_fields_analyzed <- renderText({
+      req(monoculture_data())
+      format(monoculture_data()$total_fields, big.mark = ",")
+    })
+
+    output$monoculture_count <- renderText({
+      req(monoculture_data())
+      format(monoculture_data()$mono_fields, big.mark = ",")
+    })
+
+    output$monoculture_percentage <- renderText({
+      req(monoculture_data())
+      paste0(round(monoculture_data()$mono_fields / monoculture_data()$total_fields * 100, 1), "%")
+    })
+
+    output$monoculture_area <- renderText({
+      req(monoculture_data())
+      format(round(monoculture_data()$mono_area, 2), big.mark = ",")
+    })
+
+    # ==== MONOCULTURE VISUALIZATIONS ====
+    output$monoculture_bar_chart <- renderPlotly({
+      req(monoculture_data())
+
+      summary_df <- monoculture_data()$summary
+
+      if (nrow(summary_df) == 0) {
+        return(plotly_empty() %>%
+                 layout(title = "No monocultures detected"))
+      }
+
+      # Get colors from crop_colors if available
+      colors <- if (exists("crop_colors") && is.function(crop_colors)) {
+        sapply(summary_df$dominant_crop, function(crop) {
+          cols <- crop_colors()
+          if (crop %in% names(cols)) cols[crop] else "#666666"
+        })
+      } else {
+        rep("#74961E", nrow(summary_df))
+      }
+
+      plot_ly(
+        data = summary_df,
+        x = ~reorder(dominant_crop, -total_area),
+        y = ~total_area,
+        type = "bar",
+        marker = list(color = colors),
+        text = ~paste0("Crop: ", dominant_crop,
+                       "<br>Area: ", round(total_area, 2), " km²",
+                       "<br>Fields: ", n_fields),
+        hoverinfo = "text"
+      ) %>%
+        layout(
+          title = list(text = "Monoculture Area by Crop", font = list(color = "white")),
+          xaxis = list(title = "Crop", tickangle = -45, color = "white"),
+          yaxis = list(title = "Area (km²)", color = "white"),
+          paper_bgcolor = "#1f1b1b",
+          plot_bgcolor = "#2d2d2d",
+          font = list(color = "white")
+        )
+    })
+
+    output$monoculture_pie_chart <- renderPlotly({
+      req(monoculture_data())
+
+      summary_df <- monoculture_data()$summary
+
+      if (nrow(summary_df) == 0) {
+        return(plotly_empty() %>%
+                 layout(title = "No monocultures detected"))
+      }
+
+      # Get colors
+      colors <- if (exists("crop_colors") && is.function(crop_colors)) {
+        sapply(summary_df$dominant_crop, function(crop) {
+          cols <- crop_colors()
+          if (crop %in% names(cols)) cols[crop] else "#666666"
+        })
+      } else {
+        RColorBrewer::brewer.pal(min(nrow(summary_df), 8), "Set2")
+      }
+
+      plot_ly(
+        data = summary_df,
+        labels = ~dominant_crop,
+        values = ~total_area,
+        type = "pie",
+        marker = list(colors = colors),
+        textinfo = "label+percent",
+        hoverinfo = "text",
+        text = ~paste0(dominant_crop, ": ", round(total_area, 2), " km²")
+      ) %>%
+        layout(
+          title = list(text = "Monoculture Distribution", font = list(color = "white")),
+          paper_bgcolor = "#1f1b1b",
+          font = list(color = "white"),
+          showlegend = FALSE
+        )
+    })
+
+    output$monoculture_table <- DT::renderDataTable({
+      req(monoculture_data())
+
+      summary_df <- monoculture_data()$summary
+
+      if (nrow(summary_df) == 0) {
+        return(DT::datatable(
+          data.frame(Message = "No monocultures detected in the data"),
+          options = list(dom = 't'),
+          rownames = FALSE
+        ))
+      }
+
+      table_data <- summary_df %>%
+        select(
+          Crop = dominant_crop,
+          `Number of Fields` = n_fields,
+          `Total Area (km²)` = total_area,
+          `Percentage (%)` = percentage
+        )
+
+      DT::datatable(
+        table_data,
+        options = list(
+          pageLength = 10,
+          order = list(list(2, 'desc')),
+          initComplete = JS(
+            "function(settings, json) {",
+            "$(this.api().table().header()).css({'color': '#fff'});",
+            "}"
+          )
+        ),
+        rownames = FALSE
+      ) %>%
+        DT::formatRound(columns = c("Total Area (km²)", "Percentage (%)"), digits = 2)
+    })
+
+    # ==== CLUSTER VISUALIZATIONS ====
+
+    # Define consistent cluster colors (reactive to be shared across visualizations)
+    cluster_colors_palette <- reactive({
+      req(cluster_data())
+      n_clusters <- nrow(cluster_data()$summary)
+      if (n_clusters == 0) return(NULL)
+      RColorBrewer::brewer.pal(max(min(n_clusters, 8), 3), "Set2")[1:n_clusters]
+    })
+
+    output$cluster_distribution_chart <- renderPlotly({
+      req(cluster_data(), cluster_colors_palette())
+
+      summary_df <- cluster_data()$summary
+
+      if (nrow(summary_df) == 0) {
+        return(plotly_empty() %>%
+                 layout(title = "No clusters generated"))
+      }
+
+      colors <- cluster_colors_palette()
+
+      plot_ly(
+        data = summary_df,
+        x = ~paste("Cluster", cluster),
+        y = ~n_patterns,
+        type = "bar",
+        marker = list(color = colors),
+        text = ~paste0("Cluster ", cluster,
+                       "<br>Patterns: ", n_patterns,
+                       "<br>Fields: ", n_fields),
+        hoverinfo = "text"
+      ) %>%
+        layout(
+          title = list(text = "Number of Patterns per Cluster", font = list(color = "white")),
+          xaxis = list(title = "Cluster", color = "white"),
+          yaxis = list(title = "Number of Patterns", color = "white"),
+          paper_bgcolor = "#1f1b1b",
+          plot_bgcolor = "#2d2d2d",
+          font = list(color = "white")
+        )
+    })
+
+    output$cluster_area_chart <- renderPlotly({
+      req(cluster_data())
+
+      summary_df <- cluster_data()$summary
+
+      if (nrow(summary_df) == 0) {
+        return(plotly_empty() %>%
+                 layout(title = "No clusters generated"))
+      }
+
+      colors <- RColorBrewer::brewer.pal(min(nrow(summary_df), 8), "Set2")
+
+      plot_ly(
+        data = summary_df,
+        labels = ~paste("Cluster", cluster),
+        values = ~total_area,
+        type = "pie",
+        marker = list(colors = colors),
+        textinfo = "label+percent",
+        hoverinfo = "text",
+        text = ~paste0("Cluster ", cluster,
+                       "<br>Area: ", round(total_area, 2), " km²",
+                       "<br>Top: ", substr(top_pattern, 1, 50), "...")
+      ) %>%
+        layout(
+          title = list(text = "Cluster Area Distribution", font = list(color = "white")),
+          paper_bgcolor = "#1f1b1b",
+          font = list(color = "white"),
+          showlegend = TRUE,
+          legend = list(font = list(color = "white"))
+        )
+    })
+
+    # Cluster Separability Scatter Plot
+    output$cluster_scatter_plot <- renderPlotly({
+      req(cluster_data())
+
+      patterns_df <- cluster_data()$patterns
+
+      if (is.null(patterns_df) || nrow(patterns_df) == 0) {
+        return(plotly_empty() %>%
+                 layout(title = "No pattern data available"))
+      }
+
+      # Calculate unique crop count for each pattern
+      patterns_df$unique_crops <- sapply(patterns_df$rotation, function(rot) {
+        crops <- strsplit(rot, " -> ")[[1]]
+        length(unique(crops))
+      })
+
+      # Get cluster colors
+      n_clusters <- length(unique(patterns_df$cluster))
+      cluster_colors <- RColorBrewer::brewer.pal(max(min(n_clusters, 8), 3), "Set2")
+
+      # Create scatter plot
+      plot_ly(
+        data = patterns_df,
+        x = ~avg_transitions,
+        y = ~unique_crops,
+        size = ~total_area,
+        color = ~factor(cluster),
+        colors = cluster_colors,
+        type = "scatter",
+        mode = "markers",
+        marker = list(
+          opacity = 0.7,
+          sizemode = "area",
+          sizeref = 2 * max(patterns_df$total_area, na.rm = TRUE) / (40^2),
+          sizemin = 4
+        ),
+        text = ~paste0(
+          "<b>Cluster ", cluster, "</b><br>",
+          "Transitions: ", round(avg_transitions, 1), "<br>",
+          "Unique crops: ", unique_crops, "<br>",
+          "Area: ", round(total_area, 2), " km²<br>",
+          "Pattern: ", substr(rotation, 1, 60), "..."
+        ),
+        hoverinfo = "text"
+      ) %>%
+        layout(
+          title = list(text = "Cluster Separability", font = list(color = "white")),
+          xaxis = list(
+            title = "Number of Transitions (Rotation Diversity)",
+            color = "white",
+            gridcolor = "#444444"
+          ),
+          yaxis = list(
+            title = "Number of Unique Crops",
+            color = "white",
+            gridcolor = "#444444"
+          ),
+          paper_bgcolor = "#1f1b1b",
+          plot_bgcolor = "#2d2d2d",
+          font = list(color = "white"),
+          legend = list(
+            title = list(text = "Cluster"),
+            font = list(color = "white")
+          )
+        )
+    })
+
+    output$cluster_table <- DT::renderDataTable({
+      req(cluster_data())
+
+      summary_df <- cluster_data()$summary
+
+      if (nrow(summary_df) == 0) {
+        return(DT::datatable(
+          data.frame(Message = "No clusters generated"),
+          options = list(dom = 't'),
+          rownames = FALSE
+        ))
+      }
+
+      table_data <- summary_df %>%
+        select(
+          Cluster = cluster,
+          Interpretation = interpretation,
+          `Dominant Crops` = dominant_crops_str,
+          `Patterns` = n_patterns,
+          `Fields` = n_fields,
+          `Area (km²)` = total_area,
+          `Avg. Trans.` = avg_transitions,
+          `Avg. Crops` = avg_unique_crops,
+          `Area %` = percentage
+        )
+
+      DT::datatable(
+        table_data,
+        options = list(
+          pageLength = 10,
+          order = list(list(5, 'desc')),
+          scrollX = TRUE,
+          initComplete = JS(
+            "function(settings, json) {",
+            "$(this.api().table().header()).css({'color': '#fff'});",
+            "}"
+          )
+        ),
+        rownames = FALSE
+      ) %>%
+        DT::formatRound(columns = c("Area (km²)", "Avg. Trans.", "Avg. Crops", "Area %"), digits = 2)
+    })
+
+    output$cluster_patterns_table <- DT::renderDataTable({
+      req(cluster_data())
+
+      patterns_df <- cluster_data()$patterns
+
+      if (nrow(patterns_df) == 0) {
+        return(DT::datatable(
+          data.frame(Message = "No patterns available"),
+          options = list(dom = 't'),
+          rownames = FALSE
+        ))
+      }
+
+      # Get top 3 patterns per cluster
+      top_patterns <- patterns_df %>%
+        group_by(cluster) %>%
+        slice_max(order_by = total_area, n = 3) %>%
+        ungroup() %>%
+        arrange(cluster, desc(total_area)) %>%
+        select(
+          Cluster = cluster,
+          `Rotation Pattern` = rotation,
+          `Area (km²)` = total_area,
+          `Fields` = n_fields,
+          `Transitions` = avg_transitions
+        )
+
+      DT::datatable(
+        top_patterns,
+        options = list(
+          pageLength = 15,
+          scrollX = TRUE,
+          initComplete = JS(
+            "function(settings, json) {",
+            "$(this.api().table().header()).css({'color': '#fff'});",
+            "}"
+          )
+        ),
+        rownames = FALSE
+      ) %>%
+        DT::formatRound(columns = c("Area (km²)", "Transitions"), digits = 2)
+    })
+
+    # ==== TRANSITION VISUALIZATIONS ====
+    output$transition_histogram <- renderPlotly({
+      req(transition_data())
+
+      summary_df <- transition_data()$summary
+
+      if (nrow(summary_df) == 0) {
+        return(plotly_empty() %>%
+                 layout(title = "No transition data available"))
+      }
+
+      plot_ly(
+        data = summary_df,
+        x = ~transitions,
+        y = ~n_fields,
+        type = "bar",
+        marker = list(
+          color = ~transitions,
+          colorscale = list(c(0, "#74961E"), c(1, "#164f8c")),
+          showscale = FALSE
+        ),
+        text = ~paste0("Transitions: ", transitions,
+                       "<br>Fields: ", format(n_fields, big.mark = ","),
+                       "<br>Percentage: ", percentage, "%"),
+        hoverinfo = "text"
+      ) %>%
+        layout(
+          title = list(text = "Distribution of Crop Transitions", font = list(color = "white")),
+          xaxis = list(
+            title = "Number of Transitions",
+            color = "white",
+            dtick = 1
+          ),
+          yaxis = list(title = "Number of Fields", color = "white"),
+          paper_bgcolor = "#1f1b1b",
+          plot_bgcolor = "#2d2d2d",
+          font = list(color = "white")
+        )
+    })
+
+    output$transition_stats_table <- renderTable({
+      req(transition_data())
+
+      stats <- transition_data()$stats
+
+      data.frame(
+        Statistic = c("Mean", "Median", "Std. Dev.", "Minimum", "Maximum"),
+        Value = c(stats$mean, stats$median, stats$sd, stats$min, stats$max)
+      )
+    }, striped = TRUE, hover = TRUE, bordered = TRUE)
+
+    output$transition_categories_table <- DT::renderDataTable({
+      req(transition_data())
+
+      summary_df <- transition_data()$summary
+
+      if (nrow(summary_df) == 0) {
+        return(DT::datatable(
+          data.frame(Message = "No transition data available"),
+          options = list(dom = 't'),
+          rownames = FALSE
+        ))
+      }
+
+      table_data <- summary_df %>%
+        select(
+          `Transitions` = transitions,
+          Category = category,
+          `Number of Fields` = n_fields,
+          `Field %` = percentage,
+          `Total Area (km²)` = total_area,
+          `Area %` = area_percentage
+        )
+
+      DT::datatable(
+        table_data,
+        options = list(
+          pageLength = 10,
+          order = list(list(0, 'asc')),
+          initComplete = JS(
+            "function(settings, json) {",
+            "$(this.api().table().header()).css({'color': '#fff'});",
+            "}"
+          )
+        ),
+        rownames = FALSE
+      ) %>%
+        DT::formatRound(columns = c("Field %", "Total Area (km²)", "Area %"), digits = 2)
+    })
+
+    # ==== DOWNLOAD HANDLERS ====
+    output$download_monoculture_data <- downloadHandler(
+      filename = function() {
+        paste0("monoculture_analysis_", format(Sys.Date(), "%Y%m%d"), ".csv")
+      },
+      content = function(file) {
+        req(monoculture_data())
+        write.csv(monoculture_data()$summary, file, row.names = FALSE)
+      }
+    )
+
+    output$download_cluster_data <- downloadHandler(
+      filename = function() {
+        paste0("cluster_analysis_", format(Sys.Date(), "%Y%m%d"), ".csv")
+      },
+      content = function(file) {
+        req(cluster_data())
+        write.csv(cluster_data()$patterns, file, row.names = FALSE)
+      }
+    )
+
   })
 }

@@ -698,8 +698,9 @@ intersect_fields <- function(fields_list, max_area = 20000000 * 1e6, n_cores = 4
       }
       
       # Update progress every progress_step tiles
+      # Scale to 0-0.6 range (tile intersection is ~60% of total, missing field check is ~40%)
       if (!is.null(progress_callback) && i %% progress_step == 0) {
-        progress_callback(i / total_tiles, paste("Processed", i, "of", total_tiles, "tiles"))
+        progress_callback((i / total_tiles) * 0.6, paste("Processed", i, "of", total_tiles, "tiles"))
       }
     }
     
@@ -775,7 +776,8 @@ intersect_fields <- function(fields_list, max_area = 20000000 * 1e6, n_cores = 4
       }
       
       if (!is.null(progress_callback)) {
-        progress_callback((i-1) / (length(fields_list)-1),
+        # Scale to 0-0.6 range (intersection is ~60% of total, missing field check is ~40%)
+        progress_callback(((i-1) / (length(fields_list)-1)) * 0.6,
                           paste("Intersecting layer", i, "of", length(fields_list)))
       }
       
@@ -788,13 +790,25 @@ intersect_fields <- function(fields_list, max_area = 20000000 * 1e6, n_cores = 4
   }
   
   message("\nChecking for non-intersecting polygons...")
-  if (!is.null(shiny::getDefaultReactiveDomain())) {
+  # Use progress callback if available, otherwise fall back to incProgress
+  if (!is.null(progress_callback)) {
+    progress_callback(0.6, "Checking for non-intersecting polygons...")
+  } else if (!is.null(shiny::getDefaultReactiveDomain())) {
     incProgress(0.05, detail = "Checking for non-intersecting polygons...")
   }
   # bind the intersected with the non intersecting polygons
   if (!is.null(intersected)) {
-    non_intersecting <- intersecting_check_spatial(fields_list, intersected, n_cores = n_cores, 
-                                                   progress_callback = progress_callback)
+    # Create a sub-callback for the missing field check (uses remaining 40% of intersection progress)
+    missing_field_callback <- if (!is.null(progress_callback)) {
+      function(fraction, msg) {
+        # Scale: 0.6 base + (0.4 * fraction) for the missing field portion
+        progress_callback(0.6 + (fraction * 0.4), msg)
+      }
+    } else {
+      NULL
+    }
+    non_intersecting <- intersecting_check_spatial(fields_list, intersected, n_cores = n_cores,
+                                                   progress_callback = missing_field_callback)
     if (!is.null(non_intersecting) && nrow(non_intersecting) > 0) {
       intersected <- rbind(intersected, non_intersecting)
     }

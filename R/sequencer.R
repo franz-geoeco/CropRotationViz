@@ -750,6 +750,15 @@ processing_ui <- function(app_data, output_dir = NA, start_year = NA, vector_fil
                               c("Yes", "No"), inline = TRUE)
                )
         ),
+        column(2,
+               conditionalPanel(
+                 condition = "output.show_process_button",
+                 textInput("outputPrefix",
+                           "Output folder prefix (optional)",
+                           value = "",
+                           placeholder = "e.g. MyRegion")
+               )
+        ),
         column(1, style = "padding: 0; margin-left: 10px;",
                conditionalPanel(
                  condition = "output.show_process_button", 
@@ -3049,8 +3058,16 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
       tryCatch({
         # Initialize memory checkpoints list
         mem_checkpoints <- list()
-        
-        incProgress(0.1, detail = "Adding names to all files")
+
+        # Progress allocation designed to reflect actual processing time:
+        # - Pre-processing (names, filtering): ~5%
+        # - Intersection + missing field calculation: ~50% (longest running)
+        # - Aggregation: ~10%
+        # - Border intersection: ~15%
+        # - File writing: ~10%
+        # - Diversity + final prep: ~10%
+
+        incProgress(0.03, detail = "Adding names to all files")
         mem_checkpoints$after_names <- gc(reset = TRUE)
         
         # pre-process the layers
@@ -3104,10 +3121,25 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
           }
         }
         
-        # start intersection
-        incProgress(0.1, detail = "Intersecting")
+        # start intersection - this is the longest running part (~50% of total time)
+        # Create a progress callback for detailed intersection progress
+        # Track previous progress to calculate incremental updates
+        last_intersection_progress <- 0
+        intersection_progress_callback <- function(fraction, message) {
+          # Scale the fraction to use 0.50 of the total progress bar
+          # (intersection + missing field calculation combined)
+          scaled_progress <- fraction * 0.50
+          increment <- scaled_progress - last_intersection_progress
+          if (increment > 0) {
+            last_intersection_progress <<- scaled_progress
+            incProgress(increment, detail = message)
+          }
+        }
+
+        incProgress(0.02, detail = "Starting intersection...")
         if(input$radio_process == "complete"){
-          CropRotViz_intersection <- intersect_fields(all_files, n_cores = ncores)
+          CropRotViz_intersection <- intersect_fields(all_files, n_cores = ncores,
+                                                       progress_callback = intersection_progress_callback)
         }else{
           CropRotViz_intersection <- intersect_fields_simple(all_files, n_cores = ncores)
         }
@@ -3121,16 +3153,16 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
           aggregation_codes <- prepare_aggregation_data()
           aggregation_codes <- aggregation_codes$converter
           
-          incProgress(0.15, detail = "aggregating")
-          
+          incProgress(0.08, detail = "aggregating")
+
           CropRotViz_intersection <- aggregator(CropRotViz_intersection, years, aggregation_codes, type = "NC")
           mem_checkpoints$after_aggregation <- gc(reset = TRUE)
           
         }else if(input$aggregation == "Yes" && input$id_or_name == "Name"){
           aggregation_codes <- prepare_aggregation_data()
           aggregation_codes <- aggregation_codes$converter
-          
-          incProgress(0.15, detail = "aggregating")
+
+          incProgress(0.08, detail = "aggregating")
           CropRotViz_intersection <- aggregator(CropRotViz_intersection, years, aggregation_codes, type = "Name")
           mem_checkpoints$after_aggregation <- gc(reset = TRUE)
         }else{
@@ -3139,7 +3171,7 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
         
         #--------------------------------------------------------------
         # intersect with attributes
-        incProgress(0.15, detail = "intersecting with areas")
+        incProgress(0.12, detail = "Intersecting with areas")
         message("intersecting with areas")
         list_intersect_with_borders <- intersect_with_borders(CropRotViz_intersection, 3, countriesSP,
                                                               EZG, aoi_data)
@@ -3160,7 +3192,7 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
           AOIs <- NULL
         }
         
-        incProgress(0.15, detail = "writing vector file")
+        incProgress(0.08, detail = "Writing vector file")
         message("writing vector file")
         if(vector_file){
           if(input$filetype == "Shapefile"){
@@ -3228,8 +3260,8 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
           diversity_data <- NULL
         })
         #--------------------------------------------------------------
-        incProgress(0.1, detail = "preparing the rest of the outputs")
-        
+        incProgress(0.07, detail = "Preparing the rest of the outputs")
+
         # processing section 
         district_CropRotViz_intersection <- list()
         
@@ -3619,12 +3651,30 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
   
   # Process button observer with output_dir
   observeEvent(input$btn_process, {
+    # Determine base directory
     if (!is.null(output_dir) && !is.na(output_dir)) {
-      processor(output_dir)
+      base_dir <- output_dir
     } else {
       req(selected_dir())  # Ensure directory is selected
-      processor(get_selected_dir())
+      base_dir <- get_selected_dir()
     }
+
+    # Build output subfolder name with optional prefix
+    prefix <- trimws(input$outputPrefix)
+    if (nchar(prefix) > 0) {
+      # Sanitize prefix: remove characters not safe for folder names
+      prefix <- gsub("[^A-Za-z0-9_-]", "_", prefix)
+      folder_name <- paste0(prefix, "_CropRotViz_intersection")
+    } else {
+      folder_name <- "CropRotViz_intersection"
+    }
+
+    current_output_dir <- file.path(base_dir, folder_name)
+    if (!dir.exists(current_output_dir)) {
+      dir.create(current_output_dir, recursive = TRUE)
+    }
+
+    processor(current_output_dir)
   })
   
   # Return the processed files reactive expression
