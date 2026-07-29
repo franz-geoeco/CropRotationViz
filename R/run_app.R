@@ -93,6 +93,9 @@
 #' )
 #' }
 run_processing_app <- function(output_dir = NA, common_column = NA, start_year = NA, intersection_type = NA, preview = TRUE, vector_file = T, ncores = 4) {
+  # Normalize path separators (accept both / and \)
+  if (!is.na(output_dir)) output_dir <- normalizePath(output_dir, winslash = "/", mustWork = FALSE)
+
   # Load the package data
   utils::data("Input_App_data", package = "CropRotationViz", envir = environment())
   
@@ -130,11 +133,15 @@ run_processing_app <- function(output_dir = NA, common_column = NA, start_year =
 #' analyzing sustainability metrics, and understanding environmental effects of different
 #' cropping sequences.
 #'
-#' @param input_dir Optional filepath to custom input data directory. If NA (default), 
+#' @param input_dir Optional filepath to custom input data directory. If NA (default),
 #' you have to choose it manually in the app.
+#' @param crop_colors Optional named character vector mapping crop names to colors (hex codes
+#'   or R color names). Crops not present in this vector receive colors from the built-in
+#'   palette; any remaining unmapped crops are assigned random colors. Use \code{NULL}
+#'   (default) to rely entirely on the built-in palette.
 #'
 #' @return A Shiny application object
-#' 
+#'
 #' @details
 #' The function initializes the visualization environment by:
 #' 1. Loading built-in or custom input data
@@ -148,8 +155,66 @@ run_processing_app <- function(output_dir = NA, common_column = NA, start_year =
 #' \dontrun{
 #' run_visualization_app()
 #' run_visualization_app("path/to/custom/data")
+#'
+#' # Custom crop color palette
+#' my_colors <- c(
+#'   "winter wheat"             = "#F5D76E",
+#'   "maize"                    = "#FFD700",
+#'   "other areas"              = "#AAAAAA",
+#'   "winter barley"            = "#C8A96E",
+#'   "permanent grassland"      = "#5DAD37",
+#'   "sugar beet"               = "#E74C3C",
+#'   "Not named"                = "#FFFFFF",
+#'   "woody vegetation"         = "#2E7D32",
+#'   "arable fodder"            = "#A8D5A2",
+#'   "winter rapeseed"          = "#FFEB3B",
+#'   "plantations"              = "#808000",
+#'   "winter rye"               = "#A0785A",
+#'   "horticultural products"   = "#CE93D8",
+#'   "potato"                   = "#8B6914",
+#'   "sunflower"                = "#FFA500",
+#'   "spring oat"               = "#D4B896",
+#'   "spring barley"            = "#B8943F",
+#'   "hops"                     = "#556B2F",
+#'   "vineyard"                 = "#8B008B",
+#'   "pea"                      = "#90EE90",
+#'   "fallow"                   = "#F5DEB3",
+#'   "other agricultural areas" = "#888888",
+#'   "soybean"                  = "#9ACD32",
+#'   "field bean"               = "#6B8E23",
+#'   "lupine"                   = "#9370DB"
+#' )
+#' run_visualization_app(crop_colors = my_colors)
+#'
+#' # Alternative palette (20-crop set)
+#' my_colors_alt <- c(
+#'   "maize"                                  = "#FFD700",
+#'   "permanent grassland"                    = "#4CAF50",
+#'   "winter wheat"                           = "#F5C518",
+#'   "Not named"                              = "#FFFFFF",
+#'   "spring wheat"                           = "#FAE08A",
+#'   "other agricultural use"                 = "#9E9E9E",
+#'   "winter barley"                          = "#C49A3C",
+#'   "sugar beet"                             = "#E74C3C",
+#'   "arable grass"                           = "#8BC34A",
+#'   "rapeseed"                               = "#FFEE58",
+#'   "potato"                                 = "#795548",
+#'   "clover/alfalfa"                         = "#66BB6A",
+#'   "spring barley"                          = "#A1887F",
+#'   "other winter cereals"                   = "#78909C",
+#'   "spring oat"                             = "#BCAAA4",
+#'   "fruit trees and other woody vegetation" = "#2E7D32",
+#'   "winter rye"                             = "#6D4C41",
+#'   "vineyard"                               = "#7B1FA2",
+#'   "legumes"                                = "#9CCC65",
+#'   "hops"                                   = "#33691E"
+#' )
+#' run_visualization_app(crop_colors = my_colors_alt)
 #' }
-run_visualization_app <- function(input_dir = NA) {
+run_visualization_app <- function(input_dir = NA, crop_colors = NULL) {
+  # Normalize path separators (accept both / and \)
+  if (!is.na(input_dir)) input_dir <- normalizePath(input_dir, winslash = "/", mustWork = FALSE)
+
   # Load the package data
   utils::data("Input_App_data", package = "CropRotationViz", envir = environment())
   
@@ -172,7 +237,7 @@ run_visualization_app <- function(input_dir = NA) {
   shiny::shinyApp(
     ui = CropRotationViz:::ui(app_data),
     server = function(input, output, session) {
-      viz_server(input, output, session, app_data, input_dir)
+      viz_server(input, output, session, app_data, input_dir, crop_colors)
     }
   )
 }
@@ -221,7 +286,9 @@ run_visualization_app <- function(input_dir = NA) {
 #'
 #' @export
 run_fast_visualization_app <- function(input_dir = NA) {
-  
+  # Normalize path separators (accept both / and \)
+  if (!is.na(input_dir)) input_dir <- normalizePath(input_dir, winslash = "/", mustWork = FALSE)
+
   # Load the package data
   utils::data("Input_App_data", package = "CropRotationViz", envir = environment())
   

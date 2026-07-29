@@ -37,8 +37,7 @@
 #' 
 #' @import shiny
 #' @import shinythemes
-#' @importFrom shiny fluidPage tabsetPanel tabPanel fluidRow column
-#'   radioButtons conditionalPanel div textOutput imageOutput
+#' @importFrom shiny fluidPage tabsetPanel tabPanel fluidRow column radioButtons conditionalPanel div textOutput imageOutput
 #' @importFrom shinythemes shinytheme
 #' @importFrom leaflet leafletOutput
 #'
@@ -233,10 +232,8 @@ fast_viz_ui <- function(input_dir = NA){
 #' 
 #' @return A Shiny UI object with dynamic loading capabilities
 #' 
-#' @importFrom shiny fluidPage tabsetPanel tabPanel fluidRow column
-#'   plotOutput uiOutput renderUI verbatimTextOutput
-#'   actionButton wellPanel textInput
-#'   
+#' @importFrom shiny fluidPage tabsetPanel tabPanel fluidRow column plotOutput uiOutput renderUI verbatimTextOutput actionButton wellPanel textInput
+#'
 #' @examples
 #' \dontrun{
 #' shinyApp(ui = ui, server = server)
@@ -313,6 +310,9 @@ fast_ui <- function(app_data) {
 #' 
 #' @export
 fast_viz_server <- function(input, output, session, app_data, input_dir) {
+  # Normalize path separators (accept both / and \)
+  if (!is.na(input_dir)) input_dir <- normalizePath(input_dir, winslash = "/", mustWork = FALSE)
+
   # global options
   options(warn = -1)
   sf_use_s2(F)
@@ -520,7 +520,7 @@ fast_viz_server <- function(input, output, session, app_data, input_dir) {
 
     # Cache image file list to avoid repeated filesystem scans (OPTIMIZATION)
     image_files_cached <- reactive({
-      gsub("\\.png$", "", list.files(paste0(current_input_dir(), "/images"), pattern = "\\.png$"))
+      gsub("\\.png$", "", list.files(file.path(current_input_dir(), "images"), pattern = "\\.png$"))
     }) %>% bindCache(current_input_dir())
 
     # Load the appropriate spatial data based on selection
@@ -633,7 +633,7 @@ fast_viz_server <- function(input, output, session, app_data, input_dir) {
       req(firstSelection())
       print(firstSelection())
       sanitized_name <- gsub("/", "_", firstSelection())
-      filename <- normalizePath(paste0(current_input_dir(), '/images/', sanitized_name, '.png'))
+      filename <- normalizePath(file.path(current_input_dir(), "images", paste0(sanitized_name, ".png")))
       print(filename)
       list(
         src = filename,
@@ -642,12 +642,12 @@ fast_viz_server <- function(input, output, session, app_data, input_dir) {
         alt = paste("Data visualization for", firstSelection())
       )
     }, deleteFile = FALSE)
-    
+
     # Render second image
     output$secondImage <- renderImage({
       req(secondSelection())
       sanitized_name <- gsub("/", "_", secondSelection())
-      filename <- normalizePath(paste0(current_input_dir(), '/images/', sanitized_name, '.png'))
+      filename <- normalizePath(file.path(current_input_dir(), "images", paste0(sanitized_name, ".png")))
       list(
         src = filename,
         width = "100%",    # This makes it take full width of container

@@ -1,3 +1,25 @@
+#' Check Geodata Server Connectivity
+#'
+#' @description
+#' Tests whether the geodata.ucdavis.edu server (used by the geodata package
+#' to download GADM administrative boundaries) is reachable within a given timeout.
+#'
+#' @param timeout_secs Numeric. Seconds to wait before declaring the server unreachable. Default 10.
+#'
+#' @return Logical. TRUE if server is reachable, FALSE otherwise.
+check_geodata_server <- function(timeout_secs = 10) {
+  old_timeout <- getOption("timeout")
+  on.exit(options(timeout = old_timeout))
+  options(timeout = timeout_secs)
+  tryCatch({
+    con <- url("https://geodata.ucdavis.edu/", "rb")
+    close(con)
+    TRUE
+  }, error = function(e) FALSE, warning = function(w) FALSE)
+}
+
+#-------------------------------------------------------------------------------------------
+
 #' Parse Crop Translation File
 #'
 #' @description
@@ -25,6 +47,8 @@
 #'
 #' @keywords internal
 parse_crop_translation <- function(file_path) {
+  # Normalize path separators (accept both / and \)
+  file_path <- normalizePath(file_path, winslash = "/", mustWork = FALSE)
   tryCatch({
     # Read raw lines to detect separator
     lines <- readLines(file_path, warn = FALSE)
@@ -641,20 +665,20 @@ intersect_fields <- function(fields_list, max_area = 20000000 * 1e6, n_cores = 4
                 # Perform intersection on filtered candidates
                 tile_intersect <- st_intersection(sf::st_make_valid(features_with_candidates),
                                                   sf::st_make_valid(field_clipped))
-                
+
                 # Filter valid geometries
                 tile_intersect <- tile_intersect %>%
-                  filter(st_geometry_type(geometry) %in% c("POLYGON", "MULTIPOLYGON")) %>%
+                  filter(as.character(st_geometry_type(st_geometry(.))) %in% c("POLYGON", "MULTIPOLYGON")) %>%
                   st_make_valid() %>%
                   filter(st_area(.) >= units::set_units(1, "m^2"))
               } else {
                 # No candidates found - fall back to direct intersection
                 tile_intersect <- st_intersection(sf::st_make_valid(tile_intersect),
                                                   sf::st_make_valid(field_clipped))
-                
+
                 # Filter valid geometries
                 tile_intersect <- tile_intersect %>%
-                  filter(st_geometry_type(geometry) %in% c("POLYGON", "MULTIPOLYGON")) %>%
+                  filter(as.character(st_geometry_type(st_geometry(.))) %in% c("POLYGON", "MULTIPOLYGON")) %>%
                   st_make_valid() %>%
                   filter(st_area(.) >= units::set_units(1, "m^2"))
               }
@@ -662,10 +686,10 @@ intersect_fields <- function(fields_list, max_area = 20000000 * 1e6, n_cores = 4
               # Fall back to direct intersection
               tile_intersect <- st_intersection(sf::st_make_valid(tile_intersect),
                                                 sf::st_make_valid(field_clipped))
-              
+
               # Filter valid geometries
               tile_intersect <- tile_intersect %>%
-                filter(st_geometry_type(geometry) %in% c("POLYGON", "MULTIPOLYGON")) %>%
+                filter(as.character(st_geometry_type(st_geometry(.))) %in% c("POLYGON", "MULTIPOLYGON")) %>%
                 st_make_valid() %>%
                 filter(st_area(.) >= units::set_units(1, "m^2"))
             }
@@ -751,7 +775,7 @@ intersect_fields <- function(fields_list, max_area = 20000000 * 1e6, n_cores = 4
           
           # Filter valid geometries
           intersected <- intersected_result %>%
-            filter(st_geometry_type(geometry) %in% c("POLYGON", "MULTIPOLYGON")) %>%
+            filter(as.character(st_geometry_type(st_geometry(.))) %in% c("POLYGON", "MULTIPOLYGON")) %>%
             st_make_valid() %>%
             filter(st_area(.) >= units::set_units(1, "m^2"))
         } else {
@@ -759,18 +783,18 @@ intersect_fields <- function(fields_list, max_area = 20000000 * 1e6, n_cores = 4
           # This handles edge cases where st_intersects is too conservative
           message(sprintf("Spatial index found no candidates for layer %d, trying direct intersection...", i))
           intersected <- st_intersection(sf::st_make_valid(intersected), current_layer)
-          
+
           intersected <- intersected %>%
-            filter(st_geometry_type(geometry) %in% c("POLYGON", "MULTIPOLYGON")) %>%
+            filter(as.character(st_geometry_type(st_geometry(.))) %in% c("POLYGON", "MULTIPOLYGON")) %>%
             st_make_valid() %>%
             filter(st_area(.) >= units::set_units(1, "m^2"))
         }
       } else {
         # Fall back to original method without spatial indexing
         intersected <- st_intersection(sf::st_make_valid(intersected), current_layer)
-        
+
         intersected <- intersected %>%
-          filter(st_geometry_type(geometry) %in% c("POLYGON", "MULTIPOLYGON")) %>%
+          filter(as.character(st_geometry_type(st_geometry(.))) %in% c("POLYGON", "MULTIPOLYGON")) %>%
           st_make_valid() %>%
           filter(st_area(.) >= units::set_units(1, "m^2"))
       }
@@ -842,7 +866,28 @@ intersecting_check_spatial <- function(input_list, intersection, n_cores = 5, pr
     n_cores <- min(n_cores, parallel::detectCores())
   }
   message(sprintf("Using %d cores for non-intersecting polygon check", n_cores))
-  
+
+  # Check if CRS is geographic (degrees) - operations like st_buffer and ms_erase
+
+  # need projected coordinates (meters) to work reliably across systems
+  original_crs <- st_crs(input_list[[1]])
+  is_geographic <- sf::st_is_longlat(input_list[[1]])
+
+  if (is_geographic) {
+    message("Geographic CRS detected - transforming to projected CRS for reliable spatial operations...")
+    # Use a UTM zone based on the centroid of the data
+    centroid <- st_coordinates(st_centroid(st_union(input_list[[1]])))
+    utm_zone <- floor((centroid[1, "X"] + 180) / 6) + 1
+    hemisphere <- ifelse(centroid[1, "Y"] >= 0, "north", "south")
+    epsg_code <- ifelse(hemisphere == "north", 32600 + utm_zone, 32700 + utm_zone)
+    projected_crs <- st_crs(epsg_code)
+    message(sprintf("Using UTM zone %d%s (EPSG:%d)", utm_zone,
+                    ifelse(hemisphere == "north", "N", "S"), epsg_code))
+
+    input_list <- lapply(input_list, function(x) st_transform(x, projected_crs))
+    intersection <- st_transform(intersection, projected_crs)
+  }
+
   # Get the overall bounding box
   bbox <- st_bbox(input_list[[1]])
   
@@ -870,12 +915,26 @@ intersecting_check_spatial <- function(input_list, intersection, n_cores = 5, pr
     }
   }
   
+  # Pre-compute column ranges: map each input layer to its columns in the intersection result
+  # After sequential st_intersection, columns appear in order: layer1_cols, layer2_cols, ...
+  # with suffixes (.1, .2, ...) added for duplicate names
+  inter_geom_col <- attr(intersection, "sf_column")
+  inter_data_cols <- setdiff(names(intersection), inter_geom_col)
+  col_ranges <- list()
+  offset <- 0
+  for (j in seq_along(input_list)) {
+    geom_col_j <- attr(input_list[[j]], "sf_column")
+    n_cols_j <- length(setdiff(names(input_list[[j]]), geom_col_j))
+    col_ranges[[j]] <- (offset + 1):(offset + n_cols_j)
+    offset <- offset + n_cols_j
+  }
+
   # Setup parallel cluster
   cl <- parallel::makeCluster(n_cores)
   doParallel::registerDoParallel(cl)
-  
+
   # Export necessary objects
-  parallel::clusterExport(cl, c("input_list", "intersection", "tiles", "clean_thin_polygons"), 
+  parallel::clusterExport(cl, c("input_list", "intersection", "tiles", "clean_thin_polygons", "col_ranges"),
                           envir = environment())
   
   # Load required packages on each worker
@@ -896,67 +955,98 @@ intersecting_check_spatial <- function(input_list, intersection, n_cores = 5, pr
     # Crop intersection to tile
     tryCatch({
       intersection_subset <- sf::st_crop(intersection, tile)
-      
-      if (nrow(intersection_subset) == 0) {
-        return(NULL)
-      }
-      
+      has_intersection <- nrow(intersection_subset) > 0
+
       tile_results <- list()
-      
+
       for(i in 1:length(input_list)) {
         input <- input_list[[i]]
-        
+
         # Crop input to tile
         input_subset <- sf::st_crop(input, tile)
-        
-        # Only process if we have features
-        if(nrow(input_subset) > 0 && nrow(intersection_subset) > 0) {
+
+        # Only process if we have input features
+        if(nrow(input_subset) > 0) {
           tryCatch({
-            erase_result <- sf::st_make_valid(ms_erase(input_subset, intersection_subset))
-            erase_result <- clean_thin_polygons(erase_result, 2)
-            
+            # If intersection exists in this tile, erase it to find non-intersecting parts
+            # If no intersection in this tile, all input polygons are non-intersecting
+            if (has_intersection) {
+              erase_result <- sf::st_make_valid(ms_erase(input_subset, intersection_subset))
+              erase_result <- clean_thin_polygons(erase_result, 2)
+            } else {
+              erase_result <- sf::st_make_valid(input_subset)
+            }
+
             if(!is.null(erase_result) && nrow(erase_result) > 0) {
-              if(i == 1){
-                df_missing <- intersection[1:nrow(erase_result),]
-                df_missing[,-c((i),(i+1), ncol(df_missing))] <- "Not named"
-                df_missing[,c((i),(i+1))] <- st_drop_geometry(erase_result)
-                df_missing$geometry <- erase_result$geometry
-                
-                tile_results[[length(tile_results) + 1]] <- df_missing
-                
-                # add an intersecting group id 
-                tile_results[[length(tile_results)]] <- tile_results[[length(tile_results)]]%>%
-                  group_overlapping_polygons()%>% # add intersecting id 
-                  group_by(group_id) %>%
-                  summarize(
-                    across(where(~!inherits(., "sfc")), ~na.omit(.)[1]),  # Take first non-NA value
-                    geometry = st_union(geometry),
-                    .groups = "drop"
-                  ) %>%
-                  select(-group_id)
-                
-              } else {
-                counter2 <- (i * 2) + 1
-                df_missing <- intersection[1:nrow(erase_result),]
-                df_missing[,-c((counter2),(counter2+1), ncol(df_missing))] <- "Not named"
-                df_missing[,c((counter2),(counter2+1))] <- st_drop_geometry(erase_result)
-                df_missing$geometry <- erase_result$geometry
-                
-                if (length(tile_results) > 0) {
-                  tile_results[[length(tile_results)]] <- rbind(tile_results[[length(tile_results)]], df_missing)
-                  
-                  # add an intersecting group id 
-                  tile_results[[length(tile_results)]] <- tile_results[[length(tile_results)]]%>%
-                    group_overlapping_polygons()%>% # add intersecting id 
-                    group_by(group_id) %>%
-                    summarize(
-                      across(where(~!inherits(., "sfc")), ~na.omit(.)[1]),  # Take first non-NA value
-                      geometry = st_union(geometry),
-                      .groups = "drop"
-                    ) %>%
-                    select(-group_id)
+              inter_geom_col <- attr(intersection, "sf_column")
+              inter_data_cols <- setdiff(names(intersection), inter_geom_col)
+
+              # Create template with same structure as intersection
+              df_missing <- intersection[1:nrow(erase_result), ]
+              # Initialize all columns to "Not named"
+              for (col in inter_data_cols) {
+                df_missing[[col]] <- "Not named"
+              }
+              st_geometry(df_missing) <- st_geometry(erase_result)
+
+              # For each input layer, fill in actual crop data via spatial lookup
+              for (j in seq_along(input_list)) {
+                geom_col_j <- attr(input_list[[j]], "sf_column")
+                layer_cols_j <- setdiff(names(input_list[[j]]), geom_col_j)
+                j_inter_cols <- inter_data_cols[col_ranges[[j]]]
+
+                if (j == i) {
+                  # For the current layer, use data directly from erase_result
+                  erase_data <- sf::st_drop_geometry(erase_result)
+                  for (k in seq_along(layer_cols_j)) {
+                    df_missing[[j_inter_cols[k]]] <- as.character(erase_data[[layer_cols_j[k]]])
+                  }
+                } else {
+                  # For other layers, spatial join to find what crop is at this location
+                  input_j_subset <- tryCatch(sf::st_crop(input_list[[j]], tile), error = function(e) NULL)
+                  if (!is.null(input_j_subset) && nrow(input_j_subset) > 0) {
+                    joined <- tryCatch({
+                      sf::st_join(erase_result, input_j_subset, largest = TRUE)
+                    }, error = function(e) {
+                      # Fallback: try without largest (less accurate but more compatible)
+                      tryCatch(sf::st_join(erase_result, input_j_subset), error = function(e2) NULL)
+                    })
+                    if (!is.null(joined)) {
+                      joined_data <- sf::st_drop_geometry(joined)
+                      for (k in seq_along(layer_cols_j)) {
+                        # The joined columns may have suffixes; find them
+                        # st_join adds columns from input_j_subset, potentially with suffixes
+                        col_pattern <- paste0("^", gsub("([.\\\\|(){}^$*+?\\[\\]])", "\\\\\\1", layer_cols_j[k]), "(\\..*)?$")
+                        matching_col <- grep(col_pattern, names(joined_data), value = TRUE)
+                        # Use the LAST match (the one from the joined layer, not from erase_result)
+                        if (length(matching_col) > 0) {
+                          vals <- as.character(joined_data[[matching_col[length(matching_col)]]])
+                          has_data <- !is.na(vals)
+                          if (any(has_data)) {
+                            df_missing[[j_inter_cols[k]]][has_data] <- vals[has_data]
+                          }
+                        }
+                      }
+                    }
+                  }
                 }
               }
+
+              if (length(tile_results) > 0) {
+                tile_results[[length(tile_results)]] <- rbind(tile_results[[length(tile_results)]], df_missing)
+              } else {
+                tile_results[[1]] <- df_missing
+              }
+
+              # add an intersecting group id
+              tile_results[[length(tile_results)]] <- tile_results[[length(tile_results)]]%>%
+                group_overlapping_polygons()%>% # add intersecting id
+                group_by(group_id) %>%
+                summarize(
+                  across(where(~!inherits(., "sfc")), ~na.omit(.)[1]),  # Take first non-NA value
+                  .groups = "drop"
+                ) %>%
+                select(-group_id)
             }
           }, error = function(e) {
             warning(paste("Error processing tile", tile_idx, "for layer", i, ":", e$message))
@@ -1002,6 +1092,10 @@ intersecting_check_spatial <- function(input_list, intersection, n_cores = 5, pr
   # Combine all results
   if (length(valid_results) > 0) {
     combined_results <- do.call(rbind, valid_results)
+    # Transform back to original CRS if we projected from geographic coordinates
+    if (is_geographic) {
+      combined_results <- st_transform(combined_results, original_crs)
+    }
     return(combined_results)
   } else {
     return(NULL)
@@ -1123,7 +1217,7 @@ intersect_fields_simple <- function(fields_list, max_area = 20000 * 1e6, n_cores
             result <- st_intersection(features_with_candidates, current_field)
             
             result <- result %>%
-              filter(st_geometry_type(geometry) %in% c("POLYGON", "MULTIPOLYGON")) %>%
+              filter(as.character(st_geometry_type(st_geometry(.))) %in% c("POLYGON", "MULTIPOLYGON")) %>%
               st_make_valid() %>%
               filter(st_area(.) >= units::set_units(1, "m^2"))
           } else {
@@ -1131,7 +1225,7 @@ intersect_fields_simple <- function(fields_list, max_area = 20000 * 1e6, n_cores
             result <- st_intersection(result, current_field)
             
             result <- result %>%
-              filter(st_geometry_type(geometry) %in% c("POLYGON", "MULTIPOLYGON")) %>%
+              filter(as.character(st_geometry_type(st_geometry(.))) %in% c("POLYGON", "MULTIPOLYGON")) %>%
               st_make_valid() %>%
               filter(st_area(.) >= units::set_units(1, "m^2"))
           }
@@ -1140,7 +1234,7 @@ intersect_fields_simple <- function(fields_list, max_area = 20000 * 1e6, n_cores
           result <- st_intersection(result, current_field)
           
           result <- result %>%
-            filter(st_geometry_type(geometry) %in% c("POLYGON", "MULTIPOLYGON")) %>%
+            filter(as.character(st_geometry_type(st_geometry(.))) %in% c("POLYGON", "MULTIPOLYGON")) %>%
             st_make_valid() %>%
             filter(st_area(.) >= units::set_units(1, "m^2"))
         }
@@ -1207,7 +1301,7 @@ intersect_fields_simple <- function(fields_list, max_area = 20000 * 1e6, n_cores
           intersected <- st_intersection(features_with_candidates, current_layer)
           
           intersected <- intersected %>%
-            filter(st_geometry_type(geometry) %in% c("POLYGON", "MULTIPOLYGON")) %>%
+            filter(as.character(st_geometry_type(st_geometry(.))) %in% c("POLYGON", "MULTIPOLYGON")) %>%
             st_make_valid() %>%
             filter(st_area(.) >= units::set_units(1, "m^2"))
         } else {
@@ -1216,7 +1310,7 @@ intersect_fields_simple <- function(fields_list, max_area = 20000 * 1e6, n_cores
           intersected <- st_intersection(intersected, current_layer)
           
           intersected <- intersected %>%
-            filter(st_geometry_type(geometry) %in% c("POLYGON", "MULTIPOLYGON")) %>%
+            filter(as.character(st_geometry_type(st_geometry(.))) %in% c("POLYGON", "MULTIPOLYGON")) %>%
             st_make_valid() %>%
             filter(st_area(.) >= units::set_units(1, "m^2"))
         }
@@ -1225,7 +1319,7 @@ intersect_fields_simple <- function(fields_list, max_area = 20000 * 1e6, n_cores
         intersected <- st_intersection(intersected, current_layer)
         
         intersected <- intersected %>%
-          filter(st_geometry_type(geometry) %in% c("POLYGON", "MULTIPOLYGON")) %>%
+          filter(as.character(st_geometry_type(st_geometry(.))) %in% c("POLYGON", "MULTIPOLYGON")) %>%
           st_make_valid() %>%
           filter(st_area(.) >= units::set_units(1, "m^2"))
       }
@@ -1334,7 +1428,14 @@ intersect_with_borders <- function(input, level, countriesSP, EZG, aoi) {
 
   message(paste("Downloading administrative boundaries for", cc$ISO2, "at level", level, "..."))
   borders <- geodata::gadm(country = cc$ISO2, level = level, path = tempdir(), resolution = 2)
-  borders <- borders[paste0("NAME_", level)]
+  col_name <- paste0("NAME_", level)
+  if (is.null(borders) && level > 1) {
+    message(paste0("Level ", level, " not available, falling back to level ", level - 1))
+    level <- level - 1
+    borders <- geodata::gadm(country = cc$ISO2, level = level, path = tempdir(), resolution = 2)
+    col_name <- paste0("NAME_", level)
+  }
+  borders <- borders[col_name]
 
   message("Transforming borders to match input CRS...")
   borders <- sf::st_as_sf(borders)
@@ -1358,9 +1459,9 @@ intersect_with_borders <- function(input, level, countriesSP, EZG, aoi) {
   # delete to small intersection areas
   intersected <- intersected %>%
     st_make_valid() %>%
-    mutate(area = as.numeric(st_area(geometry))) %>%
+    mutate(area = as.numeric(st_area(st_geometry(.)))) %>%
     group_by(District) %>%
-    filter(sum(area) >= 20000) %>%
+    filter(sum(area) >= 350000) %>%
     ungroup()
   
   # if it`s in Germany intersect with river catchments
@@ -1375,9 +1476,7 @@ intersect_with_borders <- function(input, level, countriesSP, EZG, aoi) {
       EZG_inter <- sf::st_intersection(EZG_inter, borders_inter)
       EZG_inter <- EZG_inter[,-2] %>%
         group_by(EZG) %>%
-        summarise(
-          geometry = st_union(geometry)
-        )
+        summarise(.groups = "drop")
       # Prepare the output list
       out_list <- list(intersected = intersected, borders_inter = borders_inter, EZG_inter = EZG_inter)
     }, error = function(e) {
@@ -1408,9 +1507,7 @@ intersect_with_borders <- function(input, level, countriesSP, EZG, aoi) {
       AOI_inter <- sf::st_intersection(AOI_inter, borders_inter)
       AOI_inter <- AOI_inter %>%
         group_by(AOI_name) %>%
-        summarise(
-          geometry = st_union(geometry)
-        )
+        summarise(.groups = "drop")
 
       # Update output list
       out_list$intersected <- intersected
@@ -1920,7 +2017,7 @@ create_multi_year_donut <- function(data, year_columns, title = "Crop Distributi
 #' }
 #' 
 #' @export
-transform_rotation_data <- function(All_rot_big, distribution_df, input_area_range, choices, selected_crops, type, specific_crop = NULL, district = NULL, EZG = NULL) {
+transform_rotation_data <- function(All_rot_big, distribution_df, input_area_range, choices, selected_crops, type, specific_crop = NULL, district = NULL, EZG = NULL, AOI_name = NULL) {
   # Input validation with more informative messages
   if (!is.data.frame(All_rot_big) & !is.list(All_rot_big)) {
     stop("All_rot_big must be a data frame or list. Received object of class: ", class(All_rot_big))
@@ -1935,45 +2032,50 @@ transform_rotation_data <- function(All_rot_big, distribution_df, input_area_ran
   
   tryCatch({
     # Apply type-specific filtering
+    cols_to_exclude_meta <- intersect(c("area", "District", "EZG", "AOI_name"), names(distribution_df))
+
     pre_data <- if (type == "basic") {
-      cols_to_exclude <- intersect(c("area", "District", "EZG"), names(distribution_df))
-      pre_data <- distribution_df %>%
-        filter(!if_any(-all_of(cols_to_exclude), ~ . %in% setdiff(choices, selected_crops)))
+      distribution_df %>%
+        filter(!if_any(-all_of(cols_to_exclude_meta), ~ . %in% setdiff(choices, selected_crops)))
     } else if (type == "specific") {
-      cols_to_exclude <- intersect(c("area", "District", "EZG"), names(distribution_df))
-      pre_data <- distribution_df %>%
-        filter(if_any(-all_of(cols_to_exclude), ~grepl(specific_crop, ., fixed = TRUE)))
+      distribution_df %>%
+        filter(if_any(-all_of(cols_to_exclude_meta), ~grepl(specific_crop, ., fixed = TRUE)))
     } else if (type == "district") {
-      pre_data <- subset(distribution_df, District == district)
-      cols_to_exclude <- intersect(c("area", "District", "EZG"), names(distribution_df))
-      pre_data <- pre_data %>%
-        filter(!if_any(-all_of(cols_to_exclude), ~ . %in% setdiff(choices, selected_crops)))
+      subset(distribution_df, District == district) %>%
+        filter(!if_any(-all_of(cols_to_exclude_meta), ~ . %in% setdiff(choices, selected_crops)))
     } else if (type == "basin") {
       if (!"EZG" %in% names(distribution_df)) {
         stop("EZG column not found in the dataset")
       }
-      pre_data <- subset(distribution_df, EZG == EZG)
-      cols_to_exclude <- intersect(c("area", "District", "EZG"), names(distribution_df))
-      pre_data <- pre_data %>%
-        filter(!if_any(-all_of(cols_to_exclude), ~ . %in% setdiff(choices, selected_crops)))
+      ezg_val <- EZG
+      subset(distribution_df, EZG == ezg_val) %>%
+        filter(!if_any(-all_of(cols_to_exclude_meta), ~ . %in% setdiff(choices, selected_crops)))
+    } else if (type == "aoi") {
+      if (!"AOI_name" %in% names(distribution_df)) {
+        stop("AOI_name column not found in the dataset")
+      }
+      aoi_val <- AOI_name
+      subset(distribution_df, AOI_name == aoi_val) %>%
+        filter(!if_any(-all_of(cols_to_exclude_meta), ~ . %in% setdiff(choices, selected_crops)))
     }
-    
+
     pre_data <- pre_data %>%
       filter(area/1e6 >= input_area_range[1], area/1e6 <= input_area_range[2])
-    
+
     rotation_data <- if (type == "basic") {
-      rotation_data <- All_rot_big %>%
+      All_rot_big %>%
         filter(!if_any(-c(freq, id), ~ . %in% setdiff(choices, selected_crops)))
     } else if (type == "specific") {
-      rotation_data <- All_rot_big %>%
+      All_rot_big %>%
         filter(if_any(-c(freq, id), ~grepl(specific_crop, ., fixed = TRUE)))
     } else if (type == "district") {
-      rotation_data <- All_rot_big[[district]]
-      rotation_data <- rotation_data %>%
+      All_rot_big[[district]] %>%
         filter(!if_any(-c(freq, id), ~ . %in% setdiff(choices, selected_crops)))
     } else if (type == "basin") {
-      rotation_data <- All_rot_big[[EZG]]
-      rotation_data <- rotation_data %>%
+      All_rot_big[[EZG]] %>%
+        filter(!if_any(-c(freq, id), ~ . %in% setdiff(choices, selected_crops)))
+    } else if (type == "aoi") {
+      All_rot_big[[AOI_name]] %>%
         filter(!if_any(-c(freq, id), ~ . %in% setdiff(choices, selected_crops)))
     }
     
@@ -2046,8 +2148,7 @@ transform_rotation_data <- function(All_rot_big, distribution_df, input_area_ran
 #'   \item{area_km2}{Numeric, area in square kilometers}
 #'   \item{Crop_YYYY}{Character, crop type for each year YYYY in the specified range}
 #' 
-#' @importFrom dplyr %>% mutate filter select group_by summarize arrange
-#'                      slice_head if_any all_of first across
+#' @importFrom dplyr %>% mutate filter select group_by summarize arrange slice_head if_any all_of first across
 #' @importFrom stats setNames
 #' 
 #' @examples
@@ -2064,22 +2165,25 @@ transform_rotation_data <- function(All_rot_big, distribution_df, input_area_ran
 #' }
 #' 
 #' @export
-transform_rotation_summary <- function(All_rot_big, 
-                                       area_range, 
+transform_rotation_summary <- function(All_rot_big,
+                                       area_range,
                                        type = c("basic", "specific"),
                                        choices = NULL,
                                        selected_crops = NULL,
                                        specific_crop = NULL,
                                        max_rows = 3000,
-                                       years) {
-  
+                                       years,
+                                       pre_grouped_data = NULL) {
+
   # Input validation
   type <- match.arg(type)
-  if (!is.data.frame(All_rot_big)) {
-    stop("All_rot_big must be a data frame")
-  }
-  if (!is.numeric(area_range) || length(area_range) != 2) {
-    stop("area_range must be a numeric vector of length 2")
+  if (is.null(pre_grouped_data)) {
+    if (!is.data.frame(All_rot_big)) {
+      stop("All_rot_big must be a data frame")
+    }
+    if (!is.numeric(area_range) || length(area_range) != 2) {
+      stop("area_range must be a numeric vector of length 2")
+    }
   }
   if (type == "basic" && (is.null(choices) || is.null(selected_crops))) {
     stop("choices and selected_crops must be provided when type is 'basic'")
@@ -2087,12 +2191,15 @@ transform_rotation_summary <- function(All_rot_big,
   if (type == "specific" && is.null(specific_crop)) {
     stop("specific_crop must be provided when type is 'specific'")
   }
-  
+
   # Create year sequence for dynamic column creation
   crop_cols <- paste0("Name_", years)
   agg_cols <- paste0("Aggregated_", years)
-  
-  if (any(grepl("Aggregated_", names(All_rot_big)))) {
+
+  # Use pre-computed grouped data if available, otherwise compute it
+  if (!is.null(pre_grouped_data)) {
+    transformed_data <- data.table::copy(pre_grouped_data)
+  } else if (any(grepl("Aggregated_", names(All_rot_big)))) {
     setDT(All_rot_big)
     transformed_data <- All_rot_big[
       freq >= area_range[1] & freq <= area_range[2],
@@ -2109,10 +2216,10 @@ transform_rotation_summary <- function(All_rot_big,
     ][
       , rotation := NULL
     ]
-    
+
     # Rename columns if needed
-    setnames(transformed_data, 
-             old = agg_cols, 
+    setnames(transformed_data,
+             old = agg_cols,
              new = sub("Aggregated_", "Name_", agg_cols))
   }else{
     # Data.table transformation for Crop columns
@@ -2133,7 +2240,7 @@ transform_rotation_summary <- function(All_rot_big,
       , rotation := NULL
     ]
   }
-  
+
   # Apply type-specific filtering
   if (type == "basic") {
     transformed_data <- transformed_data %>%
@@ -2142,10 +2249,68 @@ transform_rotation_summary <- function(All_rot_big,
     transformed_data <- transformed_data %>%
       filter(if_any(all_of(crop_cols), ~grepl(specific_crop, ., fixed = TRUE)))
   }
-  
+
   # Apply row limit and return
   transformed_data <- transformed_data %>%
     slice_head(n = max_rows)
+}
+
+#' Compute base grouped rotation summary (expensive step)
+#'
+#' Groups raw rotation data by rotation pattern and sums areas.
+#' This is the expensive operation that should be cached and reused
+#' when calling transform_rotation_summary multiple times with
+#' the same data and area_range.
+#'
+#' @param All_rot_big Data frame with rotation data
+#' @param area_range Numeric vector of length 2 (min, max area)
+#' @param years Numeric vector of years
+#' @return A data.table with grouped rotation summaries
+#' @export
+compute_rotation_base_grouped <- function(All_rot_big, area_range, years) {
+  crop_cols <- paste0("Name_", years)
+  agg_cols <- paste0("Aggregated_", years)
+
+  setDT(All_rot_big)
+
+  if (any(grepl("Aggregated_", names(All_rot_big)))) {
+    transformed_data <- All_rot_big[
+      freq >= area_range[1] & freq <= area_range[2],
+    ][
+      ,
+      c(
+        .(area_km2 = round(sum(freq), 4)),
+        lapply(.SD, first)
+      ),
+      by = rotation,
+      .SDcols = agg_cols
+    ][
+      order(-area_km2)
+    ][
+      , rotation := NULL
+    ]
+    setnames(transformed_data,
+             old = agg_cols,
+             new = sub("Aggregated_", "Name_", agg_cols))
+  } else {
+    transformed_data <- All_rot_big[
+      freq >= area_range[1] & freq <= area_range[2]
+    ][
+      ,
+      c(
+        .(area_km2 = round(sum(freq), 4)),
+        lapply(.SD, first)
+      ),
+      by = rotation,
+      .SDcols = crop_cols
+    ][
+      order(-area_km2)
+    ][
+      , rotation := NULL
+    ]
+  }
+
+  transformed_data
 }
 
 #-------------------------------------------------------------------------------------------
@@ -2246,10 +2411,164 @@ process_specific_transitions <- function(data, crop) {
 
 #-------------------------------------------------------------------------------------------
 
+#' Compute Area-Weighted Crop Transition Probability Matrix
+#'
+#' @description Compute the probability of each crop following another crop,
+#' aggregated across all consecutive year-to-year transitions and weighted by field area.
+#'
+#' @param data sf or data.table with columns Aggregated_YYYY or Name_YYYY plus freq (area in km2).
+#' @param area_range Numeric vector of length 2 for filtering on freq. Default NULL (no filter).
+#'
+#' @return A data.frame with columns: source, target, probability (0-1), area_km2.
+#'
+#' @importFrom sf st_drop_geometry
+#'
+#' @export
+compute_transition_matrix <- function(data, area_range = NULL) {
+
+  if (any(grepl("Aggregated_", names(data)))) {
+    year_cols <- grep("^Aggregated_", names(data), value = TRUE)
+    prefix <- "Aggregated_"
+  } else {
+    year_cols <- grep("^Name_", names(data), value = TRUE)
+    prefix <- "Name_"
+  }
+  years <- sort(as.numeric(sub(prefix, "", year_cols)))
+
+  df <- if (inherits(data, "sf")) sf::st_drop_geometry(data) else as.data.frame(data)
+
+  if (!is.null(area_range) && length(area_range) == 2) {
+    df <- df[df$freq >= area_range[1] & df$freq <= area_range[2], ]
+  }
+
+  all_transitions <- do.call(rbind, lapply(seq_len(length(years) - 1), function(i) {
+    col1 <- paste0(prefix, years[i])
+    col2 <- paste0(prefix, years[i + 1])
+    data.frame(
+      source = as.character(df[[col1]]),
+      target = as.character(df[[col2]]),
+      freq = df$freq,
+      stringsAsFactors = FALSE
+    )
+  }))
+
+  agg <- aggregate(freq ~ source + target, data = all_transitions, FUN = sum)
+  names(agg)[3] <- "area_km2"
+
+  row_sums <- aggregate(area_km2 ~ source, data = agg, FUN = sum)
+  names(row_sums)[2] <- "total"
+  agg <- merge(agg, row_sums, by = "source")
+  agg$probability <- agg$area_km2 / agg$total
+  agg$total <- NULL
+
+  agg
+}
+
+#-------------------------------------------------------------------------------------------
+
+#' Create Interactive Crop Transition Probability Heatmap
+#'
+#' @description Render a plotly heatmap showing the probability of each crop
+#' following another across all year transitions, weighted by area.
+#'
+#' @param trans_df Data frame from \code{compute_transition_matrix()} with columns:
+#'   source, target, probability, area_km2.
+#' @param crop_colors Named character vector mapping crop names to hex colors
+#'   (used for axis ordering). Default NULL.
+#'
+#' @return A plotly object.
+#'
+#' @import plotly
+#' @export
+create_transition_heatmap <- function(trans_df, crop_colors = NULL) {
+
+  wrap_label <- function(label, max_chars = 12) {
+    if (nchar(label) <= max_chars) return(label)
+    words <- strsplit(label, " ")[[1]]
+    if (length(words) < 2) return(label)
+    cum <- cumsum(nchar(words) + c(0, rep(1, length(words) - 1)))
+    mid <- nchar(label) / 2
+    split_at <- which.min(abs(cum - mid))
+    paste0(paste(words[seq_len(split_at)], collapse = " "), "<br>",
+           paste(words[(split_at + 1):length(words)], collapse = " "))
+  }
+
+  if (!is.null(crop_colors)) {
+    all_crops <- intersect(names(crop_colors),
+                           union(unique(trans_df$source), unique(trans_df$target)))
+    extra <- setdiff(union(unique(trans_df$source), unique(trans_df$target)), all_crops)
+    all_crops <- sort(c(all_crops, extra))
+  } else {
+    all_crops <- sort(union(unique(trans_df$source), unique(trans_df$target)))
+  }
+
+  n <- length(all_crops)
+  mat <- matrix(0, nrow = n, ncol = n, dimnames = list(all_crops, all_crops))
+  area_mat <- matrix(0, nrow = n, ncol = n, dimnames = list(all_crops, all_crops))
+
+  for (i in seq_len(nrow(trans_df))) {
+    s <- trans_df$source[i]
+    t <- trans_df$target[i]
+    if (s %in% all_crops && t %in% all_crops) {
+      mat[s, t] <- trans_df$probability[i]
+      area_mat[s, t] <- trans_df$area_km2[i]
+    }
+  }
+
+  hover_mat <- matrix("", nrow = n, ncol = n)
+  for (r in seq_len(n)) {
+    for (cc in seq_len(n)) {
+      hover_mat[r, cc] <- paste0(
+        all_crops[r], " \u2192 ", all_crops[cc], "<br>",
+        round(mat[r, cc] * 100, 1), "%<br>",
+        round(area_mat[r, cc], 2), " km\u00b2"
+      )
+    }
+  }
+
+  wrapped_labels <- sapply(all_crops, wrap_label, USE.NAMES = FALSE)
+
+  plot_ly(
+    x = all_crops,
+    y = all_crops,
+    z = mat,
+    type = "heatmap",
+    colorscale = "Viridis",
+    hoverinfo = "text",
+    text = hover_mat,
+    colorbar = list(
+      title = list(text = "Probability", font = list(color = "white")),
+      tickformat = ".0%",
+      tickfont = list(color = "white")
+    )
+  ) %>%
+    layout(
+      title = list(
+        text = "Crop Transition Probabilities (Area-Weighted)",
+        font = list(size = 14, color = "white")
+      ),
+      xaxis = list(title = "Following Crop", tickangle = 45,
+                   color = "white", gridcolor = "#444",
+                   tickvals = all_crops, ticktext = wrapped_labels,
+                   tickfont = list(size = 13, color = "white")),
+      yaxis = list(title = "Preceding Crop",
+                   color = "white", gridcolor = "#444",
+                   tickvals = all_crops, ticktext = wrapped_labels,
+                   tickfont = list(size = 13, color = "white"),
+                   autorange = "reversed"),
+      paper_bgcolor = "#1f1b1b",
+      plot_bgcolor = "#2d2d2d",
+      font = list(color = "white"),
+      margin = list(b = 150, l = 150)
+    )
+}
+
+#-------------------------------------------------------------------------------------------
+
 #' Create Dummy Agricultural Fields
-#' 
+#'
 #' @description Generate a set of dummy agricultural fields over multiple years in a region of your choice.
-#' 
+#'
 #' @param output_dir Character string specifying the directory to save shapefiles
 #' @param base_location Numeric vector of length 2 with longitude and latitude coordinates. Default c(2.3, 49.2) for Northern France
 #' @param field_count Integer specifying number of fields to generate. Default 100
@@ -2274,11 +2593,13 @@ dummy_field_creator <- function(output_dir,
                                 min_field_size = 0.003,  # Increased by factor of 10
                                 max_field_size = 0.005) { # Increased by factor of 10
   options(warn = -1)
-  
+
   # Input validation
   if (!is.character(output_dir)) {
     stop("output_dir must be a character string")
   }
+  # Normalize path separators (accept both / and \)
+  output_dir <- normalizePath(output_dir, winslash = "/", mustWork = FALSE)
   if (length(base_location) != 2) {
     stop("base_location must be a vector of length 2 (longitude, latitude)")
   }
@@ -2379,8 +2700,8 @@ dummy_field_creator <- function(output_dir,
     # Transform back to WGS84
     yearly_data[[i]] <- st_transform(snapped_data, 4326)
     yearly_data[[i]] <- st_make_valid(yearly_data[[i]])
-    st_write(yearly_data[[i]], 
-             paste0(output_dir, "/fields_", years[i], ".shp"), 
+    st_write(yearly_data[[i]],
+             file.path(output_dir, paste0("fields_", years[i], ".shp")),
              delete_layer = TRUE,
              quiet = TRUE)
   }
@@ -2580,15 +2901,15 @@ diversity_mapping <- function(input, agg_cols, districts, EZGs = NA, AOIs = NA, 
   
   # Process AOIs if provided
   if (!all(is.na(AOIs)) && inherits(AOIs, "sf")) {
-    if (!"AOI" %in% names(invekos_df)) {
-      warning("'AOI' column not found in input data, skipping AOI processing")
+    if (!"AOI_name" %in% names(invekos_df)) {
+      warning("'AOI_name' column not found in input data, skipping AOI processing")
       AOI_div_data <- NA
     } else {
-      AOI_names <- c("AOI", "area", "unique_count", "transitions")
+      AOI_names <- c("AOI_name", "area", "unique_count", "transitions")
       BISCALE_AOI <- invekos_df[, AOI_names]
-      
+
       BISCALE_AOI <- BISCALE_AOI %>%
-        group_by(AOI) %>%
+        group_by(AOI_name) %>%
         summarise(
           mean_unique = mean(unique_count, na.rm = TRUE),
           meant_transi = mean(transitions, na.rm = TRUE),
@@ -2596,8 +2917,8 @@ diversity_mapping <- function(input, agg_cols, districts, EZGs = NA, AOIs = NA, 
           mean_transi_weight = weighted.mean(transitions, area, na.rm = TRUE),
           .groups = "drop"
         )
-      
-      BISCALE_AOI <- merge(AOIs, BISCALE_AOI, by = "AOI")  # Fixed: was using EZGs instead of AOIs
+
+      BISCALE_AOI <- merge(AOIs, BISCALE_AOI, by = "AOI_name")
       
       # create classes
       BISCALE_AOI <- bi_class(BISCALE_AOI, x = mean_unique_weight, y = mean_transi_weight,
@@ -2633,9 +2954,195 @@ diversity_mapping <- function(input, agg_cols, districts, EZGs = NA, AOIs = NA, 
   }
   
   # Return the maps data
-  Data <- list(District_div_data, EZG_div_data, AOI_div_data) 
-  
+  Data <- list(District_div_data, EZG_div_data, AOI_div_data)
+
   return(Data)
+}
+
+#-------------------------------------------------------------------------------------------
+
+#' Compute Shannon-Wiener Diversity Index per Geographic Group
+#'
+#' @description Calculate the Shannon-Wiener diversity index H = -sum(p_i * ln(p_i))
+#' per district or river basin, where p_i is the area proportion of each crop.
+#' Values are computed per year and averaged across years.
+#'
+#' @param data sf or data.table with crop year columns and freq (area) column.
+#' @param agg_cols Character vector of year column names (Aggregated_YYYY or Name_YYYY).
+#' @param group_col Character string: grouping column name (e.g. "District" or "EZG").
+#' @param group_geometries sf object with geometries for the groups. Must have a column
+#'   matching \code{group_col} and a geometry column.
+#'
+#' @return An sf object with columns: group_col, mean_shannon, and H_YYYY per year.
+#'
+#' @importFrom sf st_drop_geometry st_transform
+#'
+#' @export
+compute_shannon_diversity <- function(data, agg_cols, group_col, group_geometries) {
+
+  # data can be a named list of sf/data.frames (one per group) or a single sf/data.frame
+  if (is.list(data) && !inherits(data, "data.frame") && !inherits(data, "sf")) {
+    # Named list: iterate over elements, names are group labels
+    groups <- names(data)
+    results <- lapply(groups, function(g) {
+      elem <- data[[g]]
+      df_elem <- if (inherits(elem, "sf")) sf::st_drop_geometry(elem) else as.data.frame(elem)
+      area_col <- if ("freq" %in% names(df_elem)) "freq" else "area"
+      h_values <- sapply(agg_cols, function(col) {
+        if (!col %in% names(df_elem)) return(NA_real_)
+        crop_area <- tapply(df_elem[[area_col]], df_elem[[col]], sum, na.rm = TRUE)
+        total <- sum(crop_area)
+        if (total == 0) return(NA_real_)
+        p <- crop_area / total
+        p <- p[p > 0]
+        -sum(p * log(p))
+      })
+      row <- data.frame(group = g, mean_shannon = round(mean(h_values, na.rm = TRUE), 3),
+                        stringsAsFactors = FALSE)
+      for (i in seq_along(agg_cols)) {
+        year_label <- gsub("^(Aggregated_|Name_)", "H_", agg_cols[i])
+        row[[year_label]] <- round(h_values[i], 3)
+      }
+      row
+    })
+  } else {
+    # Single data.frame/sf with group_col column
+    df <- if (inherits(data, "sf")) sf::st_drop_geometry(data) else as.data.frame(data)
+    stopifnot(group_col %in% names(df))
+    area_col <- if ("freq" %in% names(df)) "freq" else "area"
+    groups <- unique(df[[group_col]])
+    results <- lapply(groups, function(g) {
+      sub_df <- df[df[[group_col]] == g, ]
+      h_values <- sapply(agg_cols, function(col) {
+        crop_area <- tapply(sub_df[[area_col]], sub_df[[col]], sum, na.rm = TRUE)
+        total <- sum(crop_area)
+        if (total == 0) return(NA_real_)
+        p <- crop_area / total
+        p <- p[p > 0]
+        -sum(p * log(p))
+      })
+      row <- data.frame(group = g, mean_shannon = round(mean(h_values, na.rm = TRUE), 3),
+                        stringsAsFactors = FALSE)
+      for (i in seq_along(agg_cols)) {
+        year_label <- gsub("^(Aggregated_|Name_)", "H_", agg_cols[i])
+        row[[year_label]] <- round(h_values[i], 3)
+      }
+      row
+    })
+  }
+
+  result_df <- do.call(rbind, results)
+  names(result_df)[1] <- group_col
+
+  # Ensure geometry object has matching column name
+  geom_names <- names(group_geometries)
+  if (!group_col %in% geom_names) {
+    names(group_geometries)[1] <- group_col
+  }
+
+  merged <- merge(group_geometries, result_df, by = group_col)
+  merged <- sf::st_transform(merged, crs = "EPSG:4326")
+
+  merged
+}
+
+#-------------------------------------------------------------------------------------------
+
+#' Create Interactive Shannon Diversity Choropleth Map
+#'
+#' @description Render a leaflet choropleth map coloured by the Shannon-Wiener
+#' crop diversity index.
+#'
+#' @param shannon_sf sf object from \code{compute_shannon_diversity()} with mean_shannon column.
+#' @param group_col Character: the grouping column name for popup labels.
+#'
+#' @return A leaflet map object.
+#'
+#' @import leaflet
+#' @export
+create_shannon_map <- function(shannon_sf, group_col = "District") {
+
+  pal <- colorNumeric(palette = "YlGn", domain = shannon_sf$mean_shannon)
+
+  popup_text <- paste0(
+    "<div style='font-family: Arial, sans-serif; font-size: 14px; line-height: 1.4;'>",
+    "<strong style='color: #2c3e50; font-size: 16px;'>", shannon_sf[[group_col]], "</strong><br>",
+    "<hr style='margin: 8px 0; border: none; border-top: 1px solid #bdc3c7;'>",
+    "<span style='color: #34495e;'><strong>Shannon H:</strong></span> ",
+    "<span style='font-weight: bold;'>", round(shannon_sf$mean_shannon, 3), "</span>",
+    "</div>"
+  )
+
+  leaflet(shannon_sf) %>%
+    addProviderTiles("CartoDB.Positron") %>%
+    addPolygons(
+      fillColor = ~pal(mean_shannon),
+      fillOpacity = 0.8,
+      color = "white",
+      weight = 1,
+      popup = popup_text,
+      highlightOptions = highlightOptions(
+        weight = 2, color = "#666666",
+        fillOpacity = 1, bringToFront = TRUE
+      )
+    ) %>%
+    addLegend(
+      pal = pal,
+      values = ~mean_shannon,
+      title = "Shannon H",
+      position = "bottomright"
+    )
+}
+
+#-------------------------------------------------------------------------------------------
+
+#' Create Shannon Diversity Ranking Bar Chart
+#'
+#' @description Render a plotly horizontal bar chart ranking geographic areas by
+#' the Shannon-Wiener crop diversity index.
+#'
+#' @param shannon_sf sf object from \code{compute_shannon_diversity()}.
+#' @param group_col Character: the grouping column name.
+#'
+#' @return A plotly object.
+#'
+#' @import plotly
+#' @importFrom sf st_drop_geometry
+#' @export
+create_shannon_ranking <- function(shannon_sf, group_col = "District") {
+
+  df <- sf::st_drop_geometry(shannon_sf)
+  df <- df[order(df$mean_shannon), ]
+
+  plot_ly(
+    data = df,
+    y = ~reorder(get(group_col), mean_shannon),
+    x = ~mean_shannon,
+    type = "bar",
+    orientation = "h",
+    marker = list(
+      color = ~mean_shannon,
+      colorscale = list(c(0, "#f7fcb1"), c(1, "#006837")),
+      showscale = FALSE
+    ),
+    hoverinfo = "text",
+    text = ~paste0(get(group_col), ": H = ", round(mean_shannon, 3))
+  ) %>%
+    layout(
+      title = list(
+        text = "Shannon Diversity Ranking by Area",
+        font = list(size = 14, color = "white")
+      ),
+      xaxis = list(title = "Shannon H Index", color = "white",
+                   gridcolor = "#444",
+                   tickfont = list(color = "white")),
+      yaxis = list(title = "", color = "white",
+                   tickfont = list(color = "white")),
+      paper_bgcolor = "#1f1b1b",
+      plot_bgcolor = "#2d2d2d",
+      font = list(color = "white"),
+      margin = list(l = 150)
+    )
 }
 
 #-------------------------------------------------------------------------------------------
@@ -3197,4 +3704,45 @@ validate_crop_data <- function(sf_object, crop_column, file_name = NULL, show_wa
     removal_reasons = removal_reasons,
     original_count = original_count
   ))
+}
+
+#-------------------------------------------------------------------------------------------
+
+#' Build ggplot2 Theme Layers for Sankey/Alluvial Plots
+#'
+#' @description Creates the theme layers used by the crop rotation Sankey (alluvial)
+#' plots, allowing the background/text styling to be switched between a dark and a
+#' light (white background, black text) appearance, and the base text size to be
+#' adjusted.
+#'
+#' @param dark Logical. If `TRUE` (default) uses the dark background theme; if
+#'   `FALSE` uses a white background with black axis/legend text.
+#' @param text_size Numeric. Base font size (pt) for axis and legend text. The
+#'   y-axis title is rendered one point larger. Default: 15.
+#'
+#' @return A list of ggplot2 theme layers to be added to a plot with `+`.
+#'
+#' @importFrom ggplot2 theme_linedraw theme element_text element_rect element_blank margin
+#' @keywords internal
+sankey_plot_theme <- function(dark = TRUE, text_size = 15) {
+  bg_color <- if (dark) "#1f1b1b" else "white"
+  text_color <- if (dark) "white" else "black"
+  panel_color <- if (dark) "lightgrey" else "white"
+
+  list(
+    theme_linedraw(),
+    theme(
+      axis.text = element_text(color = text_color, size = text_size, face = "bold"),
+      axis.title.y = element_text(color = text_color, size = text_size + 1, face = "bold", margin = margin(r = 10)),
+      legend.background = element_rect(fill = panel_color, color = "black"),
+      panel.background = element_rect(fill = panel_color, color = "black"),
+      legend.direction = "horizontal",
+      legend.position = "bottom",
+      legend.box = "horizontal",
+      legend.title = element_blank(),
+      legend.text = element_text(size = text_size, color = "black"),
+      plot.background = element_rect(fill = bg_color, color = NA),
+      legend.box.background = element_rect(fill = bg_color, color = NA)
+    )
+  )
 }

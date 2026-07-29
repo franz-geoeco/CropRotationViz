@@ -1109,8 +1109,10 @@ processing_ui <- function(app_data, output_dir = NA, start_year = NA, vector_fil
 #' @keywords internal
 processing_server <- function(input, output, session, app_data, output_dir = NA, common_column = NA, preview = TRUE, vector_file = TRUE, ncores = 4) {
   library(ggalluvial)
-  
-  
+
+  # Normalize path separators (accept both / and \)
+  if (!is.na(output_dir)) output_dir <- normalizePath(output_dir, winslash = "/", mustWork = FALSE)
+
   # Reactive value to store remembered directory
   remembered_dir <- reactiveVal(NULL)
   
@@ -3160,7 +3162,7 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
           
         }else if(input$aggregation == "Yes" && input$id_or_name == "Name"){
           aggregation_codes <- prepare_aggregation_data()
-          aggregation_codes <- aggregation_codes$converter
+          aggregation_codes <- aggregation_codes$converter 
 
           incProgress(0.08, detail = "aggregating")
           CropRotViz_intersection <- aggregator(CropRotViz_intersection, years, aggregation_codes, type = "Name")
@@ -3173,36 +3175,82 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
         # intersect with attributes
         incProgress(0.12, detail = "Intersecting with areas")
         message("intersecting with areas")
-        list_intersect_with_borders <- intersect_with_borders(CropRotViz_intersection, 3, countriesSP,
-                                                              EZG, aoi_data)
-        
-        CropRotViz_intersection <- list_intersect_with_borders$intersected
-        
-        Districts <- list_intersect_with_borders$borders_inter
-        
-        if("EZG_inter" %in% names(list_intersect_with_borders)){
-          EZGs <- list_intersect_with_borders$EZG_inter
-        }else{
+
+        # Check if geodata server is reachable before attempting GADM download
+        message("Checking geodata server connectivity...")
+        geodata_online <- check_geodata_server(timeout_secs = 10)
+
+        if (!geodata_online) {
+          showNotification(
+            paste0("Warning: The geodata server (geodata.ucdavis.edu) is not reachable. ",
+                   "Administrative border intersection will be skipped. ",
+                   "Results will not be split by administrative district."),
+            type = "warning",
+            duration = NULL
+          )
+          message("Geodata server offline - skipping administrative border intersection.")
+
+          # Create a single-district fallback so downstream code keeps working
+          CropRotViz_intersection$District <- "All"
+          bbox_sf <- sf::st_as_sf(
+            data.frame(District = "All"),
+            geometry = sf::st_sfc(sf::st_as_sfc(sf::st_bbox(CropRotViz_intersection))),
+            crs = sf::st_crs(CropRotViz_intersection)
+          )
+          Districts <- bbox_sf
           EZGs <- NULL
-        }
-        
-        if("AOI_inter" %in% names(list_intersect_with_borders)){
-          AOIs <- list_intersect_with_borders$AOI_inter
-        }else{
-          AOIs <- NULL
+
+          # Still intersect with user-uploaded AOI if provided
+          if (!is.null(aoi_data) && inherits(aoi_data, "sf") && nrow(aoi_data) > 0) {
+            tryCatch({
+              aoi_transformed <- sf::st_transform(aoi_data, crs = sf::st_crs(CropRotViz_intersection))
+              CropRotViz_intersection <- sf::st_intersection(CropRotViz_intersection, aoi_transformed)
+              AOI_inter <- subset(aoi_transformed,
+                                  AOI_name %in% unique(sf::st_drop_geometry(CropRotViz_intersection)$AOI_name))
+              AOI_inter <- AOI_inter %>%
+                dplyr::group_by(AOI_name) %>%
+                dplyr::summarise(.groups = "drop")
+              AOIs <- AOI_inter
+              message("AOI intersection completed despite geodata server being offline.")
+            }, error = function(e) {
+              warning("AOI intersection failed: ", e$message)
+              AOIs <- NULL
+            })
+          } else {
+            AOIs <- NULL
+          }
+
+        } else {
+          list_intersect_with_borders <- intersect_with_borders(CropRotViz_intersection, 3, countriesSP,
+                                                                EZG, aoi_data)
+
+          CropRotViz_intersection <- list_intersect_with_borders$intersected
+          Districts <- list_intersect_with_borders$borders_inter
+
+          if ("EZG_inter" %in% names(list_intersect_with_borders)) {
+            EZGs <- list_intersect_with_borders$EZG_inter
+          } else {
+            EZGs <- NULL
+          }
+
+          if ("AOI_inter" %in% names(list_intersect_with_borders)) {
+            AOIs <- list_intersect_with_borders$AOI_inter
+          } else {
+            AOIs <- NULL
+          }
         }
         
         incProgress(0.08, detail = "Writing vector file")
         message("writing vector file")
         if(vector_file){
           if(input$filetype == "Shapefile"){
-            sf::st_write(sf::st_make_valid(CropRotViz_intersection), paste0(current_dir, "/CropRotViz_intersection.shp"), quiet = TRUE, driver = "ESRI Shapefile", append = F, delete_layer = TRUE)
-            
+            sf::st_write(sf::st_make_valid(CropRotViz_intersection), file.path(current_dir, "CropRotViz_intersection.shp"), quiet = TRUE, driver = "ESRI Shapefile", append = F, delete_layer = TRUE)
+
           }else if(input$filetype == "GeoPackage"){
-            sf::st_write(sf::st_make_valid(CropRotViz_intersection), paste0(current_dir, "/CropRotViz_intersection.gpkg"), quiet = TRUE, append = F, delete_layer = TRUE)
-            
+            sf::st_write(sf::st_make_valid(CropRotViz_intersection), file.path(current_dir, "CropRotViz_intersection.gpkg"), quiet = TRUE, append = F, delete_layer = TRUE)
+
           }else{
-            sf::st_write(sf::st_make_valid(CropRotViz_intersection), paste0(current_dir, "/CropRotViz_intersection.fgb"), quiet = TRUE, driver = "FlatGeobuf", append = F, delete_layer = T)
+            sf::st_write(sf::st_make_valid(CropRotViz_intersection), file.path(current_dir, "CropRotViz_intersection.fgb"), quiet = TRUE, driver = "FlatGeobuf", append = F, delete_layer = T)
           }
         }
         mem_checkpoints$after_file_write <- gc(reset = TRUE)
@@ -3236,16 +3284,13 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
               })
             }
             
-            # Add AOIs parameter and handle potential AOI data
-            aoi_for_diversity <- if(exists("aoi_data") && !is.null(aoi_data())) aoi_data() else NA
-            
             # diversity mapping with proper error handling
             diversity_data <- diversity_mapping(
-              input = CropRotViz_intersection, 
-              agg_cols = agg_cols, 
-              districts = Districts, 
-              EZGs = if(exists("EZGs") && !is.null(EZGs)) EZGs else NA,
-              AOIs = aoi_for_diversity,
+              input = CropRotViz_intersection,
+              agg_cols = agg_cols,
+              districts = Districts,
+              EZGs = if (!is.null(EZGs)) EZGs else NA,
+              AOIs = if (!is.null(AOIs)) AOIs else NA,
               BS = BS_raster
             )
             
@@ -3336,25 +3381,22 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
         }
         mem_checkpoints$after_EZG_processing <- gc(reset = TRUE)
         
-        if("AOI" %in% names(CropRotViz_intersection)){
+        if ("AOI_name" %in% names(CropRotViz_intersection) && !is.null(AOIs)) {
           AOI_CropRotViz_intersection <- list()
-          
-          for (i in 1:length(unique(st_drop_geometry(AOIs)$AOI))) {
-            AOI_sel <- unique(st_drop_geometry(AOIs)$AOI)[i]
-            
-            current <- subset(CropRotViz_intersection, AOI == AOI_sel)
-            current <- current%>%
-              plyr::count(vars = agg_cols, wt_var = "area")%>%
+
+          for (AOI_sel in unique(sf::st_drop_geometry(AOIs)$AOI_name)) {
+            current <- subset(CropRotViz_intersection, AOI_name == AOI_sel)
+            current <- current %>%
+              plyr::count(vars = agg_cols, wt_var = "area") %>%
               mutate(id = row_number(),
-                     freq = freq/1e6)
-            
-            # ad rotation column
-            current$rotation <- do.call(paste, st_drop_geometry(current[agg_cols]))
-            
+                     freq = freq / 1e6)
+
+            current$rotation <- do.call(paste, sf::st_drop_geometry(current[agg_cols]))
+
             AOI_CropRotViz_intersection[[AOI_sel]] <- current
           }
-        }else{
-          AOIs  <- NA
+        } else {
+          AOIs <- NA
           AOI_CropRotViz_intersection <- NA
         }
         
@@ -3375,19 +3417,18 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
           "District",
           "area",
           if ("EZG" %in% names(CropRotViz_intersection)) "EZG",
-          if ("EZG" %in% names(CropRotViz_intersection) &&
-              "AOI" %in% names(CropRotViz_intersection)) "AOI"
+          if ("AOI_name" %in% names(CropRotViz_intersection)) "AOI_name"
         )
-        
-        distribution_df <- st_drop_geometry(CropRotViz_intersection)[,agg_cols]
-        
+
+        distribution_df <- sf::st_drop_geometry(CropRotViz_intersection)[, agg_cols]
+
         language <- input$language
-        
+
         # save environment
         save(EZG_CropRotViz_intersection, district_CropRotViz_intersection, AOI_CropRotViz_intersection,
-             cropping_area, years, Crop_choices, Districts, EZGs,
+             cropping_area, years, Crop_choices, Districts, EZGs, AOIs,
              distribution_df, diversity_data, sankey_data, aggregation_codes, language,
-             file = paste0(current_dir, "/CropRotViz_intersection.RData"))
+             file = file.path(current_dir, "CropRotViz_intersection.RData"))
         
         #-----------------------------------------------------------------------------------------------------
         incProgress(0.05, detail = "preparing images for fast preview version")
@@ -3401,7 +3442,7 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
             if(!is.null(data) && is.data.frame(data) && nrow(data) > 0 && !is.na(nrow(data))) {
               data$id <- seq_len(nrow(data))
               create_crop_rotation_sankey(data,
-                                          output_path = paste0(current_dir, "/CropRotViz_intersection.png"),
+                                          output_path = file.path(current_dir, "CropRotViz_intersection.png"),
                                           min_area = 0,
                                           color = color_palette)
               incProgress(0.02, detail = "Preview image created")
@@ -3418,7 +3459,7 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
         if(input$fastImages == "Yes"){
           incProgress(0.03, detail = "Starting parallel image generation...")
           # Create images directory
-          dir.create(paste0(current_dir, "/images"))
+          dir.create(file.path(current_dir, "images"))
           
           # Setup parallel environment
           message(sprintf("Using %d cores for parallel image generation", ncores))
@@ -3500,7 +3541,7 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
                   sanitized_name <- gsub("/", "_", task$name)
                   
                   # Create the output path
-                  output_path <- paste0(current_dir, "/images/", sanitized_name, ".png")
+                  output_path <- file.path(current_dir, "images", paste0(sanitized_name, ".png"))
                   
                   # Generate the Sankey diagram with excluded crops
                   create_crop_rotation_sankey(
@@ -3558,7 +3599,7 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
         mem_checkpoints$after_save <- gc(reset = TRUE)
         
         # write meta file
-        file_conn <- file(paste0(current_dir, "/CropRotViz_processing_info.txt"), "w")
+        file_conn <- file(file.path(current_dir, "CropRotViz_processing_info.txt"), "w")
         writeLines("Processing Information Summary for the field intersection\n", file_conn)
         writeLines(paste("Processing Date:", format(Sys.time(), "%Y-%m-%d %H:%M:%S")), file_conn)
         writeLines("----------------------------------------\n", file_conn)

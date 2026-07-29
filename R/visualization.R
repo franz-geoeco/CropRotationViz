@@ -41,9 +41,7 @@
 #' @return A Shiny UI object containing the complete visualization interface
 #' 
 #' @import shiny shinythemes shinyBS shinyWidgets shinycssloaders DT plotly ggplot2 dplyr sf leaflet
-#' @importFrom shiny fluidPage tabsetPanel tabPanel fluidRow column
-#'   plotOutput uiOutput renderUI verbatimTextOutput fileInput
-#'   actionButton wellPanel
+#' @importFrom shiny fluidPage tabsetPanel tabPanel fluidRow column plotOutput uiOutput renderUI verbatimTextOutput fileInput actionButton wellPanel
 #' @importFrom shinythemes shinytheme
 #' @importFrom shinyBS bsButton bsPopover
 #' @importFrom shinyWidgets pickerInput pickerOptions
@@ -70,13 +68,35 @@ viz_ui <- function(input_dir = NA){
   
   # Extract years and create span string outside the fluidRow
   year_span <- paste0(
-    min(as.numeric(gsub(".*?(\\d+).*", "\\1", 
+    min(as.numeric(gsub(".*?(\\d+).*", "\\1",
                         names(district_CropRotViz_intersection[[1]])[grepl("\\d", names(district_CropRotViz_intersection[[1]]))]))),
     "-",
-    max(as.numeric(gsub(".*?(\\d+).*", "\\1", 
+    max(as.numeric(gsub(".*?(\\d+).*", "\\1",
                         names(district_CropRotViz_intersection[[1]])[grepl("\\d", names(district_CropRotViz_intersection[[1]]))])))
   )
-  
+
+  # Maximum sequence area (km²) present in the current dataset - used as the
+  # upper bound and default value for the Sequence Area Range inputs, so that
+  # by default no sequence is excluded from the plots. The Sankey/table data
+  # (rotation_data) is filtered on the aggregated per-rotation "freq" (km²),
+  # not on the raw per-field "area" used for the distribution/export data, and
+  # freq can be much larger than any single field's area, so both have to be
+  # taken into account.
+  max_freq_km2 <- function(lst) {
+    if (is.null(lst) || (length(lst) == 1 && identical(lst, NA))) return(-Inf)
+    max(vapply(lst, function(x) {
+      if (is.null(x) || is.null(x[["freq"]]) || length(x[["freq"]]) == 0) return(-Inf)
+      max(x[["freq"]], na.rm = TRUE)
+    }, numeric(1)))
+  }
+
+  max_area_km2 <- ceiling(max(
+    max(distribution_df$area, na.rm = TRUE) / 1e6,
+    max_freq_km2(district_CropRotViz_intersection),
+    max_freq_km2(EZG_CropRotViz_intersection),
+    max_freq_km2(AOI_CropRotViz_intersection)
+  ))
+
   fluidPage(
     Crop_choices <- "",
     District_choices <- "",
@@ -124,7 +144,7 @@ viz_ui <- function(input_dir = NA){
     
     # Define the tabs
     tabsetPanel(id = "tabs",
-                tabPanel("Plot Sequence",
+                tabPanel("1. Plot Sequence",
                          br(),
                          fluidRow(
                            #-------------------------------------------------------------------------------
@@ -141,8 +161,8 @@ viz_ui <- function(input_dir = NA){
                            #-------------------------------------------------------------------------------
                            column(2,
                                   shinyWidgets::numericRangeInput("Area_range_sec", "Sequence Area Range (km²):",
-                                                    min = 0, max = 4000,
-                                                    value = c(0, 1000))
+                                                    min = 0, max = max_area_km2,
+                                                    value = c(0, max_area_km2))
                            ),
                            column(1, 
                                   bsButton("range-info",
@@ -222,7 +242,18 @@ viz_ui <- function(input_dir = NA){
                            ),
                            column(1,
                                   downloadButton("Save_sankey_plot", label = "Save Plot"
-                                  )
+                                  ),
+                                  br(), br(),
+                                  shinyWidgets::switchInput(
+                                    inputId = "sankey_theme_sec",
+                                    label = "Theme",
+                                    value = TRUE,
+                                    onLabel = "Dark",
+                                    offLabel = "Light",
+                                    size = "mini"
+                                  ),
+                                  sliderInput("sankey_textsize_sec", "Text size",
+                                              min = 8, max = 24, value = 15, step = 1)
                            )
                          ),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),
                          
@@ -274,11 +305,53 @@ viz_ui <- function(input_dir = NA){
                                   )
                            )
                          ),
-                         # Horizontal line
+                         #---------------------------------------------------------------
+                         # Transition Probability Heatmap
+                         #---------------------------------------------------------------
                          tags$hr(style = "border-top: 1px solid white; margin-top: 20px; margin-bottom: 20px;"),
+                         fluidRow(
+                           column(1),
+                           column(3,
+                                  h4("Crop Transition Probability Heatmap")),
+                           column(1, shinyBS::bsButton("transition_heatmap-info",
+                                                       label = "",
+                                                       icon = icon("info"),
+                                                       style = "default", size = "extra-small"),
+                                  shinyBS::bsPopover(
+                                    id = "transition_heatmap-info",
+                                    title = "Transition Probabilities",
+                                    content = "Shows the area-weighted probability of each crop following another across all consecutive year transitions. Each row sums to 100%. Read as: given crop A was grown, what is the probability crop B follows?",
+                                    placement = "right",
+                                    trigger = "hover",
+                                    options = list(
+                                      container = 'body',
+                                      html = TRUE,
+                                      delay = list(show = 0, hide = 0)
+                                    )
+                                  )
+                           ),
+                           column(5,
+                                  div(style = "margin-top: 5px;",
+                                      downloadButton("export_heatmap_csv", "Export as CSV",
+                                                     style = "margin-right: 10px; color: #fff; background-color: rgb(0,86,157); border-color: rgb(0,86,157)"),
+                                      downloadButton("export_heatmap_xlsx", "Export as Excel",
+                                                     style = "color: #fff; background-color: rgb(0,86,157); border-color: rgb(0,86,157)")
+                                  )
+                           )
+                         ),
+                         br(),
+                         fluidRow(
+                           column(1),
+                           column(10,
+                                  shinycssloaders::withSpinner(
+                                    plotlyOutput("transition_heatmap", height = "900px")
+                                  )
+                           )
+                         ),
                          #-------------------------------------------------------------------------------
-                         # Step 4: Aggregation Visualization
+                         # Aggregation Visualization
                          #-------------------------------------------------------------------------------
+                         tags$hr(style = "border-top: 1px solid white; margin-top: 20px; margin-bottom: 20px;"),
                          fluidRow(
                            column(1),
                            column(7,
@@ -291,9 +364,10 @@ viz_ui <- function(input_dir = NA){
                                     plotlyOutput("sankey_plotly")
                                   )
                            )
-                         ),br(), br(), br(),br(), br()
+                         ),
+                         br(), br(), br(), br(), br()
                 ),
-                tabPanel("Plot Crop Specific Sequence",
+                tabPanel("2. Plot Crop Specific Sequence",
                          br(),
                          fluidRow(
                            column(style = "margin-top: -30px; margin-bottom: 0px;", width = 4, h2("Crop Specific Sequences"), p("Analyze the Rotation with a Specific Fokus Crop")), 
@@ -303,8 +377,8 @@ viz_ui <- function(input_dir = NA){
                          br(),
                          fluidRow(column(2,
                                          shinyWidgets::numericRangeInput("Area_range_spec", "Sequence Area Range (km²):",
-                                                           min = 0, max = 4000,
-                                                           value = c(0, 1000))
+                                                           min = 0, max = max_area_km2,
+                                                           value = c(0, max_area_km2))
                          ),
                          column(1, shinyBS::bsButton("range_spec-info",
                                                      label = "",
@@ -378,7 +452,18 @@ viz_ui <- function(input_dir = NA){
                            ),
                            column(1,
                                   downloadButton("Save_sankey_specific_plot", label = "Save Plot"
-                                  )
+                                  ),
+                                  br(), br(),
+                                  shinyWidgets::switchInput(
+                                    inputId = "sankey_theme_spec",
+                                    label = "Theme",
+                                    value = TRUE,
+                                    onLabel = "Dark",
+                                    offLabel = "Light",
+                                    size = "mini"
+                                  ),
+                                  sliderInput("sankey_textsize_spec", "Text size",
+                                              min = 8, max = 24, value = 15, step = 1)
                            )
                          ),
                          br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),
@@ -410,14 +495,17 @@ viz_ui <- function(input_dir = NA){
                                   )
                            ),
                            column(4,
-                                  sliderInput(
-                                    inputId = "year_select_spec",
-                                    label = "Select Year:",
-                                    min = 2000,
-                                    max = 2024,
-                                    value = 2008,
-                                    step = 1,
-                                    sep = ""
+                                  conditionalPanel(
+                                    condition = "input.year_mode_spec == 'annual'",
+                                    sliderInput(
+                                      inputId = "year_select_spec",
+                                      label = "Select Year:",
+                                      min = 2000,
+                                      max = 2024,
+                                      value = 2008,
+                                      step = 1,
+                                      sep = ""
+                                    )
                                   )
                            )
                          ),
@@ -493,7 +581,7 @@ viz_ui <- function(input_dir = NA){
                          br(), br(), br(), br(), br(), br(), br(), br(), br(), br()
                          
                 ),
-                tabPanel("Plot Sequence per Area",
+                tabPanel("3. Plot Sequence per Area",
                          br(),
                          fluidRow(
                            column(width = 4, style = "margin-top: -30px; margin-bottom: 0px;", h2("Crop Sequences Per Area"), p("Analyze the Rotation Situation in Specific Area")), 
@@ -501,12 +589,16 @@ viz_ui <- function(input_dir = NA){
                            column(width = 2, style = "margin-top: 2vh;", tags$img(src = "www/GeoECO_MLU_LANG_2.png", height = "70px", width = "265px"))
                          ),
                          fluidRow(
-                           if(sum(is.na(EZGs))==0){
+                           if(sum(is.na(EZGs))==0 || (exists("AOI_CropRotViz_intersection") && !is.null(AOI_CropRotViz_intersection) && !identical(AOI_CropRotViz_intersection, NA))){
                              column(1,
                                     radioButtons(inputId = "district_or_ezg",
                                                  label = "Select",
                                                  selected = "District",
-                                                 choices = c("District", "River Basin"))
+                                                 choices = c(
+                                                   "District",
+                                                   if(sum(is.na(EZGs))==0) "River Basin",
+                                                   if(exists("AOI_CropRotViz_intersection") && !is.null(AOI_CropRotViz_intersection) && !identical(AOI_CropRotViz_intersection, NA)) "Custom Area"
+                                                 ))
                              )
                            },
                            conditionalPanel(
@@ -526,14 +618,29 @@ viz_ui <- function(input_dir = NA){
                            ),
                            conditionalPanel(
                              condition = "input.district_or_ezg == 'River Basin'",
-                             column(2, 
+                             column(2,
                                     shinyWidgets::pickerInput(
-                                      inputId = "EZG_sel", 
-                                      label = "RIver basin you wanna display", 
-                                      choices = EZG_choices, 
-                                      selected = EZG_choices[1], 
+                                      inputId = "EZG_sel",
+                                      label = "River basin you wanna display",
+                                      choices = EZG_choices,
+                                      selected = EZG_choices[1],
                                       options = shinyWidgets::pickerOptions(
-                                        actionsBox = TRUE, 
+                                        actionsBox = TRUE,
+                                        size = 15,
+                                        selectedTextFormat = "count > 3"
+                                      ), multiple = F)
+                             )
+                           ),
+                           conditionalPanel(
+                             condition = "input.district_or_ezg == 'Custom Area'",
+                             column(2,
+                                    shinyWidgets::pickerInput(
+                                      inputId = "AOI_sel",
+                                      label = "Custom area to display",
+                                      choices = character(0),
+                                      selected = NULL,
+                                      options = shinyWidgets::pickerOptions(
+                                        actionsBox = TRUE,
                                         size = 15,
                                         selectedTextFormat = "count > 3"
                                       ), multiple = F)
@@ -541,17 +648,17 @@ viz_ui <- function(input_dir = NA){
                            ),
                            column(2,
                                   shinyWidgets::numericRangeInput("Area_range_areas", "Sequence Area Range (km²):",
-                                                    min = 0, max = 5000,
-                                                    value = c(0, 1000))
+                                                    min = 0, max = max_area_km2,
+                                                    value = c(0, max_area_km2))
                            ),
-                           column(2, 
+                           column(2,
                                   shinyWidgets::pickerInput(
-                                    inputId = "Crops_kreis", 
-                                    label = "Show/hide crops:", 
-                                    choices = Crop_choices, 
-                                    selected = Crop_choices, 
+                                    inputId = "Crops_kreis",
+                                    label = "Show/hide crops:",
+                                    choices = Crop_choices,
+                                    selected = Crop_choices,
                                     options = shinyWidgets::pickerOptions(
-                                      actionsBox = TRUE, 
+                                      actionsBox = TRUE,
                                       size = 15,
                                       selectedTextFormat = "count > 3"
                                     ), multiple = TRUE)
@@ -563,17 +670,21 @@ viz_ui <- function(input_dir = NA){
                                                style = "color: #fff; background-color: rgb(0,86,157); border-color: rgb(0,86,157); margin-top: 25px")
                            ),
                            conditionalPanel(
-                             condition = "input.district_or_ezg != 'River Basin'",
+                             condition = "input.district_or_ezg == 'District'",
                              column(3, plotOutput("perc_district_plot", height = 80))
                            ),
                            conditionalPanel(
                              condition = "input.district_or_ezg == 'River Basin'",
                              column(3, plotOutput("perc_basin_plot", height = 80))
+                           ),
+                           conditionalPanel(
+                             condition = "input.district_or_ezg == 'Custom Area'",
+                             column(3, plotOutput("perc_aoi_plot", height = 80))
                            )
                          ),
                          fluidRow(
                            conditionalPanel(
-                             condition = "input.district_or_ezg != 'River Basin'",
+                             condition = "input.district_or_ezg == 'District'",
                              column(2,
                                     shinycssloaders::withSpinner(
                                       leafletOutput("leaflet_district")
@@ -581,7 +692,7 @@ viz_ui <- function(input_dir = NA){
                              )
                            ),
                            conditionalPanel(
-                             condition = "input.district_or_ezg != 'River Basin'",
+                             condition = "input.district_or_ezg == 'District'",
                              column(10,
                                     shinycssloaders::withSpinner(
                                       plotOutput("sankey_district")
@@ -603,22 +714,49 @@ viz_ui <- function(input_dir = NA){
                                       plotOutput("sankey_basin")
                                     )
                              )
-                           )
-                         ),
-                         fluidRow(
-                           br(),br(),
+                           ),
                            conditionalPanel(
-                             condition = "input.district_or_ezg != 'River Basin'",
-                             fluidRow(
-                              column(1,
-                                    downloadButton("Save_sankey_district_plot", label = "Save Plot", style = "margin-left: 10px;")
-                              )
-                            )
+                             condition = "input.district_or_ezg == 'Custom Area'",
+                             column(2,
+                                    shinycssloaders::withSpinner(
+                                      leafletOutput("leaflet_aoi")
+                                    )
+                             )
+                           ),
+                           conditionalPanel(
+                             condition = "input.district_or_ezg == 'Custom Area'",
+                             column(10,
+                                    shinycssloaders::withSpinner(
+                                      plotOutput("sankey_aoi")
+                                    )
+                             )
                            )
                          ),
                          fluidRow(
-                          conditionalPanel(
-                             condition = "input.district_or_ezg != 'River Basin'",
+                           br(), br(),
+                           conditionalPanel(
+                             condition = "input.district_or_ezg == 'District'",
+                             fluidRow(
+                               column(1, style = "margin-left: 10px;",
+                                      downloadButton("Save_sankey_district_plot", label = "Save Plot"),
+                                      br(), br(),
+                                      shinyWidgets::switchInput(
+                                        inputId = "sankey_theme_district",
+                                        label = "Theme",
+                                        value = TRUE,
+                                        onLabel = "Dark",
+                                        offLabel = "Light",
+                                        size = "mini"
+                                      ),
+                                      sliderInput("sankey_textsize_district", "Text size",
+                                                  min = 8, max = 24, value = 15, step = 1)
+                               )
+                             )
+                           )
+                         ),
+                         fluidRow(
+                           conditionalPanel(
+                             condition = "input.district_or_ezg == 'District'",
                              column(3,
                                     div(style = "margin-left: 0px;",
                                         downloadButton("export_district_csv", "Export as CSV",
@@ -629,29 +767,72 @@ viz_ui <- function(input_dir = NA){
                              )
                            )
                          ),
-                         
                          fluidRow(
-                           br(),br(),
+                           br(), br(),
                            conditionalPanel(
                              condition = "input.district_or_ezg == 'River Basin'",
                              fluidRow(
-                              column(1,
-                                    downloadButton("Save_sankey_basin_plot", label = "Save Plot", style = "margin-left: 10px;")
-                              )
-                            )
+                               column(1, style = "margin-left: 10px;",
+                                      downloadButton("Save_sankey_basin_plot", label = "Save Plot"),
+                                      br(), br(),
+                                      shinyWidgets::switchInput(
+                                        inputId = "sankey_theme_basin",
+                                        label = "Theme",
+                                        value = TRUE,
+                                        onLabel = "Dark",
+                                        offLabel = "Light",
+                                        size = "mini"
+                                      ),
+                                      sliderInput("sankey_textsize_basin", "Text size",
+                                                  min = 8, max = 24, value = 15, step = 1)
+                               )
+                             )
                            )
                          ),
                          fluidRow(
-                          conditionalPanel(
+                           conditionalPanel(
                              condition = "input.district_or_ezg == 'River Basin'",
                              column(3,
                                     div(style = "margin-left: 0px;",
                                         downloadButton("export_basin_csv", "Export as CSV",
-                                                       style = "margin-right: 10px; margin-top: 10px; color: #fff; background-color: rgb(0,86,157); border-color: rgb(0,86,157"
-                                                        ),
+                                                       style = "margin-right: 10px; margin-top: 10px; color: #fff; background-color: rgb(0,86,157); border-color: rgb(0,86,157)"),
                                         downloadButton("export_basin_xlsx", "Export as Excel",
-                                                       style = "margin-top: 10px; color: #fff; background-color: rgb(0,86,157); border-color: rgb(0,86,157)"
-                                                        )
+                                                       style = "margin-top: 10px; color: #fff; background-color: rgb(0,86,157); border-color: rgb(0,86,157)")
+                                    )
+                             )
+                           )
+                         ),
+                         fluidRow(
+                           br(), br(),
+                           conditionalPanel(
+                             condition = "input.district_or_ezg == 'Custom Area'",
+                             fluidRow(
+                               column(1, style = "margin-left: 10px;",
+                                      downloadButton("Save_sankey_aoi_plot", label = "Save Plot"),
+                                      br(), br(),
+                                      shinyWidgets::switchInput(
+                                        inputId = "sankey_theme_aoi",
+                                        label = "Theme",
+                                        value = TRUE,
+                                        onLabel = "Dark",
+                                        offLabel = "Light",
+                                        size = "mini"
+                                      ),
+                                      sliderInput("sankey_textsize_aoi", "Text size",
+                                                  min = 8, max = 24, value = 15, step = 1)
+                               )
+                             )
+                           )
+                         ),
+                         fluidRow(
+                           conditionalPanel(
+                             condition = "input.district_or_ezg == 'Custom Area'",
+                             column(3,
+                                    div(style = "margin-left: 0px;",
+                                        downloadButton("export_aoi_csv", "Export as CSV",
+                                                       style = "margin-right: 10px; margin-top: 10px; color: #fff; background-color: rgb(0,86,157); border-color: rgb(0,86,157)"),
+                                        downloadButton("export_aoi_xlsx", "Export as Excel",
+                                                       style = "margin-top: 10px; color: #fff; background-color: rgb(0,86,157); border-color: rgb(0,86,157)")
                                     )
                              )
                            )
@@ -701,10 +882,11 @@ viz_ui <- function(input_dir = NA){
                                     )
                              ), br()
                            )
-                         )
+                         ),
+                          br(), br(), br()
                 ),
                 if (exists("diversity_data") && is.list(diversity_data) && length(diversity_data) > 0) {
-                  tabPanel("Plot Diversity",
+                  tabPanel("4. Plot Diversity",
                            br(),
                            fluidRow(
                             column(width = 8,
@@ -718,7 +900,8 @@ viz_ui <- function(input_dir = NA){
                                            radioButtons("AreaType",
                                                         "Select Map Type:", inline = TRUE,
                                                         choices = c("Districts" = "districts",
-                                                                    "Catchment" = "ezg"))),
+                                                                    "Catchment" = "ezg",
+                                                                    "Custom Area" = "aoi"))),
                                     column(5,
                                            h4(paste0("The Structural Diversity is defined by the number of transitions and unique crops over the period ",
                                                      year_span,
@@ -738,12 +921,71 @@ viz_ui <- function(input_dir = NA){
                                     column(10,
                                            plotlyOutput("diversity_soil", height = "650px" )
                                     )),
-                           br(), br(),br(), br(),
-                           
+                           br(),
+                           fluidRow(column(1),
+                                    column(10,
+                                           div(style = "margin-left: 0px;",
+                                               downloadButton("export_diversity_csv", "Export as CSV",
+                                                              style = "margin-right: 10px; margin-top: 10px; color: #fff; background-color: rgb(0,86,157); border-color: rgb(0,86,157)"),
+                                               downloadButton("export_diversity_xlsx", "Export as Excel",
+                                                              style = "margin-top: 10px; color: #fff; background-color: rgb(0,86,157); border-color: rgb(0,86,157)")
+                                           )
+                                    )),
+                           #---------------------------------------------------------------
+                           # Shannon Diversity Section
+                           #---------------------------------------------------------------
+                           tags$hr(style = "border-top: 1px solid white; margin-top: 20px; margin-bottom: 20px;"),
+                           fluidRow(
+                             column(1),
+                             column(3,
+                                    h4("Shannon-Wiener Crop Diversity Index")),
+                             column(1, shinyBS::bsButton("shannon-info",
+                                                         label = "",
+                                                         icon = icon("info"),
+                                                         style = "default", size = "extra-small"),
+                                    shinyBS::bsPopover(
+                                      id = "shannon-info",
+                                      title = "Shannon-Wiener Index",
+                                      content = paste0(
+                                        "The Shannon-Wiener index <b>H = -&Sigma;(p<sub>i</sub> &middot; ln p<sub>i</sub>)</b> ",
+                                        "quantifies crop diversity per area unit, where p<sub>i</sub> is the area proportion of crop i.<br><br>",
+                                        "<b>H = 0</b>: Monoculture (single crop covers 100% of area).<br>",
+                                        "<b>H &gt; 2</b>: High diversity with many crops at similar proportions.<br><br>",
+                                        "Unlike a simple crop count, Shannon H accounts for <b>evenness</b>: ",
+                                        "an area with 5 crops where one dominates at 90% scores lower than ",
+                                        "an area with 5 crops at equal shares.<br><br>",
+                                        "Values are computed per year and averaged across all years in the time series. ",
+                                        "The map shows H per district/catchment, the bar chart ranks areas from lowest to highest diversity."
+                                      ),
+                                      placement = "right",
+                                      trigger = "hover",
+                                      options = list(
+                                        container = 'body',
+                                        html = TRUE,
+                                        delay = list(show = 0, hide = 0)
+                                      )
+                                    )
+                             )
+                           ),
+                           fluidRow(
+                             column(1),
+                             column(5,
+                                    shinycssloaders::withSpinner(
+                                      leafletOutput("shannon_map", height = "500px")
+                                    )
+                             ),
+                             column(5,
+                                    shinycssloaders::withSpinner(
+                                      plotlyOutput("shannon_ranking", height = "650px")
+                                    )
+                             )
+                           ),
+                           br(), br(), br(), br(),
+
                   )
                 },
                 # Rotation Ranking Tab
-                tabPanel("Rotation Ranking",
+                tabPanel("5. Rotation Ranking",
                          br(),
                          fluidRow(
                           column(width = 6,
@@ -802,6 +1044,17 @@ viz_ui <- function(input_dir = NA){
                                       "ranking_download_data",
                                       "Download Results",
                                       class = "btn-success btn-block"
+                                    ),
+
+                                    br(), br(),
+
+                                    conditionalPanel(
+                                      condition = "input.ranking_spatial_type != 'full'",
+                                      downloadButton(
+                                        "ranking_download_shp",
+                                        "Download Map (Shapefile)",
+                                        class = "btn-success btn-block"
+                                      )
                                     )
                                   )
                            ),
@@ -873,7 +1126,9 @@ viz_ui <- function(input_dir = NA){
                                              p(class = "text-muted",
                                                "The map shows the dominant crop rotation pattern for each area (district or catchment). ",
                                                "If available, soil potential data (Bodenschätzung) is overlaid as a semi-transparent layer to visualize ",
-                                               "the relationship between soil quality and rotation patterns."
+                                               "the relationship between soil quality and rotation patterns. ",
+                                               "Use the \"Download Map (Shapefile)\" button in the sidebar to export this map, including the soil potential ",
+                                               "column (if available) and a settings file describing the analysis parameters used."
                                              ),
                                              div(
                                                style = "background-color: #f8f9fa; padding: 10px; margin-bottom: 15px; border-left: 4px solid #007bff;",
@@ -890,7 +1145,7 @@ viz_ui <- function(input_dir = NA){
                          br(), br(), br()
                 ),
                 # Rotation Analysis Tab - Monoculture Detection & Pattern Clustering
-                tabPanel("Rotation Analysis",
+                tabPanel("6. Rotation Analysis",
                          br(),
                          fluidRow(
                            column(width = 6,
@@ -913,7 +1168,8 @@ viz_ui <- function(input_dir = NA){
                                       "Spatial Scope:",
                                       choices = c("Full Area" = "full",
                                                   "District" = "district",
-                                                  "Catchment/Basin" = "catchment"),
+                                                  "Catchment/Basin" = "catchment",
+                                                  "Custom Area" = "aoi"),
                                       selected = "full"
                                     ),
 
@@ -925,6 +1181,11 @@ viz_ui <- function(input_dir = NA){
                                     conditionalPanel(
                                       condition = "input.analysis_spatial_type == 'catchment'",
                                       uiOutput("analysis_catchment_ui")
+                                    ),
+
+                                    conditionalPanel(
+                                      condition = "input.analysis_spatial_type == 'aoi'",
+                                      uiOutput("analysis_aoi_ui")
                                     ),
 
                                     hr(),
@@ -1024,7 +1285,7 @@ viz_ui <- function(input_dir = NA){
                                     column(3,
                                            div(class = "metric-box",
                                                div(class = "metric-value", textOutput("monoculture_percentage")),
-                                               div(class = "metric-label", "Monoculture %")
+                                               div(class = "metric-label", "Monoculture Area %")
                                            )
                                     ),
                                     column(3,
@@ -1061,9 +1322,10 @@ viz_ui <- function(input_dir = NA){
                                                    "- Pest/disease buildup<br>",
                                                    "- Reduced biodiversity<br><br>",
                                                    "<b>Metrics shown:</b><br>",
-                                                   "- Number of monoculture fields<br>",
-                                                   "- Total area under monoculture<br>",
-                                                   "- Breakdown by crop type"
+                                                   "- <b>Monoculture Fields:</b> number of field polygons with zero crop transitions<br>",
+                                                   "- <b>Monoculture Area %:</b> share of total analysed area (km\u00b2) under monoculture &mdash; area-weighted, so large fields count more than small ones<br>",
+                                                   "- <b>Monoculture Area (km\u00b2):</b> absolute area under monoculture<br>",
+                                                   "- Breakdown by dominant crop type"
                                                  ),
                                                  placement = "left",
                                                  trigger = "hover",
@@ -1224,12 +1486,12 @@ viz_ui <- function(input_dir = NA){
                                         "Distribution of the number of crop transitions (changes) across all fields."),
                                       br(),
                                       fluidRow(
-                                        column(8,
+                                        column(10,
                                                shinycssloaders::withSpinner(
                                                  plotlyOutput("transition_histogram", height = "400px")
                                                )
                                         ),
-                                        column(4,
+                                        column(2,
                                                div(style = "margin-top: 50px;",
                                                    h5("Transition Statistics"),
                                                    tableOutput("transition_stats_table")
@@ -1317,10 +1579,8 @@ viz_ui <- function(input_dir = NA){
 #' 
 #' @return A Shiny UI object with dynamic loading capabilities
 #' 
-#' @importFrom shiny fluidPage tabsetPanel tabPanel fluidRow column
-#'   plotOutput uiOutput renderUI verbatimTextOutput fileInput
-#'   actionButton wellPanel
-#'   
+#' @importFrom shiny fluidPage tabsetPanel tabPanel fluidRow column plotOutput uiOutput renderUI verbatimTextOutput fileInput actionButton wellPanel
+#'
 #' @examples
 #' \dontrun{
 #' shinyApp(ui = ui, server = server)
@@ -1407,9 +1667,7 @@ ui <- function(app_data) {
 #'
 #' @return A Shiny server function that manages the complete visualization workflow
 #' 
-#' @importFrom shiny fluidPage tabsetPanel tabPanel fluidRow column
-#'   uiOutput renderUI verbatimTextOutput fileInput
-#'   actionButton wellPanel
+#' @importFrom shiny fluidPage tabsetPanel tabPanel fluidRow column uiOutput renderUI verbatimTextOutput fileInput actionButton wellPanel
 #' @import data.table
 #' @import ggalluvial
 #' @importFrom RColorBrewer brewer.pal
@@ -1574,9 +1832,11 @@ extract_rotations_ranking <- function(data, rotation_length, start_year, end_yea
 
 
 #' @export
-viz_server <- function(input, output, session, app_data, input_dir) {
-  
-  options(warn = -1) 
+viz_server <- function(input, output, session, app_data, input_dir, crop_colors = NULL) {
+  # Normalize path separators (accept both / and \)
+  if (!is.na(input_dir)) input_dir <- normalizePath(input_dir, winslash = "/", mustWork = FALSE)
+
+  options(warn = -1)
   
   all_wrap_number_count_small <- app_data$Input_App_data$all_wrap_number_count_small
   loaded_env <- app_data$Input_App_data$loaded_env
@@ -1725,11 +1985,23 @@ viz_server <- function(input, output, session, app_data, input_dir) {
     })
     District_choices <- names(district_CropRotViz_intersection)
     EZG_choices      <- names(EZG_CropRotViz_intersection)
+    AOI_choices      <- if (exists("AOI_CropRotViz_intersection") &&
+                             !is.null(AOI_CropRotViz_intersection) &&
+                             !identical(AOI_CropRotViz_intersection, NA))
+                          names(AOI_CropRotViz_intersection) else character(0)
     
     if(language == "English"){
       crop_color_mapping <- app_data$Input_App_data$crop_color_mapping$en
     }else{
       crop_color_mapping <- app_data$Input_App_data$crop_color_mapping$de
+    }
+    # Merge user-supplied colors: user values take precedence over the built-in palette
+    if (!is.null(crop_colors) && length(crop_colors) > 0) {
+      if (is.null(crop_color_mapping)) {
+        crop_color_mapping <- crop_colors
+      } else {
+        crop_color_mapping[names(crop_colors)] <- crop_colors
+      }
     }
     #--------------------------------------------------------------------------------------------
     
@@ -1772,7 +2044,17 @@ viz_server <- function(input, output, session, app_data, input_dir) {
       choices = setNames(as.character(EZG_choices), EZG_choices),
       selected = EZG_choices[1]
     )
-    
+
+    # Update the pickerInput AOI_sel
+    if (length(AOI_choices) > 0) {
+      shinyWidgets::updatePickerInput(
+        session,
+        inputId = "AOI_sel",
+        choices = setNames(as.character(AOI_choices), AOI_choices),
+        selected = AOI_choices[1]
+      )
+    }
+
     # Update the sliderInput year_select
     updateSliderInput(
       session,
@@ -1829,13 +2111,15 @@ viz_server <- function(input, output, session, app_data, input_dir) {
     
     # rotation_data with caching for performance
     rotation_data <- reactiveVal(NULL)
-    
+    # Cache for the expensive base grouped rotation summary (by = rotation)
+    base_grouped_cache <- reactiveVal(NULL)
+
     observeEvent(input$update_plot_sequence, {
       req(input$Area_range_sec, input$Crops_sec)
-      
+
       withProgress(message = 'Updating visualization...', value = 0, {
-        incProgress(0.3, detail = "Processing data")
-        
+        incProgress(0.2, detail = "Processing data")
+
         result <- transform_rotation_data(
           All_rot_big = CropRotViz_intersection,
           distribution_df  = distribution_df,
@@ -1844,8 +2128,18 @@ viz_server <- function(input, output, session, app_data, input_dir) {
           selected_crops = input$Crops_sec,
           type = "basic"
         )
-        
-        incProgress(0.7, detail = "Finalizing")
+
+        incProgress(0.5, detail = "Computing rotation summary")
+
+        # Compute the expensive base grouped data once and cache it
+        base_grouped <- compute_rotation_base_grouped(
+          CropRotViz_intersection,
+          input$Area_range_sec,
+          years
+        )
+        base_grouped_cache(base_grouped)
+
+        incProgress(0.8, detail = "Finalizing")
         rotation_data(result)
       })
     })
@@ -1891,7 +2185,12 @@ viz_server <- function(input, output, session, app_data, input_dir) {
         # Ensure color map matches unique keys exactly
         color_map <- color_map[as.character(unique_keys)]
       }
-      
+
+      # Always set "Not named" to white color
+      if ("Not named" %in% names(color_map)) {
+        color_map["Not named"] <- "#FFFFFF"
+      }
+
       return(color_map)
     })
     
@@ -1983,7 +2282,36 @@ viz_server <- function(input, output, session, app_data, input_dir) {
         basin_rotation_data(result)
       })
     })
-    
+
+    # aoi_rotation_data with caching for performance
+    aoi_rotation_data <- reactiveVal(NULL)
+
+    observeEvent(input$update_plot_areas, {
+      req(input$Area_range_areas, input$Crops_kreis, input$AOI_sel)
+      req(exists("AOI_CropRotViz_intersection") && !is.null(AOI_CropRotViz_intersection) &&
+          !identical(AOI_CropRotViz_intersection, NA))
+
+      withProgress(message = 'Updating custom area visualization...', value = 0, {
+        incProgress(0.3, detail = "Processing data")
+
+        result <- tryCatch(
+          transform_rotation_data(
+            All_rot_big      = AOI_CropRotViz_intersection,
+            distribution_df  = distribution_df,
+            choices          = Crop_choices,
+            selected_crops   = input$Crops_kreis,
+            input_area_range = input$Area_range_areas,
+            type             = "aoi",
+            AOI_name         = input$AOI_sel
+          ),
+          error = function(e) { warning(e$message); NULL }
+        )
+
+        incProgress(0.7, detail = "Finalizing")
+        aoi_rotation_data(result)
+      })
+    })
+
     #--------------------------------------------------------------------------------------------
     
     # Create reactive expression for the plot
@@ -2158,40 +2486,72 @@ viz_server <- function(input, output, session, app_data, input_dir) {
       Sys.sleep(1.5)
       create_basin_perc_plot()
     }, height = 65, bg = "transparent")
-    
+
     #--------------------------------------------------------------------------------------------
-    
+
+    # Create reactive expression for the AOI percentage plot
+    create_aoi_perc_plot <- reactive({
+      req(aoi_rotation_data(), input$AOI_sel)
+      req(exists("AOI_CropRotViz_intersection") && !is.null(AOI_CropRotViz_intersection))
+      cropping_area_aoi <- sum(AOI_CropRotViz_intersection[[input$AOI_sel]]$freq)
+
+      plot_data <- data.frame(
+        Category = c("Selected Cropping Area", "Remaining Cropping Area"),
+        Percentage = c((sum(aoi_rotation_data()[[1]]$Area) / length(years) / cropping_area_aoi) * 100,
+                       100 - (sum(aoi_rotation_data()[[1]]$Area) / length(years) / cropping_area_aoi) * 100)
+      )
+
+      ggplot(plot_data, aes(x = 0.1, y = Percentage, fill = Category)) +
+        geom_bar(stat = "identity", width = 10) +
+        geom_text(aes(label = paste0(round(Percentage, 1), "%")),
+                  position = position_stack(vjust = 0.5),
+                  color = "white", fontface = "bold", size = 5) +
+        coord_flip() +
+        scale_fill_manual(values = c("Selected Cropping Area" = "darkgreen", "Remaining Cropping Area" = "darkred")) +
+        labs(x = NULL, y = NULL, title = NULL) +
+        theme_minimal() +
+        theme(
+          axis.text.y = element_blank(),
+          axis.text.x = element_text(color = "white", size = 15, face = "bold"),
+          legend.title = element_blank(),
+          legend.text = element_text(color = "white", size = 15, face = "bold"),
+          axis.ticks.y = element_blank(),
+          panel.grid = element_blank(),
+          panel.background = element_rect(fill = "transparent", color = NA),
+          plot.background = element_rect(fill = "transparent", color = NA),
+          legend.background = element_rect(fill = "transparent", color = NA),
+          legend.box.background = element_rect(fill = "transparent", color = NA)
+        ) +
+        scale_y_continuous(labels = function(x) paste0(x, "%"))
+    })
+
+    output$perc_aoi_plot <- renderPlot({
+      Sys.sleep(1.5)
+      create_aoi_perc_plot()
+    }, height = 65, bg = "transparent")
+
+    #--------------------------------------------------------------------------------------------
+
     # Create reactive expression for the plot
     create_sankey_plot <- reactive({
       req(rotation_data())
       req(crop_colors())
-      
+
+      text_size <- input$sankey_textsize_sec
+
       base_plot <- ggplot(
-        rotation_data()[[1]], 
+        rotation_data()[[1]],
         aes(
-          x = year, y = Area, stratum = key, 
+          x = year, y = Area, stratum = key,
           fill = key, alluvium = id, label = key
         )
       ) +
         geom_stratum(alpha = .90, show.legend = TRUE, color = NA) +
-        theme_linedraw() +
-        theme(
-          axis.text = element_text(color = "white", size = 15, face="bold"),
-          axis.title.y = element_text(color = "white", size = 16, face="bold", margin = margin(r = 10)),
-          legend.background = element_rect(fill = "lightgrey", color = "black"),
-          panel.background = element_rect(fill = 'lightgrey', color = 'black'),
-          legend.direction = "horizontal",
-          legend.position = "bottom",
-          legend.box = "horizontal",
-          legend.title = element_blank(),
-          legend.text = element_text(size = 15),
-          plot.background = element_rect(fill = "#1f1b1b", color = NA),
-          legend.box.background = element_rect(fill = "#1f1b1b", color = NA)
-        ) +
-        geom_text(stat = ggalluvial::StatStratum, size = 4, check_overlap = TRUE) +
+        sankey_plot_theme(dark = isTRUE(input$sankey_theme_sec), text_size = text_size) +
+        geom_text(stat = ggalluvial::StatStratum, size = text_size/15*4, check_overlap = TRUE) +
         scale_fill_manual(name = "Crops", values = crop_colors()) +
-        ylab("Area [km²]") + 
-        xlab("") + 
+        ylab("Area [km²]") +
+        xlab("") +
         scale_x_continuous(breaks = unique(rotation_data()[[1]]$year))+
         geom_flow(show.legend = FALSE)
       
@@ -2226,25 +2586,16 @@ viz_server <- function(input, output, session, app_data, input_dir) {
     create_specific_sankey_plot <- reactive({
       req(spec_rotation_data())
       req(crop_colors())
-      
+
+      text_size <- input$sankey_textsize_spec
+
       # make basic transition graph
       specific <- ggplot(spec_rotation_data()[[1]], aes(x = year, y = Area,
                                                         stratum = key, fill = key,
                                                         alluvium = id, label = key)) +
         geom_stratum(alpha = .90 , show.legend = T, color=NA) +
-        theme_linedraw()+
-        theme(axis.text = element_text(color = "white", size = 15, face="bold"),
-              axis.title.y = element_text(color = "white", size = 16, face="bold", margin = margin(r = 10)),
-              legend.background = element_rect(fill = "lightgrey", color = "black"),
-              panel.background = element_rect(fill = 'lightgrey', color = 'black'),
-              legend.direction = "horizontal",
-              legend.position = "bottom",
-              legend.box = "horizontal",
-              legend.title = element_blank(),
-              legend.text = element_text(size = 15),
-              plot.background = element_rect(fill = "#1f1b1b", color = NA),
-              legend.box.background = element_rect(fill = "#1f1b1b", color = NA))+
-        geom_text(stat = ggalluvial::StatStratum, size = 4, check_overlap=T) +
+        sankey_plot_theme(dark = isTRUE(input$sankey_theme_spec), text_size = text_size) +
+        geom_text(stat = ggalluvial::StatStratum, size = text_size/15*4, check_overlap=T) +
         scale_fill_manual(name = "Crops", values = crop_colors()) +
         ylab("Area [km²]")+  xlab("")+ 
         scale_x_continuous(breaks = unique(spec_rotation_data()[[1]]$year))+
@@ -2282,25 +2633,16 @@ viz_server <- function(input, output, session, app_data, input_dir) {
     create_district_sankey_plot <- reactive({
       req(district_rotation_data())
       req(crop_colors())
-      
+
+      text_size <- input$sankey_textsize_district
+
       # make basic transition graph
       specific <- ggplot(district_rotation_data()[[1]], aes(x = year, y = Area,
                                                             stratum = key, fill = key,
                                                             alluvium = id, label = key)) +
         geom_stratum(alpha = .90 , show.legend = T, color=NA) +
-        theme_linedraw()+
-        theme(axis.text = element_text(color = "white", size = 15, face="bold"),
-              axis.title.y = element_text(color = "white", size = 16, face="bold", margin = margin(r = 10)),
-              legend.background = element_rect(fill = "lightgrey", color = "black"),
-              panel.background = element_rect(fill = 'lightgrey', color = 'black'),
-              legend.direction = "horizontal",
-              legend.position = "bottom",
-              legend.box = "horizontal",
-              legend.title = element_blank(),
-              legend.text = element_text(size = 15),
-              plot.background = element_rect(fill = "#1f1b1b", color = NA),
-              legend.box.background = element_rect(fill = "#1f1b1b", color = NA))+
-        geom_text(stat = ggalluvial::StatStratum, size = 4, check_overlap=T) +
+        sankey_plot_theme(dark = isTRUE(input$sankey_theme_district), text_size = text_size) +
+        geom_text(stat = ggalluvial::StatStratum, size = text_size/15*4, check_overlap=T) +
         scale_fill_manual(name = "Crops", values = crop_colors()) +
         ylab("Area [km²]")+  xlab("")+ 
         scale_x_continuous(breaks = unique(district_rotation_data()[[1]]$year))+
@@ -2337,25 +2679,16 @@ viz_server <- function(input, output, session, app_data, input_dir) {
     create_basin_sankey_plot <- reactive({
       req(basin_rotation_data())
       req(crop_colors())
-      
+
+      text_size <- input$sankey_textsize_basin
+
       # make basic transition graph
       specific <- ggplot(basin_rotation_data()[[1]], aes(x = year, y = Area,
                                                          stratum = key, fill = key,
                                                          alluvium = id, label = key)) +
         geom_stratum(alpha = .90 , show.legend = T, color=NA) +
-        theme_linedraw()+
-        theme(axis.text = element_text(color = "white", size = 15, face="bold"),
-              axis.title.y = element_text(color = "white", size = 16, face="bold", margin = margin(r = 10)),
-              legend.background = element_rect(fill = "lightgrey", color = "black"),
-              panel.background = element_rect(fill = 'lightgrey', color = 'black'),
-              legend.direction = "horizontal",
-              legend.position = "bottom",
-              legend.box = "horizontal",
-              legend.title = element_blank(),
-              legend.text = element_text(size = 15),
-              plot.background = element_rect(fill = "#1f1b1b", color = NA),
-              legend.box.background = element_rect(fill = "#1f1b1b", color = NA))+
-        geom_text(stat = ggalluvial::StatStratum, size = 4, check_overlap=T) +
+        sankey_plot_theme(dark = isTRUE(input$sankey_theme_basin), text_size = text_size) +
+        geom_text(stat = ggalluvial::StatStratum, size = text_size/15*4, check_overlap=T) +
         scale_fill_manual(name = "Crops", values = crop_colors()) +
         ylab("Area [km²]")+  xlab("")+ 
         scale_x_continuous(breaks = unique(basin_rotation_data()[[1]]$year))+
@@ -2378,8 +2711,81 @@ viz_server <- function(input, output, session, app_data, input_dir) {
       Sys.sleep(1.5)
       create_basin_sankey_plot()
     }, height = 800, bg = "transparent")
-    
-    
+
+    #--------------------------------------------------------------------------------------------
+
+    create_aoi_sankey_plot <- reactive({
+      req(aoi_rotation_data())
+      req(crop_colors())
+
+      text_size <- input$sankey_textsize_aoi
+
+      specific <- ggplot(aoi_rotation_data()[[1]], aes(x = year, y = Area,
+                                                       stratum = key, fill = key,
+                                                       alluvium = id, label = key)) +
+        geom_stratum(alpha = .90, show.legend = TRUE, color = NA) +
+        sankey_plot_theme(dark = isTRUE(input$sankey_theme_aoi), text_size = text_size) +
+        geom_text(stat = ggalluvial::StatStratum, size = text_size/15*4, check_overlap = TRUE) +
+        scale_fill_manual(name = "Crops", values = crop_colors()) +
+        ylab("Area [km²]") + xlab("") +
+        scale_x_continuous(breaks = unique(aoi_rotation_data()[[1]]$year)) +
+        geom_flow(show.legend = FALSE)
+
+      unique_key_count <- length(unique(aoi_rotation_data()[[1]]$key))
+      if (unique_key_count > 20) {
+        specific + guides(fill = guide_legend(nrow = 8))
+      } else {
+        specific + guides(fill = guide_legend(nrow = 2))
+      }
+    })
+
+    output$sankey_aoi <- renderPlot({
+      Sys.sleep(1.5)
+      create_aoi_sankey_plot()
+    }, height = 800, bg = "transparent")
+
+    output$Save_sankey_aoi_plot <- downloadHandler(
+      filename = function(file) { "sankey_aoi_plot.png" },
+      content = function(file) {
+        ggsave(file, plot = create_aoi_sankey_plot(), width = 590, height = 365, units = "mm", device = "png")
+      }
+    )
+
+    # CSV export for Custom Area
+    output$export_aoi_csv <- downloadHandler(
+      filename = function() {
+        aoi_name <- gsub(" ", "_", input$AOI_sel)
+        paste0("aoi_sequences_", aoi_name, "_", format(Sys.Date(), "%Y%m%d"), ".csv")
+      },
+      content = function(file) {
+        req(aoi_rotation_data())
+        export_data <- aoi_rotation_data()[[2]]
+        if (inherits(export_data, "sf")) export_data <- sf::st_drop_geometry(export_data)
+        write.csv(export_data, file, row.names = FALSE)
+      }
+    )
+
+    # Excel export for Custom Area
+    output$export_aoi_xlsx <- downloadHandler(
+      filename = function() {
+        aoi_name <- gsub(" ", "_", input$AOI_sel)
+        paste0("aoi_sequences_", aoi_name, "_", format(Sys.Date(), "%Y%m%d"), ".xlsx")
+      },
+      content = function(file) {
+        req(aoi_rotation_data())
+        export_data <- aoi_rotation_data()[[2]]
+        if (inherits(export_data, "sf")) export_data <- sf::st_drop_geometry(export_data)
+        if (requireNamespace("openxlsx", quietly = TRUE)) {
+          openxlsx::write.xlsx(export_data, file, rowNames = FALSE)
+        } else if (requireNamespace("writexl", quietly = TRUE)) {
+          writexl::write_xlsx(export_data, file)
+        } else {
+          write.csv(export_data, file, row.names = FALSE)
+          showNotification("Excel packages not available. File saved as CSV format.", type = "warning")
+        }
+      }
+    )
+
     output$Save_sankey_basin_plot <- downloadHandler(
       filename = function(file) {
         "sankey_box_plot.png"
@@ -2499,7 +2905,8 @@ viz_server <- function(input, output, session, app_data, input_dir) {
         choices = Crop_choices,
         selected_crops = input$Crops_sec,
         max_rows = 3000,
-        years = years
+        years = years,
+        pre_grouped_data = base_grouped_cache()
       )
       
       # Generate the datatable with dynamic year formatting and performance optimizations
@@ -2548,7 +2955,8 @@ viz_server <- function(input, output, session, app_data, input_dir) {
           choices = Crop_choices,
           selected_crops = input$Crops_sec,
           max_rows = 10000,
-          years = years
+          years = years,
+          pre_grouped_data = base_grouped_cache()
         )
 
         if (inherits(export_data, "sf")) {
@@ -2573,7 +2981,8 @@ viz_server <- function(input, output, session, app_data, input_dir) {
           choices = Crop_choices,
           selected_crops = input$Crops_sec,
           max_rows = 10000,
-          years = years
+          years = years,
+          pre_grouped_data = base_grouped_cache()
         )
 
         if (inherits(export_data, "sf")) {
@@ -2595,9 +3004,25 @@ viz_server <- function(input, output, session, app_data, input_dir) {
 
     #--------------------------------------------------------------------------------------------
 
+    # Shared reactive: compute unique sequences summary once for table + return time boxplot
+    spec_summary_data <- reactive({
+      req(spec_rotation_data())
+      selected_crop <- isolate(input$Crop_spec)
+      area_range <- isolate(input$Area_range_spec)
+
+      transform_rotation_summary(
+        All_rot_big = CropRotViz_intersection,
+        area_range = area_range,
+        specific_crop = selected_crop,
+        type = "specific",
+        max_rows = Inf,
+        years = years
+      )
+    })
+
     # table specific
     output$table_spec <- renderDT({
-      req(spec_rotation_data())
+      req(spec_summary_data())
       Sys.sleep(1.5)
       # coloring
       crop_color_mapping_df <- as.data.frame(crop_colors())
@@ -2605,20 +3030,7 @@ viz_server <- function(input, output, session, app_data, input_dir) {
       crop_color_mapping_df <- crop_color_mapping_df[complete.cases(crop_color_mapping_df),]
       names(crop_color_mapping_df) <- c("color", "crop")
 
-      # Use isolate to prevent reactive updates when crop changes
-      selected_crop <- isolate(input$Crop_spec)
-      area_range <- isolate(input$Area_range_spec)
-
-      All_rot_clean <- transform_rotation_summary(
-        All_rot_big = CropRotViz_intersection,
-        area_range = area_range,
-        specific_crop = selected_crop,
-        type = "specific",
-        max_rows = 3000,
-        years = years
-      )
-      
-      All_rot_clean <- st_drop_geometry(All_rot_clean)
+      All_rot_clean <- st_drop_geometry(head(spec_summary_data(), 3000))
       
       # Generate datatable with performance optimizations
       datatable(All_rot_clean,
@@ -2714,7 +3126,7 @@ viz_server <- function(input, output, session, app_data, input_dir) {
     observe({
       req(data_loaded())
       req(rotation_data())
-      
+
       if (any(grepl("Aggregated_", names(rotation_data()[[2]])))) {
         output$sankey_plotly <- renderPlotly({
           Sys.sleep(1.5)
@@ -2798,7 +3210,49 @@ viz_server <- function(input, output, session, app_data, input_dir) {
         })
       }
     })
-    
+
+    #--------------------------------------------------------------------------------------------
+    # Transition Probability Heatmap (Tab 1)
+    #--------------------------------------------------------------------------------------------
+    transition_matrix_data <- reactive({
+      req(data_loaded())
+      req(rotation_data())
+      compute_transition_matrix(
+        data = CropRotViz_intersection,
+        area_range = isolate(input$Area_range_sec)
+      )
+    })
+
+    output$transition_heatmap <- renderPlotly({
+      create_transition_heatmap(transition_matrix_data(), crop_colors = crop_colors())
+    })
+
+    output$export_heatmap_csv <- downloadHandler(
+      filename = function() {
+        paste0("crop_transition_probabilities_", format(Sys.Date(), "%Y%m%d"), ".csv")
+      },
+      content = function(file) {
+        write.csv(transition_matrix_data(), file, row.names = FALSE)
+      }
+    )
+
+    output$export_heatmap_xlsx <- downloadHandler(
+      filename = function() {
+        paste0("crop_transition_probabilities_", format(Sys.Date(), "%Y%m%d"), ".xlsx")
+      },
+      content = function(file) {
+        export_data <- transition_matrix_data()
+        if (requireNamespace("openxlsx", quietly = TRUE)) {
+          openxlsx::write.xlsx(export_data, file, rowNames = FALSE)
+        } else if (requireNamespace("writexl", quietly = TRUE)) {
+          writexl::write_xlsx(export_data, file)
+        } else {
+          write.csv(export_data, file, row.names = FALSE)
+          showNotification("Excel packages not available. File saved as CSV format.", type = "warning")
+        }
+      }
+    )
+
     #--------------------------------------------------------------------------------------------
     output$sankey_plotly_specific <- renderPlotly({
       req(spec_rotation_data())
@@ -2869,7 +3323,7 @@ viz_server <- function(input, output, session, app_data, input_dir) {
       }
       
       # Create map with the bounding box
-      leaflet() %>%
+      leaflet(options = leafletOptions(zoomSnap = 0.5, zoomDelta = 0.5, wheelPxPerZoomLevel = 120)) %>%
         addTiles() %>%
         addPolygons(
           data = District_sel,
@@ -2889,9 +3343,8 @@ viz_server <- function(input, output, session, app_data, input_dir) {
       if (st_crs(EZG_sel) != 4326) {
         EZG_sel <- st_transform(EZG_sel, 4326)
       }
-      
-      # Create map with the bounding box
-      leaflet() %>%
+
+      leaflet(options = leafletOptions(zoomSnap = 0.5, zoomDelta = 0.5, wheelPxPerZoomLevel = 120)) %>%
         addTiles() %>%
         addPolygons(
           data = EZG_sel,
@@ -2901,10 +3354,31 @@ viz_server <- function(input, output, session, app_data, input_dir) {
           color = "rgb(0,86,157)",
           dashArray = "5,5"
         )
-      
     })
     #--------------------------------------------------------------------------------------------
-    
+
+    output$leaflet_aoi <- renderLeaflet({
+      req(input$AOI_sel)
+      req(exists("AOIs") && !is.null(AOIs) && !identical(AOIs, NA) && inherits(AOIs, "sf"))
+
+      AOI_sel_sf <- subset(AOIs, AOI_name == input$AOI_sel)
+      if (sf::st_crs(AOI_sel_sf)$epsg != 4326) {
+        AOI_sel_sf <- sf::st_transform(AOI_sel_sf, 4326)
+      }
+
+      leaflet(options = leafletOptions(zoomSnap = 0.5, zoomDelta = 0.5, wheelPxPerZoomLevel = 120)) %>%
+        addTiles() %>%
+        addPolygons(
+          data = AOI_sel_sf,
+          fillColor = "rgb(220,80,0)",
+          fillOpacity = 0.3,
+          weight = 2,
+          color = "rgb(220,80,0)",
+          dashArray = "5,5"
+        )
+    })
+    #--------------------------------------------------------------------------------------------
+
     # Leaflet map for crop-specific area distribution
     output$leaflet_crop_spec <- renderLeaflet({
       req(spec_rotation_data(), input$map_type_spec, input$year_mode_spec)
@@ -2919,7 +3393,7 @@ viz_server <- function(input, output, session, app_data, input_dir) {
         # Check if Districts and district_CropRotViz_intersection exist
         if (!exists("Districts") || is.null(Districts) ||
             !exists("district_CropRotViz_intersection") || is.null(district_CropRotViz_intersection)) {
-          return(leaflet() %>% addTiles() %>%
+          return(leaflet(options = leafletOptions(zoomSnap = 0.5, zoomDelta = 0.5, wheelPxPerZoomLevel = 120)) %>% addTiles() %>%
                    addControl(html = "<div style='background: white; padding: 10px;'>District data not available</div>",
                               position = "topright"))
         }
@@ -2932,7 +3406,7 @@ viz_server <- function(input, output, session, app_data, input_dir) {
         # Catchments/EZGs
         if (!exists("EZGs") || is.null(EZGs) || identical(EZGs, NA) ||
             !exists("EZG_CropRotViz_intersection") || is.null(EZG_CropRotViz_intersection)) {
-          return(leaflet() %>% addTiles() %>%
+          return(leaflet(options = leafletOptions(zoomSnap = 0.5, zoomDelta = 0.5, wheelPxPerZoomLevel = 120)) %>% addTiles() %>%
                    addControl(html = "<div style='background: white; padding: 10px;'>Catchment data not available</div>",
                               position = "topright"))
         }
@@ -3067,7 +3541,7 @@ viz_server <- function(input, output, session, app_data, input_dir) {
       )
       
       # Create leaflet map
-      map <- leaflet(spatial_data) %>%
+      map <- leaflet(spatial_data, options = leafletOptions(zoomSnap = 0.5, zoomDelta = 0.5, wheelPxPerZoomLevel = 120)) %>%
         addTiles() %>%
         addPolygons(
           fillColor = ~pal(crop_percentage),
@@ -3224,20 +3698,28 @@ viz_server <- function(input, output, session, app_data, input_dir) {
     
     
     # plot diversity maps
-    output$diversity <- renderLeaflet(
-      if(input$AreaType == "districts"){
+    output$diversity <- renderLeaflet({
+      if (input$AreaType == "districts") {
         diversity_mapper(data = diversity_data[[1]], type = "District")
-      }else{
+      } else if (input$AreaType == "ezg") {
         diversity_mapper(data = diversity_data[[2]], type = "EZG")
+      } else if (input$AreaType == "aoi" && length(diversity_data) >= 3 && !is.null(diversity_data[[3]]) && !identical(diversity_data[[3]], NA)) {
+        diversity_mapper(data = diversity_data[[3]], type = "AOI_name")
+      } else {
+        diversity_mapper(data = diversity_data[[1]], type = "District")
       }
-    )
-    
+    })
+
     output$diversity_soil <- renderPlotly({
       tryCatch({
-        if(input$AreaType == "districts"){
+        if (input$AreaType == "districts") {
           diversity_soil_plotter(data = diversity_data[[1]], type = "District")
-        }else{
+        } else if (input$AreaType == "ezg") {
           diversity_soil_plotter(data = diversity_data[[2]], type = "EZG")
+        } else if (input$AreaType == "aoi" && length(diversity_data) >= 3 && !is.null(diversity_data[[3]]) && !identical(diversity_data[[3]], NA)) {
+          diversity_soil_plotter(data = diversity_data[[3]], type = "AOI_name")
+        } else {
+          diversity_soil_plotter(data = diversity_data[[1]], type = "District")
         }
       }, error = function(e) {
         # Return an empty plotly with error message if BS data is invalid
@@ -3261,8 +3743,104 @@ viz_server <- function(input, output, session, app_data, input_dir) {
           )
       })
     })
-    
-    
+
+    # CSV export for Diversity data
+    output$export_diversity_csv <- downloadHandler(
+      filename = function() {
+        area_type <- switch(input$AreaType, "districts" = "districts", "ezg" = "catchments", "aoi" = "custom_area", "districts")
+        paste0("diversity_soil_potential_", area_type, "_", format(Sys.Date(), "%Y%m%d"), ".csv")
+      },
+      content = function(file) {
+        export_data <- if (input$AreaType == "districts") {
+          diversity_data[[1]]$BISCALE
+        } else if (input$AreaType == "ezg") {
+          diversity_data[[2]]$BISCALE
+        } else if (input$AreaType == "aoi" && length(diversity_data) >= 3) {
+          diversity_data[[3]]$BISCALE
+        } else {
+          diversity_data[[1]]$BISCALE
+        }
+        if (inherits(export_data, "sf")) export_data <- sf::st_drop_geometry(export_data)
+        write.csv(export_data, file, row.names = FALSE)
+      }
+    )
+
+    # Excel export for Diversity data
+    output$export_diversity_xlsx <- downloadHandler(
+      filename = function() {
+        area_type <- switch(input$AreaType, "districts" = "districts", "ezg" = "catchments", "aoi" = "custom_area", "districts")
+        paste0("diversity_soil_potential_", area_type, "_", format(Sys.Date(), "%Y%m%d"), ".xlsx")
+      },
+      content = function(file) {
+        export_data <- if (input$AreaType == "districts") {
+          diversity_data[[1]]$BISCALE
+        } else if (input$AreaType == "ezg") {
+          diversity_data[[2]]$BISCALE
+        } else if (input$AreaType == "aoi" && length(diversity_data) >= 3) {
+          diversity_data[[3]]$BISCALE
+        } else {
+          diversity_data[[1]]$BISCALE
+        }
+        if (inherits(export_data, "sf")) {
+          export_data <- sf::st_drop_geometry(export_data)
+        }
+
+        if (requireNamespace("openxlsx", quietly = TRUE)) {
+          openxlsx::write.xlsx(export_data, file, rowNames = FALSE)
+        } else if (requireNamespace("writexl", quietly = TRUE)) {
+          writexl::write_xlsx(export_data, file)
+        } else {
+          write.csv(export_data, file, row.names = FALSE)
+          showNotification("Excel packages not available. File saved as CSV format.", type = "warning")
+        }
+      }
+    )
+
+    #--------------------------------------------------------------------------------------------
+    # Shannon Diversity Index (Tab 4)
+    #--------------------------------------------------------------------------------------------
+    shannon_data <- reactive({
+      req(data_loaded())
+
+      first_elem <- district_CropRotViz_intersection[[1]]
+      agg_cols <- grep("^(Aggregated_|Name_)[0-9]{4}$", names(first_elem), value = TRUE)
+      req(length(agg_cols) > 0)
+
+      if (input$AreaType == "districts") {
+        compute_shannon_diversity(district_CropRotViz_intersection, agg_cols, "District", Districts)
+      } else if (input$AreaType == "ezg") {
+        compute_shannon_diversity(EZG_CropRotViz_intersection, agg_cols, "EZG", EZGs)
+      } else if (input$AreaType == "aoi" &&
+                 exists("AOI_CropRotViz_intersection") &&
+                 !is.null(AOI_CropRotViz_intersection) &&
+                 !identical(AOI_CropRotViz_intersection, NA) &&
+                 exists("AOIs") && !is.null(AOIs) && !identical(AOIs, NA)) {
+        compute_shannon_diversity(AOI_CropRotViz_intersection, agg_cols, "AOI_name", AOIs)
+      } else {
+        compute_shannon_diversity(district_CropRotViz_intersection, agg_cols, "District", Districts)
+      }
+    })
+
+    output$shannon_map <- renderLeaflet({
+      req(shannon_data())
+      group <- switch(input$AreaType,
+                      "districts" = "District",
+                      "ezg"       = "EZG",
+                      "aoi"       = "AOI_name",
+                      "District")
+      create_shannon_map(shannon_data(), group_col = group)
+    })
+
+    output$shannon_ranking <- renderPlotly({
+      req(shannon_data())
+      group <- switch(input$AreaType,
+                      "districts" = "District",
+                      "ezg"       = "EZG",
+                      "aoi"       = "AOI_name",
+                      "District")
+      create_shannon_ranking(shannon_data(), group_col = group)
+    })
+
     # ==============================================================================
     # ROTATION RANKING TAB LOGIC
     # ==============================================================================
@@ -3271,6 +3849,7 @@ viz_server <- function(input, output, session, app_data, input_dir) {
     ranking_rotation_results <- reactiveVal(NULL)
     ranking_available_years <- reactiveVal(NULL)
     ranking_spatial_label <- reactiveVal("Full Area")
+    ranking_map_data <- reactiveVal(NULL)  # Pre-computed spatial data for the dominant rotation map
     
     # Extract available years from CropRotViz_intersection
     observe({
@@ -3306,35 +3885,19 @@ viz_server <- function(input, output, session, app_data, input_dir) {
     })
     
     # Reactive expression to calculate area range from aggregated rotations
+    # Always uses the full dataset so the slider range stays stable when changing district/catchment
     rotation_area_range <- reactive({
       req(CropRotViz_intersection)
       req(input$ranking_rotation_length)
       req(input$ranking_year_range)
 
       tryCatch({
-        # Determine which dataset to use based on spatial filter
-        data_to_analyze <- CropRotViz_intersection
-
-        if (!is.null(input$ranking_spatial_type) && input$ranking_spatial_type != "full") {
-          if (input$ranking_spatial_type == "District" && !is.null(input$ranking_district_sel)) {
-            data_to_analyze <- district_CropRotViz_intersection[[input$ranking_district_sel]]
-            if (!inherits(data_to_analyze, "data.table")) {
-              data_to_analyze <- data.table::as.data.table(data_to_analyze)
-            }
-          } else if (input$ranking_spatial_type == "Catchment" && !is.null(input$ranking_catchment_sel)) {
-            data_to_analyze <- EZG_CropRotViz_intersection[[input$ranking_catchment_sel]]
-            if (!inherits(data_to_analyze, "data.table")) {
-              data_to_analyze <- data.table::as.data.table(data_to_analyze)
-            }
-          }
-        }
-
         # Calculate rotations without area filter to get the full range
         start_year <- input$ranking_year_range[1]
         end_year <- input$ranking_year_range[2]
 
         results <- extract_rotations_ranking(
-          data_to_analyze,
+          CropRotViz_intersection,
           input$ranking_rotation_length,
           start_year,
           end_year,
@@ -3439,19 +4002,16 @@ viz_server <- function(input, output, session, app_data, input_dir) {
       }
     })
     
-    # Dynamic UI for spatial filter (district/catchment)
+    # Dynamic UI for spatial filter (district/catchment/AOI)
     output$ranking_spatial_filter_ui <- renderUI({
-      if (is.null(district_CropRotViz_intersection) && is.null(EZG_CropRotViz_intersection)) {
-        return(NULL)
-      }
-      
-      has_districts <- !is.null(district_CropRotViz_intersection) && length(district_CropRotViz_intersection) > 0
-      has_catchments <- !is.null(EZG_CropRotViz_intersection) && length(EZG_CropRotViz_intersection) > 0
-      
-      if (!has_districts && !has_catchments) {
-        return(NULL)
-      }
-      
+      has_districts  <- !is.null(district_CropRotViz_intersection) && length(district_CropRotViz_intersection) > 0
+      has_catchments <- exists("EZG_CropRotViz_intersection") && !is.null(EZG_CropRotViz_intersection) &&
+                        !identical(EZG_CropRotViz_intersection, NA) && length(EZG_CropRotViz_intersection) > 0
+      has_aois       <- exists("AOI_CropRotViz_intersection") && !is.null(AOI_CropRotViz_intersection) &&
+                        !identical(AOI_CropRotViz_intersection, NA) && length(AOI_CropRotViz_intersection) > 0
+
+      if (!has_districts && !has_catchments && !has_aois) return(NULL)
+
       tagList(
         br(),
         h5("Spatial Filter (Optional)"),
@@ -3459,28 +4019,29 @@ viz_server <- function(input, output, session, app_data, input_dir) {
           "ranking_spatial_type",
           "Select Area Type:",
           choices = c("Full Area" = "full",
-                      if (has_districts) "District" else NULL,
-                      if (has_catchments) "Catchment/Basin" else NULL),
+                      if (has_districts)  "District"        else NULL,
+                      if (has_catchments) "Catchment/Basin" else NULL,
+                      if (has_aois)       "Custom Area"     else NULL),
           selected = "full",
           inline = TRUE
         ),
         conditionalPanel(
           condition = "input.ranking_spatial_type == 'District'",
-          selectInput(
-            "ranking_district_sel",
-            "Select District:",
-            choices = if (has_districts) names(district_CropRotViz_intersection) else NULL,
-            selected = if (has_districts) names(district_CropRotViz_intersection)[1] else NULL
-          )
+          selectInput("ranking_district_sel", "Select District:",
+                      choices  = if (has_districts) names(district_CropRotViz_intersection) else NULL,
+                      selected = if (has_districts) names(district_CropRotViz_intersection)[1] else NULL)
         ),
         conditionalPanel(
           condition = "input.ranking_spatial_type == 'Catchment/Basin'",
-          selectInput(
-            "ranking_catchment_sel",
-            "Select Catchment/Basin:",
-            choices = if (has_catchments) names(EZG_CropRotViz_intersection) else NULL,
-            selected = if (has_catchments) names(EZG_CropRotViz_intersection)[1] else NULL
-          )
+          selectInput("ranking_catchment_sel", "Select Catchment/Basin:",
+                      choices  = if (has_catchments) names(EZG_CropRotViz_intersection) else NULL,
+                      selected = if (has_catchments) names(EZG_CropRotViz_intersection)[1] else NULL)
+        ),
+        conditionalPanel(
+          condition = "input.ranking_spatial_type == 'Custom Area'",
+          selectInput("ranking_aoi_sel", "Select Custom Area:",
+                      choices  = if (has_aois) names(AOI_CropRotViz_intersection) else NULL,
+                      selected = if (has_aois) names(AOI_CropRotViz_intersection)[1] else NULL)
         )
       )
     })
@@ -3526,18 +4087,22 @@ viz_server <- function(input, output, session, app_data, input_dir) {
           if (!is.null(input$ranking_spatial_type) && input$ranking_spatial_type != "full") {
             if (input$ranking_spatial_type == "District" && !is.null(input$ranking_district_sel)) {
               data_to_analyze <- district_CropRotViz_intersection[[input$ranking_district_sel]]
-              # Ensure it's a data.table
               if (!inherits(data_to_analyze, "data.table")) {
                 data_to_analyze <- data.table::as.data.table(data_to_analyze)
               }
               spatial_label <- paste("District:", input$ranking_district_sel)
             } else if (input$ranking_spatial_type == "Catchment/Basin" && !is.null(input$ranking_catchment_sel)) {
               data_to_analyze <- EZG_CropRotViz_intersection[[input$ranking_catchment_sel]]
-              # Ensure it's a data.table
               if (!inherits(data_to_analyze, "data.table")) {
                 data_to_analyze <- data.table::as.data.table(data_to_analyze)
               }
               spatial_label <- paste("Catchment:", input$ranking_catchment_sel)
+            } else if (input$ranking_spatial_type == "Custom Area" && !is.null(input$ranking_aoi_sel)) {
+              data_to_analyze <- AOI_CropRotViz_intersection[[input$ranking_aoi_sel]]
+              if (!inherits(data_to_analyze, "data.table")) {
+                data_to_analyze <- data.table::as.data.table(data_to_analyze)
+              }
+              spatial_label <- paste("Custom Area:", input$ranking_aoi_sel)
             }
           }
           
@@ -3562,7 +4127,142 @@ viz_server <- function(input, output, session, app_data, input_dir) {
           
           ranking_rotation_results(results)
           ranking_spatial_label(spatial_label)
-          
+
+          # Pre-compute dominant rotation map data for all districts/catchments
+          # This is stored so the map doesn't need to recompute on every input change
+          if (!is.null(input$ranking_spatial_type) && input$ranking_spatial_type != "full") {
+            tryCatch({
+              spatial_data <- NULL
+              dominant_rotations <- data.frame()
+
+              if (input$ranking_spatial_type == "District") {
+                if (exists("Districts") && !is.null(Districts) && exists("district_CropRotViz_intersection")) {
+                  spatial_data <- Districts
+                  for (district_name in names(district_CropRotViz_intersection)) {
+                    district_data <- district_CropRotViz_intersection[[district_name]]
+                    if (!inherits(district_data, "data.table")) {
+                      district_data <- data.table::as.data.table(district_data)
+                    }
+                    dist_results <- extract_rotations_ranking(
+                      district_data, input$ranking_rotation_length,
+                      input$ranking_year_range[1], input$ranking_year_range[2],
+                      min_area = min_area_val, max_area = max_area_val,
+                      excluded_crops = excluded_crops_val, specific_crop = specific_crop_val
+                    )
+                    if (nrow(dist_results) > 0) {
+                      dominant_rotations <- rbind(dominant_rotations, data.frame(
+                        area_name = district_name,
+                        dominant_rotation = dist_results$rotation[1],
+                        area_ha = dist_results$area_ha[1],
+                        percentage = dist_results$percentage[1],
+                        stringsAsFactors = FALSE
+                      ))
+                    }
+                  }
+                  if (nrow(dominant_rotations) > 0) {
+                    spatial_data <- merge(spatial_data, dominant_rotations,
+                                          by.x = "NAME_3", by.y = "area_name", all.x = TRUE)
+                  }
+                  if (exists("diversity_data") && is.list(diversity_data) && length(diversity_data) >= 1 &&
+                      !is.null(diversity_data[[1]]) && is.list(diversity_data[[1]]) &&
+                      !is.null(diversity_data[[1]][[1]]) && "BS_mean" %in% names(diversity_data[[1]][[1]])) {
+                    bs_data <- sf::st_drop_geometry(diversity_data[[1]][[1]])[, c("District", "BS_mean")]
+                    spatial_data <- merge(spatial_data, bs_data, by.x = "NAME_3", by.y = "District", all.x = TRUE)
+                  }
+                }
+              } else if (input$ranking_spatial_type == "Catchment/Basin") {
+                if (exists("EZGs") && !is.null(EZGs) && exists("EZG_CropRotViz_intersection")) {
+                  spatial_data <- EZGs
+                  for (ezg_name in names(EZG_CropRotViz_intersection)) {
+                    ezg_data <- EZG_CropRotViz_intersection[[ezg_name]]
+                    if (!inherits(ezg_data, "data.table")) {
+                      ezg_data <- data.table::as.data.table(ezg_data)
+                    }
+                    ezg_results <- extract_rotations_ranking(
+                      ezg_data, input$ranking_rotation_length,
+                      input$ranking_year_range[1], input$ranking_year_range[2],
+                      min_area = min_area_val, max_area = max_area_val,
+                      excluded_crops = excluded_crops_val, specific_crop = specific_crop_val
+                    )
+                    if (nrow(ezg_results) > 0) {
+                      dominant_rotations <- rbind(dominant_rotations, data.frame(
+                        area_name = ezg_name,
+                        dominant_rotation = ezg_results$rotation[1],
+                        area_ha = ezg_results$area_ha[1],
+                        percentage = ezg_results$percentage[1],
+                        stringsAsFactors = FALSE
+                      ))
+                    }
+                  }
+                  if (nrow(dominant_rotations) > 0) {
+                    spatial_data <- merge(spatial_data, dominant_rotations,
+                                          by.x = "EZG", by.y = "area_name", all.x = TRUE)
+                  }
+                  if (exists("diversity_data") && is.list(diversity_data) && length(diversity_data) >= 2 &&
+                      !is.null(diversity_data[[2]]) && is.list(diversity_data[[2]]) &&
+                      !is.null(diversity_data[[2]][[1]]) && "BS_mean" %in% names(diversity_data[[2]][[1]])) {
+                    bs_data <- sf::st_drop_geometry(diversity_data[[2]][[1]])[, c("EZG", "BS_mean")]
+                    spatial_data <- merge(spatial_data, bs_data, by = "EZG", all.x = TRUE)
+                  }
+                }
+              } else if (input$ranking_spatial_type == "Custom Area") {
+                if (exists("AOIs") && !is.null(AOIs) && !identical(AOIs, NA) &&
+                    exists("AOI_CropRotViz_intersection") && !is.null(AOI_CropRotViz_intersection)) {
+                  spatial_data <- AOIs
+                  for (aoi_name in names(AOI_CropRotViz_intersection)) {
+                    aoi_data_r <- AOI_CropRotViz_intersection[[aoi_name]]
+                    if (!inherits(aoi_data_r, "data.table")) {
+                      aoi_data_r <- data.table::as.data.table(aoi_data_r)
+                    }
+                    aoi_results <- extract_rotations_ranking(
+                      aoi_data_r, input$ranking_rotation_length,
+                      input$ranking_year_range[1], input$ranking_year_range[2],
+                      min_area = min_area_val, max_area = max_area_val,
+                      excluded_crops = excluded_crops_val, specific_crop = specific_crop_val
+                    )
+                    if (nrow(aoi_results) > 0) {
+                      dominant_rotations <- rbind(dominant_rotations, data.frame(
+                        area_name = aoi_name,
+                        dominant_rotation = aoi_results$rotation[1],
+                        area_ha = aoi_results$area_ha[1],
+                        percentage = aoi_results$percentage[1],
+                        stringsAsFactors = FALSE
+                      ))
+                    }
+                  }
+                  if (nrow(dominant_rotations) > 0) {
+                    spatial_data <- merge(spatial_data, dominant_rotations,
+                                          by.x = "AOI_name", by.y = "area_name", all.x = TRUE)
+                  }
+                  if (exists("diversity_data") && is.list(diversity_data) && length(diversity_data) >= 3 &&
+                      !is.null(diversity_data[[3]]) && is.list(diversity_data[[3]]) &&
+                      !is.null(diversity_data[[3]][[1]]) && "BS_mean" %in% names(diversity_data[[3]][[1]])) {
+                    bs_data <- sf::st_drop_geometry(diversity_data[[3]][[1]])[, c("AOI_name", "BS_mean")]
+                    spatial_data <- merge(spatial_data, bs_data, by = "AOI_name", all.x = TRUE)
+                  }
+                }
+              }
+
+              # Store spatial type alongside the data for the renderLeaflet
+              ranking_map_data(list(
+                spatial_data = spatial_data,
+                spatial_type = input$ranking_spatial_type,
+                rotation_length = input$ranking_rotation_length,
+                year_start = start_year,
+                year_end = end_year,
+                min_area = min_area_val,
+                max_area = max_area_val,
+                excluded_crops = excluded_crops_val,
+                specific_crop = specific_crop_val
+              ))
+            }, error = function(e) {
+              warning("Error computing map data: ", e$message)
+              ranking_map_data(NULL)
+            })
+          } else {
+            ranking_map_data(NULL)
+          }
+
           showNotification(
             paste("Analysis complete!", nrow(results), "unique rotations found for", spatial_label),
             type = "message",
@@ -3816,149 +4516,29 @@ viz_server <- function(input, output, session, app_data, input_dir) {
     })
     
     # Leaflet map for selected spatial area showing dominant rotations
+    # Only re-renders when ranking_map_data() changes (i.e., when Analyze button is clicked)
     output$ranking_spatial_map <- renderLeaflet({
-      req(input$ranking_spatial_type)
-      
-      if (is.null(input$ranking_spatial_type) || input$ranking_spatial_type == "full") {
+      req(ranking_map_data())
+
+      map_info <- ranking_map_data()
+      spatial_data <- map_info$spatial_data
+      spatial_type <- map_info$spatial_type
+      rotation_length <- map_info$rotation_length
+
+      if (is.null(spatial_data) || nrow(spatial_data) == 0) {
         return(NULL)
       }
-      
+
       tryCatch({
-        # Get parameters
-        rotation_length <- input$ranking_rotation_length
-        start_year <- input$ranking_year_range[1]
-        end_year <- input$ranking_year_range[2]
-        min_area_val <- if (!is.null(input$ranking_area_range)) input$ranking_area_range[1] else NULL
-        max_area_val <- if (!is.null(input$ranking_area_range)) input$ranking_area_range[2] else NULL
-        excluded_crops_val <- if (!is.null(input$ranking_excluded_crops)) input$ranking_excluded_crops else NULL
-        specific_crop_val <- if (!is.null(input$ranking_specific_crop) && length(input$ranking_specific_crop) > 0) input$ranking_specific_crop else NULL
-        
-        spatial_data <- NULL
-        dominant_rotations <- data.frame()
-        
-        if (input$ranking_spatial_type == "District") {
-          # Calculate dominant rotation for each district
-          if (exists("Districts") && !is.null(Districts) && exists("district_CropRotViz_intersection")) {
-            spatial_data <- Districts
-            
-            for (district_name in names(district_CropRotViz_intersection)) {
-              district_data <- district_CropRotViz_intersection[[district_name]]
-              
-              # Ensure it's a data.table
-              if (!inherits(district_data, "data.table")) {
-                district_data <- data.table::as.data.table(district_data)
-              }
-              
-              # Get rotations for this district
-              results <- extract_rotations_ranking(
-                district_data,
-                rotation_length,
-                start_year,
-                end_year,
-                min_area = min_area_val,
-                max_area = max_area_val,
-                excluded_crops = excluded_crops_val,
-                specific_crop = specific_crop_val
-              )
-              
-              if (nrow(results) > 0) {
-                # Get the dominant (top) rotation
-                dominant_rotations <- rbind(
-                  dominant_rotations,
-                  data.frame(
-                    area_name = district_name,
-                    dominant_rotation = results$rotation[1],
-                    area_ha = results$area_ha[1],
-                    percentage = results$percentage[1],
-                    stringsAsFactors = FALSE
-                  )
-                )
-              }
-            }
-            
-            # Merge with spatial data
-            if (nrow(dominant_rotations) > 0) {
-              spatial_data <- merge(spatial_data, dominant_rotations,
-                                    by.x = "NAME_3", by.y = "area_name", all.x = TRUE)
-            }
-
-            # Merge BS_mean from diversity_data if available
-            if (exists("diversity_data") && is.list(diversity_data) && length(diversity_data) >= 1 &&
-                !is.null(diversity_data[[1]]) && is.list(diversity_data[[1]]) &&
-                !is.null(diversity_data[[1]][[1]]) && "BS_mean" %in% names(diversity_data[[1]][[1]])) {
-              bs_data <- sf::st_drop_geometry(diversity_data[[1]][[1]])[, c("District", "BS_mean")]
-              spatial_data <- merge(spatial_data, bs_data, by.x = "NAME_3", by.y = "District", all.x = TRUE)
-            }
-          }
-        } else if (input$ranking_spatial_type == "Catchment/Basin") {
-          # Calculate dominant rotation for each catchment
-          if (exists("EZGs") && !is.null(EZGs) && exists("EZG_CropRotViz_intersection")) {
-            spatial_data <- EZGs
-            
-            for (ezg_name in names(EZG_CropRotViz_intersection)) {
-              ezg_data <- EZG_CropRotViz_intersection[[ezg_name]]
-              
-              # Ensure it's a data.table
-              if (!inherits(ezg_data, "data.table")) {
-                ezg_data <- data.table::as.data.table(ezg_data)
-              }
-              
-              # Get rotations for this catchment
-              results <- extract_rotations_ranking(
-                ezg_data,
-                rotation_length,
-                start_year,
-                end_year,
-                min_area = min_area_val,
-                max_area = max_area_val,
-                excluded_crops = excluded_crops_val,
-                specific_crop = specific_crop_val
-              )
-              
-              if (nrow(results) > 0) {
-                # Get the dominant (top) rotation
-                dominant_rotations <- rbind(
-                  dominant_rotations,
-                  data.frame(
-                    area_name = ezg_name,
-                    dominant_rotation = results$rotation[1],
-                    area_ha = results$area_ha[1],
-                    percentage = results$percentage[1],
-                    stringsAsFactors = FALSE
-                  )
-                )
-              }
-            }
-            
-            # Merge with spatial data
-            if (nrow(dominant_rotations) > 0) {
-              spatial_data <- merge(spatial_data, dominant_rotations,
-                                    by.x = "EZG", by.y = "area_name", all.x = TRUE)
-            }
-
-            # Merge BS_mean from diversity_data if available
-            if (exists("diversity_data") && is.list(diversity_data) && length(diversity_data) >= 2 &&
-                !is.null(diversity_data[[2]]) && is.list(diversity_data[[2]]) &&
-                !is.null(diversity_data[[2]][[1]]) && "BS_mean" %in% names(diversity_data[[2]][[1]])) {
-              bs_data <- sf::st_drop_geometry(diversity_data[[2]][[1]])[, c("EZG", "BS_mean")]
-              spatial_data <- merge(spatial_data, bs_data, by = "EZG", all.x = TRUE)
-            }
-          }
-        }
-
-        if (is.null(spatial_data) || nrow(spatial_data) == 0) {
-          return(NULL)
-        }
-        
         # Transform to WGS84 if needed (Leaflet requires WGS84)
         if (sf::st_crs(spatial_data) != 4326) {
           spatial_data <- sf::st_transform(spatial_data, 4326)
         }
-        
+
         # Create color palette for dominant rotations
         if ("dominant_rotation" %in% names(spatial_data)) {
           unique_rotations <- unique(spatial_data$dominant_rotation[!is.na(spatial_data$dominant_rotation)])
-          
+
           if (length(unique_rotations) > 0) {
             # Use a color palette
             pal <- colorFactor(
@@ -3966,30 +4546,26 @@ viz_server <- function(input, output, session, app_data, input_dir) {
               domain = unique_rotations,
               na.color = "#808080"
             )
-            
+
             # Create labels for hover
             labels <- sprintf(
               "<strong>%s</strong><br/>Dominant Rotation: %s<br/>Area: %.1f km²<br/>Percentage: %.1f%%",
-              if (input$ranking_spatial_type == "District") spatial_data$NAME_3 else spatial_data$EZG,
+              if (spatial_type == "District") spatial_data$NAME_3 else spatial_data$EZG,
               ifelse(!is.na(spatial_data$dominant_rotation), spatial_data$dominant_rotation, "No data"),
               ifelse(!is.na(spatial_data$area_ha), spatial_data$area_ha, 0),
               ifelse(!is.na(spatial_data$percentage), spatial_data$percentage, 0)
             ) %>% lapply(htmltools::HTML)
-            
-            # Get the selected area for red border highlight
+
+            # Get the selected area for red border highlight (isolate to prevent re-render on selection change)
             selected_area <- NULL
-            if (input$ranking_spatial_type == "District" && !is.null(input$ranking_district_sel)) {
-              selected_area <- spatial_data[if (input$ranking_spatial_type == "District")
-                spatial_data$NAME_3 == input$ranking_district_sel
-                else FALSE, ]
-            } else if (input$ranking_spatial_type == "Catchment/Basin" && !is.null(input$ranking_catchment_sel)) {
-              selected_area <- spatial_data[if (input$ranking_spatial_type == "Catchment/Basin")
-                spatial_data$EZG == input$ranking_catchment_sel
-                else FALSE, ]
+            if (spatial_type == "District" && !is.null(isolate(input$ranking_district_sel))) {
+              selected_area <- spatial_data[spatial_data$NAME_3 == isolate(input$ranking_district_sel), ]
+            } else if (spatial_type == "Catchment/Basin" && !is.null(isolate(input$ranking_catchment_sel))) {
+              selected_area <- spatial_data[spatial_data$EZG == isolate(input$ranking_catchment_sel), ]
             }
-            
+
             # Create leaflet map with color-coded areas
-            map <- leaflet(spatial_data) %>%
+            map <- leaflet(spatial_data, options = leafletOptions(zoomSnap = 0.5, zoomDelta = 0.5, wheelPxPerZoomLevel = 120)) %>%
               addTiles(group = "Base Map") %>%
               addPolygons(
                 fillColor = ~pal(dominant_rotation),
@@ -4013,27 +4589,24 @@ viz_server <- function(input, output, session, app_data, input_dir) {
                 position = "bottomright",
                 na.label = "No data"
               )
-            
+
             # Add soil potential (BS) layer if available
-            # Check if BS_mean column exists in the spatial data
             has_BS <- "BS_mean" %in% names(spatial_data)
-            
+
             if (has_BS) {
               tryCatch({
-                # Create color palette for BS values (using domain from data directly like diversity_mapper)
                 bs_pal <- colorNumeric(
                   palette = c(low = "#ffffcc", high = "#800026"),
                   domain = spatial_data$BS_mean,
                   na.color = "transparent"
                 )
-                
-                # Add BS polygon layer (using same polygons as spatial_data)
+
                 map <- map %>%
                   addPolygons(
                     data = spatial_data,
                     fillColor = ~bs_pal(BS_mean),
-                    fillOpacity = 0.9,  # Match diversity_mapper opacity
-                    weight = 0.1,       # Match diversity_mapper weight
+                    fillOpacity = 0.9,
+                    weight = 0.1,
                     color = "black",
                     group = "Soil Potential",
                     popup = ~paste0(
@@ -4062,7 +4635,7 @@ viz_server <- function(input, output, session, app_data, input_dir) {
                 warning("Could not add BS layer to map: ", e$message)
               })
             }
-            
+
             # Add red border for selected area
             if (!is.null(selected_area) && nrow(selected_area) > 0) {
               map <- map %>%
@@ -4077,7 +4650,7 @@ viz_server <- function(input, output, session, app_data, input_dir) {
                   group = "Selected Area"
                 )
             }
-            
+
             # Add layers control - conditional based on BS availability
             if (has_BS) {
               map <- map %>%
@@ -4087,13 +4660,13 @@ viz_server <- function(input, output, session, app_data, input_dir) {
                   position = "topleft"
                 )
             }
-            
+
             return(map)
           }
         }
-        
+
         # Fallback: show simple boundaries if no rotation data
-        leaflet(spatial_data) %>%
+        leaflet(spatial_data, options = leafletOptions(zoomSnap = 0.5, zoomDelta = 0.5, wheelPxPerZoomLevel = 120)) %>%
           addTiles() %>%
           addPolygons(
             fillColor = "rgb(0,86,157)",
@@ -4102,13 +4675,63 @@ viz_server <- function(input, output, session, app_data, input_dir) {
             color = "rgb(0,86,157)",
             dashArray = "5,5"
           )
-        
+
       }, error = function(e) {
-        # Return NULL on error
         return(NULL)
       })
     })
     
+    # Update red border highlight when district/catchment selection changes (without re-rendering entire map)
+    observeEvent(input$ranking_district_sel, {
+      req(input$ranking_spatial_type == "District")
+      proxy <- leafletProxy("ranking_spatial_map")
+      proxy %>% clearGroup("Selected Area")
+      if (!is.null(input$ranking_district_sel) && exists("Districts") && !is.null(Districts)) {
+        selected_area <- Districts[Districts$NAME_3 == input$ranking_district_sel, ]
+        if (nrow(selected_area) > 0) {
+          if (sf::st_crs(selected_area) != sf::st_crs(4326)) {
+            selected_area <- sf::st_transform(selected_area, 4326)
+          }
+          proxy %>%
+            addPolygons(
+              data = selected_area,
+              fillColor = "transparent",
+              fillOpacity = 0,
+              weight = 4,
+              color = "red",
+              opacity = 1,
+              dashArray = NULL,
+              group = "Selected Area"
+            )
+        }
+      }
+    }, ignoreNULL = FALSE)
+
+    observeEvent(input$ranking_catchment_sel, {
+      req(input$ranking_spatial_type == "Catchment/Basin")
+      proxy <- leafletProxy("ranking_spatial_map")
+      proxy %>% clearGroup("Selected Area")
+      if (!is.null(input$ranking_catchment_sel) && exists("EZGs") && !is.null(EZGs)) {
+        selected_area <- EZGs[EZGs$EZG == input$ranking_catchment_sel, ]
+        if (nrow(selected_area) > 0) {
+          if (sf::st_crs(selected_area) != sf::st_crs(4326)) {
+            selected_area <- sf::st_transform(selected_area, 4326)
+          }
+          proxy %>%
+            addPolygons(
+              data = selected_area,
+              fillColor = "transparent",
+              fillOpacity = 0,
+              weight = 4,
+              color = "red",
+              opacity = 1,
+              dashArray = NULL,
+              group = "Selected Area"
+            )
+        }
+      }
+    }, ignoreNULL = FALSE)
+
     # Download Handler
     output$ranking_download_data <- downloadHandler(
       filename = function() {
@@ -4120,6 +4743,70 @@ viz_server <- function(input, output, session, app_data, input_dir) {
       content = function(file) {
         req(ranking_rotation_results())
         write.csv(ranking_rotation_results(), file, row.names = FALSE)
+      }
+    )
+
+    # Shapefile export for the Dominant Rotation Map, including the soil potential
+    # (BS_mean) column when available and a companion settings file describing the
+    # analysis parameters used to generate the map.
+    output$ranking_download_shp <- downloadHandler(
+      filename = function() {
+        paste0("rotation_ranking_map_",
+               input$ranking_rotation_length, "years_",
+               input$ranking_year_range[1], "-", input$ranking_year_range[2], "_",
+               format(Sys.Date(), "%Y%m%d"), ".zip")
+      },
+      contentType = "application/zip",
+      content = function(file) {
+        req(ranking_map_data())
+        map_info <- ranking_map_data()
+        spatial_data <- map_info$spatial_data
+        req(!is.null(spatial_data), inherits(spatial_data, "sf"))
+
+        export_dir <- tempfile("ranking_shp_")
+        dir.create(export_dir)
+        on.exit(unlink(export_dir, recursive = TRUE), add = TRUE)
+
+        shp_path <- file.path(export_dir, "dominant_rotation_map.shp")
+        sf::st_write(sf::st_make_valid(spatial_data), shp_path,
+                     driver = "ESRI Shapefile", quiet = TRUE, append = FALSE, delete_layer = TRUE)
+
+        has_soil <- "BS_mean" %in% names(spatial_data)
+
+        meta_lines <- c(
+          "CropRotationViz - Dominant Rotation Map Export",
+          paste("Export date:", format(Sys.time(), "%Y-%m-%d %H:%M:%S")),
+          "",
+          "Analysis settings used to generate this map:",
+          paste("  Spatial extent type:", map_info$spatial_type),
+          paste("  Rotation length (years):", map_info$rotation_length),
+          paste("  Year range:", map_info$year_start, "-", map_info$year_end),
+          paste("  Minimum area filter (ha):",
+                if (is.null(map_info$min_area)) "none" else map_info$min_area),
+          paste("  Maximum area filter (ha):",
+                if (is.null(map_info$max_area)) "none" else map_info$max_area),
+          paste("  Excluded crops:",
+                if (is.null(map_info$excluded_crops) || length(map_info$excluded_crops) == 0) "none"
+                else paste(map_info$excluded_crops, collapse = ", ")),
+          paste("  Specific crop filter:",
+                if (is.null(map_info$specific_crop) || length(map_info$specific_crop) == 0) "none"
+                else paste(map_info$specific_crop, collapse = ", ")),
+          "",
+          paste("Soil potential (Bodenschaetzung, column 'BS_mean') included:",
+                if (has_soil) "yes" else "no - not available for this dataset")
+        )
+        writeLines(meta_lines, file.path(export_dir, "export_settings.txt"))
+
+        zip_files <- list.files(export_dir, full.names = FALSE)
+
+        if (requireNamespace("zip", quietly = TRUE)) {
+          zip::zip(file, files = zip_files, root = export_dir)
+        } else {
+          old_wd <- getwd()
+          setwd(export_dir)
+          on.exit(setwd(old_wd), add = TRUE, after = FALSE)
+          utils::zip(file, files = zip_files)
+        }
       }
     )
 
@@ -4152,6 +4839,18 @@ viz_server <- function(input, output, session, app_data, input_dir) {
         "Select Catchment:",
         choices = names(EZG_CropRotViz_intersection),
         selected = names(EZG_CropRotViz_intersection)[1]
+      )
+    })
+
+    # UI for custom area (AOI) selection in analysis tab
+    output$analysis_aoi_ui <- renderUI({
+      req(exists("AOI_CropRotViz_intersection") && !is.null(AOI_CropRotViz_intersection) &&
+          !identical(AOI_CropRotViz_intersection, NA))
+      selectInput(
+        "analysis_aoi_sel",
+        "Select Custom Area:",
+        choices = names(AOI_CropRotViz_intersection),
+        selected = names(AOI_CropRotViz_intersection)[1]
       )
     })
 
@@ -4227,6 +4926,11 @@ viz_server <- function(input, output, session, app_data, input_dir) {
               }
             } else if (input$analysis_spatial_type == "catchment" && !is.null(input$analysis_catchment_sel)) {
               data_to_analyze <- EZG_CropRotViz_intersection[[input$analysis_catchment_sel]]
+              if (!inherits(data_to_analyze, "data.table")) {
+                data_to_analyze <- data.table::as.data.table(data_to_analyze)
+              }
+            } else if (input$analysis_spatial_type == "aoi" && !is.null(input$analysis_aoi_sel)) {
+              data_to_analyze <- AOI_CropRotViz_intersection[[input$analysis_aoi_sel]]
               if (!inherits(data_to_analyze, "data.table")) {
                 data_to_analyze <- data.table::as.data.table(data_to_analyze)
               }
@@ -4327,6 +5031,7 @@ viz_server <- function(input, output, session, app_data, input_dir) {
               summary = mono_summary,
               details = monocultures,
               total_fields = nrow(df),
+              total_area = sum(df$freq, na.rm = TRUE),
               mono_fields = nrow(monocultures),
               mono_area = sum(monocultures$freq, na.rm = TRUE)
             ))
@@ -4335,6 +5040,7 @@ viz_server <- function(input, output, session, app_data, input_dir) {
               summary = data.frame(),
               details = data.frame(),
               total_fields = nrow(df),
+              total_area = sum(df$freq, na.rm = TRUE),
               mono_fields = 0,
               mono_area = 0
             ))
@@ -4539,7 +5245,10 @@ viz_server <- function(input, output, session, app_data, input_dir) {
 
     output$monoculture_percentage <- renderText({
       req(monoculture_data())
-      paste0(round(monoculture_data()$mono_fields / monoculture_data()$total_fields * 100, 1), "%")
+      total_area <- monoculture_data()$total_area
+      mono_area  <- monoculture_data()$mono_area
+      if (is.null(total_area) || total_area == 0) return("N/A")
+      paste0(round(mono_area / total_area * 100, 1), "%")
     })
 
     output$monoculture_area <- renderText({
@@ -4708,7 +5417,7 @@ viz_server <- function(input, output, session, app_data, input_dir) {
     })
 
     output$cluster_area_chart <- renderPlotly({
-      req(cluster_data())
+      req(cluster_data(), cluster_colors_palette())
 
       summary_df <- cluster_data()$summary
 
@@ -4717,7 +5426,7 @@ viz_server <- function(input, output, session, app_data, input_dir) {
                  layout(title = "No clusters generated"))
       }
 
-      colors <- RColorBrewer::brewer.pal(min(nrow(summary_df), 8), "Set2")
+      colors <- cluster_colors_palette()
 
       plot_ly(
         data = summary_df,
@@ -4742,7 +5451,7 @@ viz_server <- function(input, output, session, app_data, input_dir) {
 
     # Cluster Separability Scatter Plot
     output$cluster_scatter_plot <- renderPlotly({
-      req(cluster_data())
+      req(cluster_data(), cluster_colors_palette())
 
       patterns_df <- cluster_data()$patterns
 
@@ -4759,7 +5468,7 @@ viz_server <- function(input, output, session, app_data, input_dir) {
 
       # Get cluster colors
       n_clusters <- length(unique(patterns_df$cluster))
-      cluster_colors <- RColorBrewer::brewer.pal(max(min(n_clusters, 8), 3), "Set2")
+      cluster_colors <- cluster_colors_palette()
 
       # Create scatter plot
       plot_ly(
