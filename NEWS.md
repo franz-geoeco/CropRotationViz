@@ -1,6 +1,32 @@
 
+# CropRotationViz 1.1.3
+
 # CropRotationViz 1.1.2
 
+* Sped up the "Plot Sequence" and "Plot Crop Specific Sequence" tabs in the
+  visualization app by rewriting `transform_rotation_data()` (used by both
+  tabs) with `data.table` instead of `dplyr`/`tidyr`: the row-wise crop
+  filters and the wide-to-long reshape were the main cost on large datasets.
+  An initial version of this rewrite still converted the whole (potentially
+  very large) `distribution_df` to a `data.table` up front, which cost about
+  as much as it saved and left the tabs about as slow as before; the fix
+  avoids that conversion entirely and filters directly on the source
+  data frame's columns. Measured ~2.4x faster at ~900k fields, with
+  identical output verified against the original implementation.
+* Fixed unstable color scaling on the crop-specific area distribution map
+  (Crop-Specific Analysis tab): the color scale used to be recalculated from
+  whatever district/catchment/year happened to be on screen, so the same
+  color could mean different area percentages depending on what was
+  currently displayed. The scale is now fixed once per crop selection, using
+  the global min/max area percentage across every district and catchment,
+  every year, and their per-region averages, so colors stay comparable
+  across views.
+* Added a "Download Map (Shapefile)" export for the crop-specific area
+  distribution map (Crop-Specific Analysis tab). Regardless of whether a
+  single year or the complete average is currently displayed, the export
+  always includes every year as its own column (`pct_<year>`) plus the
+  average (`pct_avg`); the geometry (districts vs catchments) still follows
+  whichever map type is currently selected.
 * Added a "Download Map (Shapefile)" export for the Dominant Rotation Map on the
   Rotation Ranking tab, including the soil potential (`BS_mean`) column when
   available, plus a companion settings file recording the analysis parameters

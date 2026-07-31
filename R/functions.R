@@ -2001,10 +2001,8 @@ create_multi_year_donut <- function(data, year_columns, title = "Crop Distributi
 #'   \item{key}{Factor, crop type}
 #'   \item{year}{Numeric, year of rotation}
 #' 
-#' @importFrom dplyr %>% mutate filter select if_any row_number rename
-#' @importFrom tidyr pivot_longer
 #' @importFrom forcats fct_reorder
-#' @importFrom stringr str_remove
+#' @importFrom data.table setDT melt setnames
 #' @examples
 #' \dontrun{
 #' rotation_data <- transform_rotation_data(
@@ -2015,7 +2013,7 @@ create_multi_year_donut <- function(data, year_columns, title = "Crop Distributi
 #'   type = "basic"
 #' )
 #' }
-#' 
+#'
 #' @export
 transform_rotation_data <- function(All_rot_big, distribution_df, input_area_range, choices, selected_crops, type, specific_crop = NULL, district = NULL, EZG = NULL, AOI_name = NULL) {
   # Input validation with more informative messages
@@ -2023,99 +2021,117 @@ transform_rotation_data <- function(All_rot_big, distribution_df, input_area_ran
     stop("All_rot_big must be a data frame or list. Received object of class: ", class(All_rot_big))
   }
   if (!is.numeric(input_area_range) || length(input_area_range) != 2) {
-    stop("input_area_range must be a numeric vector of length 2. Received: ", 
+    stop("input_area_range must be a numeric vector of length 2. Received: ",
          paste(input_area_range, collapse = ", "))
   }
   if (type == "specific" && is.null(specific_crop)) {
     stop("specific_crop must be provided when type is 'specific'")
   }
-  
-  tryCatch({
-    # Apply type-specific filtering
-    cols_to_exclude_meta <- intersect(c("area", "District", "EZG", "AOI_name"), names(distribution_df))
 
-    pre_data <- if (type == "basic") {
-      distribution_df %>%
-        filter(!if_any(-all_of(cols_to_exclude_meta), ~ . %in% setdiff(choices, selected_crops)))
-    } else if (type == "specific") {
-      distribution_df %>%
-        filter(if_any(-all_of(cols_to_exclude_meta), ~grepl(specific_crop, ., fixed = TRUE)))
-    } else if (type == "district") {
-      subset(distribution_df, District == district) %>%
-        filter(!if_any(-all_of(cols_to_exclude_meta), ~ . %in% setdiff(choices, selected_crops)))
+  # Vectorized replacements for dplyr::if_any(): check, across a set of columns,
+  # whether *any* row has a value in `set` (exact match) or contains `pattern`
+  # (fixed substring). These run on the full unfiltered table, which is where
+  # if_any()/across() overhead was most noticeable, so plain data.table column
+  # access + %chin% (fast character matching) replaces it here.
+  any_col_in_set <- function(dt, cols, set) {
+    if (length(cols) == 0 || length(set) == 0) return(rep(FALSE, nrow(dt)))
+    Reduce(`|`, lapply(cols, function(cl) dt[[cl]] %chin% set))
+  }
+  any_col_grepl <- function(dt, cols, pattern) {
+    if (length(cols) == 0) return(rep(FALSE, nrow(dt)))
+    Reduce(`|`, lapply(cols, function(cl) grepl(pattern, dt[[cl]], fixed = TRUE)))
+  }
+
+  tryCatch({
+    # No upfront as.data.table()/setDT() conversion of `distribution_df` here:
+    # %chin%/grepl only need plain character vectors (which distribution_df[[col]]
+    # already provides) and two-argument `df[mask, ]` subsetting works the same
+    # for a data.frame or a data.table. Converting the whole (potentially very
+    # large, hundreds of thousands of rows) distribution_df to a data.table
+    # up front was measured to cost about as much as if_any() itself saved,
+    # netting out close to zero gain - so it's skipped entirely.
+    cols_to_exclude_meta <- intersect(c("area", "District", "EZG", "AOI_name"), names(distribution_df))
+    dist_year_cols <- setdiff(names(distribution_df), cols_to_exclude_meta)
+
+    # Restrict to the selected spatial scope first (matches the original subset() calls).
+    # Plain `$`-based comparison, unlike data.table/subset() NSE, can't collide
+    # with the EZG/AOI_name parameter names, so no ezg_val/aoi_val renaming is needed.
+    scoped_dist <- if (type == "district") {
+      distribution_df[distribution_df$District == district, ]
     } else if (type == "basin") {
       if (!"EZG" %in% names(distribution_df)) {
         stop("EZG column not found in the dataset")
       }
-      ezg_val <- EZG
-      subset(distribution_df, EZG == ezg_val) %>%
-        filter(!if_any(-all_of(cols_to_exclude_meta), ~ . %in% setdiff(choices, selected_crops)))
+      distribution_df[distribution_df$EZG == EZG, ]
     } else if (type == "aoi") {
       if (!"AOI_name" %in% names(distribution_df)) {
         stop("AOI_name column not found in the dataset")
       }
-      aoi_val <- AOI_name
-      subset(distribution_df, AOI_name == aoi_val) %>%
-        filter(!if_any(-all_of(cols_to_exclude_meta), ~ . %in% setdiff(choices, selected_crops)))
+      distribution_df[distribution_df$AOI_name == AOI_name, ]
+    } else {
+      distribution_df
     }
 
-    pre_data <- pre_data %>%
-      filter(area/1e6 >= input_area_range[1], area/1e6 <= input_area_range[2])
+    pre_data <- if (type == "specific") {
+      scoped_dist[any_col_grepl(scoped_dist, dist_year_cols, specific_crop), ]
+    } else {
+      excluded_crops <- setdiff(choices, selected_crops)
+      scoped_dist[!any_col_in_set(scoped_dist, dist_year_cols, excluded_crops), ]
+    }
 
-    rotation_data <- if (type == "basic") {
-      All_rot_big %>%
-        filter(!if_any(-c(freq, id), ~ . %in% setdiff(choices, selected_crops)))
-    } else if (type == "specific") {
-      All_rot_big %>%
-        filter(if_any(-c(freq, id), ~grepl(specific_crop, ., fixed = TRUE)))
-    } else if (type == "district") {
-      All_rot_big[[district]] %>%
-        filter(!if_any(-c(freq, id), ~ . %in% setdiff(choices, selected_crops)))
+    pre_data <- pre_data[pre_data$area / 1e6 >= input_area_range[1] & pre_data$area / 1e6 <= input_area_range[2], ]
+
+    rot_source <- if (type == "district") {
+      All_rot_big[[district]]
     } else if (type == "basin") {
-      All_rot_big[[EZG]] %>%
-        filter(!if_any(-c(freq, id), ~ . %in% setdiff(choices, selected_crops)))
+      All_rot_big[[EZG]]
     } else if (type == "aoi") {
-      All_rot_big[[AOI_name]] %>%
-        filter(!if_any(-c(freq, id), ~ . %in% setdiff(choices, selected_crops)))
+      All_rot_big[[AOI_name]]
+    } else {
+      All_rot_big
     }
-    
-    rotation_data <- rotation_data %>%
-      filter(freq >= input_area_range[1], freq <= input_area_range[2])
-    
-    if (any(grepl("Aggregated_", names(rotation_data)))) {
-      # Final transformations
-      rotation_data <- rotation_data %>%
-        pivot_longer(
-          cols      = -c(freq, id, rotation),
-          names_to  = "value",
-          values_to = "key"
-        ) %>%
-        mutate(
-          year = as.numeric(str_remove(value, "Aggregated_")),
-          key  = factor(key),
-          key  = fct_reorder(key, -key)
-        ) %>%
-        rename(Area = freq) %>%
-        select(Area, id, value, key, year)
-    }else{
-      # Final transformations
-      rotation_data <- rotation_data %>%
-        pivot_longer(
-          cols      = -c(freq, id, rotation),
-          names_to  = "value",
-          values_to = "key"
-        ) %>%
-        mutate(
-          year = as.numeric(str_remove(value, "Name_")),
-          key  = factor(key),
-          key  = fct_reorder(key, -key)
-        ) %>%
-        rename(Area = freq) %>%
-        select(Area, id, value, key, year)
+    rot_cols <- setdiff(names(rot_source), c("freq", "id"))  # mirrors the original -c(freq, id) exclusion
+
+    rotation_data <- if (type == "specific") {
+      rot_source[any_col_grepl(rot_source, rot_cols, specific_crop), ]
+    } else {
+      excluded_crops <- setdiff(choices, selected_crops)
+      rot_source[!any_col_in_set(rot_source, rot_cols, excluded_crops), ]
     }
-    
+
+    rotation_data <- rotation_data[rotation_data$freq >= input_area_range[1] & rotation_data$freq <= input_area_range[2], ]
+
+    year_prefix <- if (any(grepl("Aggregated_", names(rotation_data)))) "Aggregated_" else "Name_"
+    measure_cols <- grep(paste0("^", year_prefix), names(rotation_data), value = TRUE)
+
+    # rotation_data here is always a freshly-subsetted object (never an alias
+    # of a shared external object, since `[` subsetting above already copied
+    # it), so setDT() can convert it in place at zero extra copy cost, unlike
+    # as.data.table(). data.table::melt() is then a substantially faster
+    # wide-to-long reshape than tidyr::pivot_longer() for wide tables like this.
+    data.table::setDT(rotation_data)
+    rotation_data <- melt(
+      rotation_data,
+      id.vars      = c("freq", "id", "rotation"),
+      measure.vars = measure_cols,
+      variable.name = "value",
+      value.name    = "key",
+      variable.factor = FALSE
+    )
+
+    # Keep this reshape step in data.table too: piping a data.table produced by
+    # melt() into dplyr::mutate()/rename()/select() forces an internal tibble
+    # coercion that was measured to erase most of the gain from using melt()
+    # in the first place, so the equivalent transformation is done with `:=`
+    # and setnames() instead.
+    rotation_data[, year := as.numeric(sub(year_prefix, "", value, fixed = TRUE))]
+    rotation_data[, key := factor(key)]
+    rotation_data[, key := fct_reorder(key, -key)]
+    data.table::setnames(rotation_data, "freq", "Area")
+    rotation_data <- rotation_data[, .(Area, id, value, key, year)]
+
     out_data <- list(rotation_data, pre_data)
-    
+
   }, error = function(e) {
     stop("Error in data transformation: ", e$message)
   })
@@ -2315,6 +2331,136 @@ compute_rotation_base_grouped <- function(All_rot_big, area_range, years) {
 
 #-------------------------------------------------------------------------------------------
 
+#' Compute Global Crop Area Percentage Range
+#'
+#' @description Scans every district and every catchment, across every year
+#' plus their per-region average, to find the global minimum and maximum area
+#' percentage for a given crop. Used to fix a stable color scale for the
+#' crop-specific distribution map so that switching between years, districts,
+#' and catchments doesn't shift what a given color means, keeping visual
+#' comparisons across maps meaningful.
+#'
+#' @param district_list Named list of data frames/data.tables, one per
+#'        district, each with a `freq` column and one or more
+#'        `Aggregated_YYYY`/`Name_YYYY` crop columns. Pass `NULL` if
+#'        district data is not available.
+#' @param ezg_list Named list with the same structure, one per
+#'        catchment/basin. Pass `NULL` or `NA` if catchment data is not
+#'        available.
+#' @param selected_crop Character string, the crop to compute percentages for
+#'
+#' @return Numeric vector of length 2: `c(min_percentage, max_percentage)`.
+#'         Returns `c(0, 1)` if no data is available.
+#'
+#' @export
+compute_crop_percentage_range <- function(district_list, ezg_list, selected_crop) {
+  percentages_for_one_region <- function(region_data) {
+    if (is.null(region_data) || !is.data.frame(region_data) || nrow(region_data) == 0) {
+      return(numeric(0))
+    }
+    crop_cols <- grep("^(Aggregated_|Name_)[0-9]{4}$", names(region_data), value = TRUE)
+    if (length(crop_cols) == 0) return(numeric(0))
+
+    total_area <- sum(region_data$freq, na.rm = TRUE)
+    if (total_area <= 0) return(numeric(0))
+
+    year_percentages <- vapply(crop_cols, function(col) {
+      crop_area <- sum(region_data$freq[region_data[[col]] == selected_crop], na.rm = TRUE)
+      (crop_area / total_area) * 100
+    }, numeric(1))
+
+    c(year_percentages, mean(year_percentages, na.rm = TRUE))
+  }
+
+  percentages_for_list <- function(data_list) {
+    if (is.null(data_list) || !is.list(data_list) || length(data_list) == 0) {
+      return(numeric(0))
+    }
+    unlist(lapply(data_list, percentages_for_one_region), use.names = FALSE)
+  }
+
+  all_percentages <- c(percentages_for_list(district_list), percentages_for_list(ezg_list))
+  all_percentages <- all_percentages[is.finite(all_percentages)]
+
+  if (length(all_percentages) == 0) {
+    return(c(0, 1))
+  }
+
+  range(all_percentages)
+}
+
+#-------------------------------------------------------------------------------------------
+
+#' Build Per-Region Crop Area Percentage Table
+#'
+#' @description For each region (district or catchment) in `data_list`,
+#' computes the percentage of total area occupied by `selected_crop` in every
+#' year found in the data, plus the average percentage across those years.
+#' Unlike the on-screen map (which shows either one selected year or the
+#' average), this always returns every year as its own column so an export
+#' carries the full picture regardless of which display mode was active.
+#'
+#' @param data_list Named list of data frames/data.tables, one per region,
+#'        each with a `freq` column and one or more
+#'        `Aggregated_YYYY`/`Name_YYYY` crop columns
+#' @param selected_crop Character string, the crop to compute percentages for
+#' @param name_col Character string, name to use for the region-name column
+#'        in the returned data frame (default "region")
+#'
+#' @return A data frame with one row per region: `name_col`, one `pct_<year>`
+#'         column per year found across all regions, and `pct_avg` (the mean
+#'         of that region's per-year percentages). Returns a zero-row data
+#'         frame with just `name_col` if `data_list` is empty/NULL.
+#'
+#' @export
+compute_crop_percentage_table <- function(data_list, selected_crop, name_col = "region") {
+  if (is.null(data_list) || !is.list(data_list) || length(data_list) == 0) {
+    empty <- data.frame(character(0), stringsAsFactors = FALSE)
+    names(empty) <- name_col
+    return(empty)
+  }
+
+  # Union of year columns across all regions, so every row gets the same set
+  # of pct_<year> columns even if a given region is missing some years.
+  all_crop_cols <- unique(unlist(lapply(data_list, function(region_data) {
+    if (is.null(region_data) || !is.data.frame(region_data) || nrow(region_data) == 0) {
+      return(character(0))
+    }
+    grep("^(Aggregated_|Name_)[0-9]{4}$", names(region_data), value = TRUE)
+  })))
+  years <- sort(unique(as.numeric(gsub("^(Aggregated_|Name_)", "", all_crop_cols))))
+  pct_col_names <- paste0("pct_", years)
+
+  region_names <- names(data_list)
+  pct_matrix <- matrix(NA_real_, nrow = length(region_names), ncol = length(years),
+                        dimnames = list(NULL, pct_col_names))
+
+  for (i in seq_along(region_names)) {
+    region_data <- data_list[[region_names[i]]]
+    if (is.null(region_data) || !is.data.frame(region_data) || nrow(region_data) == 0) next
+
+    crop_cols <- grep("^(Aggregated_|Name_)[0-9]{4}$", names(region_data), value = TRUE)
+    total_area <- sum(region_data$freq, na.rm = TRUE)
+
+    for (col in crop_cols) {
+      yr <- as.numeric(gsub("^(Aggregated_|Name_)", "", col))
+      pct <- if (total_area > 0) {
+        crop_area <- sum(region_data$freq[region_data[[col]] == selected_crop], na.rm = TRUE)
+        (crop_area / total_area) * 100
+      } else {
+        0
+      }
+      pct_matrix[i, paste0("pct_", yr)] <- pct
+    }
+  }
+
+  result <- as.data.frame(pct_matrix)
+  result$pct_avg <- rowMeans(pct_matrix, na.rm = TRUE)
+  cbind(setNames(data.frame(region_names, stringsAsFactors = FALSE), name_col), result)
+}
+
+#-------------------------------------------------------------------------------------------
+
 
 #' Process Crop Transitions for Specific Crop Type
 #' 
@@ -2441,27 +2587,26 @@ compute_transition_matrix <- function(data, area_range = NULL) {
     df <- df[df$freq >= area_range[1] & df$freq <= area_range[2], ]
   }
 
-  all_transitions <- do.call(rbind, lapply(seq_len(length(years) - 1), function(i) {
+  all_transitions <- data.table::rbindlist(lapply(seq_len(length(years) - 1), function(i) {
     col1 <- paste0(prefix, years[i])
     col2 <- paste0(prefix, years[i + 1])
-    data.frame(
+    data.table::data.table(
       source = as.character(df[[col1]]),
       target = as.character(df[[col2]]),
-      freq = df$freq,
-      stringsAsFactors = FALSE
+      freq = df$freq
     )
   }))
 
-  agg <- aggregate(freq ~ source + target, data = all_transitions, FUN = sum)
-  names(agg)[3] <- "area_km2"
+  # Grouped sum via data.table instead of stats::aggregate(): aggregate()'s
+  # formula interface builds factors/interactions internally (factor(),
+  # match(), sort.list()) which is fine for small data but scales very
+  # poorly for the 100k+ row transition table produced above.
+  agg <- all_transitions[, list(area_km2 = sum(freq)), by = list(source, target)]
+  agg[, total := sum(area_km2), by = source]
+  agg[, probability := area_km2 / total]
+  agg[, total := NULL]
 
-  row_sums <- aggregate(area_km2 ~ source, data = agg, FUN = sum)
-  names(row_sums)[2] <- "total"
-  agg <- merge(agg, row_sums, by = "source")
-  agg$probability <- agg$area_km2 / agg$total
-  agg$total <- NULL
-
-  agg
+  as.data.frame(agg)
 }
 
 #-------------------------------------------------------------------------------------------
@@ -3745,4 +3890,91 @@ sankey_plot_theme <- function(dark = TRUE, text_size = 15) {
       legend.box.background = element_rect(fill = bg_color, color = NA)
     )
   )
+}
+
+#-------------------------------------------------------------------------------------------
+
+#' Build a Crop-Rotation Alluvial (Sankey) Plot Efficiently
+#'
+#' @description Builds the same stratum/flow ggalluvial visualization as
+#' passing a full one-row-per-(id, year) table straight into
+#' `geom_flow()`/`geom_stratum()`, but aggregates each adjacent year-pair by
+#' (source crop, target crop) first. ggalluvial's `stat_flow()` (used by
+#' `geom_flow()`) only ever matches rows within one adjacent pair of x
+#' positions - it does not need full multi-year `alluvium` identity - so
+#' summing same-transition rows before plotting produces identical stratum
+#' heights and flow widths while collapsing the input from one row per
+#' unique rotation sequence (potentially hundreds of thousands) down to at
+#' most (number of distinct crops)^2 rows per year-pair. This is what makes
+#' the Sankey tab slow to render at real-world data scale: the underlying
+#' geometry was always small, but ggalluvial had to grind through the full,
+#' un-aggregated row count to discover that.
+#'
+#' Each year-pair gets its own `geom_flow()` layer (rather than one layer fed
+#' all pairs at once): if a single layer's data spans more than one
+#' adjacent pair, `stat_flow()` cannot tell that a row's `alluvium` id is
+#' only meant to link within its own pair, and it inserts an extra
+#' "unmatched remainder" flow at interior years - silently doubling the
+#' apparent flow at every year that isn't the first or last. Keeping each
+#' pair's aggregated rows in an isolated layer avoids this entirely.
+#'
+#' @param rotation_long data.frame/data.table with columns `Area`, `id`,
+#'   `key`, `year` (one row per entity per year; `Area` constant across a
+#'   given id's rows), as produced by `transform_rotation_data()[[1]]`.
+#' @param crop_colors Named character vector mapping crop names to hex colors.
+#' @param text_size Numeric text size for stratum labels/theme.
+#' @param dark Logical, dark theme flag passed to `sankey_plot_theme()`.
+#'
+#' @return A ggplot object. Callers still add their own `guides()` call to
+#'   set the legend row count, exactly as before.
+#'
+#' @importFrom ggplot2 ggplot aes scale_fill_manual ylab xlab scale_x_continuous geom_text
+#' @importFrom ggalluvial geom_flow geom_stratum StatStratum
+#' @importFrom data.table as.data.table data.table rbindlist
+#' @export
+build_sankey_plot <- function(rotation_long, crop_colors, text_size = 15, dark = TRUE) {
+
+  rd <- data.table::as.data.table(rotation_long)
+  key_levels <- if (is.factor(rd$key)) levels(rd$key) else sort(unique(as.character(rd$key)))
+  rd[, key := factor(as.character(key), levels = key_levels)]
+
+  years_sorted <- sort(unique(rd$year))
+
+  strata <- rd[, list(Area = sum(Area)), by = list(year, key)]
+
+  pair_tables <- if (length(years_sorted) > 1) {
+    lapply(seq_len(length(years_sorted) - 1), function(i) {
+      y1 <- years_sorted[i]; y2 <- years_sorted[i + 1]
+      d1 <- rd[year == y1, list(id, source = key, Area)]
+      d2 <- rd[year == y2, list(id, target = key)]
+      joined <- d1[d2, on = "id", nomatch = 0]
+      agg <- joined[, list(Area = sum(Area)), by = list(source, target)]
+      gid <- paste0("p", i, "_", seq_len(nrow(agg)))
+      from_rows <- data.table::data.table(year = y1, Area = agg$Area, id = gid)
+      from_rows[, key := agg$source]
+      to_rows <- data.table::data.table(year = y2, Area = agg$Area, id = gid)
+      to_rows[, key := agg$target]
+      data.table::rbindlist(list(from_rows, to_rows))
+    })
+  } else {
+    list()
+  }
+
+  p <- ggplot() +
+    geom_stratum(data = strata, aes(x = year, y = Area, stratum = key, fill = key),
+                 alpha = .90, show.legend = TRUE, color = NA) +
+    sankey_plot_theme(dark = dark, text_size = text_size) +
+    geom_text(data = strata, aes(x = year, y = Area, stratum = key, label = key),
+              stat = ggalluvial::StatStratum, size = text_size / 15 * 4, check_overlap = TRUE) +
+    scale_fill_manual(name = "Crops", values = crop_colors) +
+    ylab("Area [km²]") +
+    xlab("") +
+    scale_x_continuous(breaks = years_sorted)
+
+  for (pt in pair_tables) {
+    p <- p + geom_flow(data = pt, aes(x = year, y = Area, stratum = key, alluvium = id, fill = key),
+                        show.legend = FALSE)
+  }
+
+  p
 }

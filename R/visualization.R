@@ -517,6 +517,21 @@ viz_ui <- function(input_dir = NA){
                                   )
                            )
                          ),
+                         fluidRow(
+                           column(1),
+                           column(4,
+                                  p(class = "text-muted",
+                                    "The download includes every year as a separate column ",
+                                    "(pct_<year>) plus the complete average (pct_avg), regardless ",
+                                    "of which display mode is currently selected above."
+                                  ),
+                                  downloadButton(
+                                    "crop_spec_download_shp",
+                                    "Download Map (Shapefile)",
+                                    class = "btn-success"
+                                  )
+                           )
+                         ),
                          br(),br(),br(),
                          # Horizontal line
                          tags$hr(style = "border-top: 1px solid white; margin-top: 20px; margin-bottom: 20px;"),
@@ -2196,7 +2211,15 @@ viz_server <- function(input, output, session, app_data, input_dir, crop_colors 
     
     # spec_rotation_data with caching for performance
     spec_rotation_data <- reactiveVal(NULL)
-    
+    # Fixed c(min, max) color-scale range for the crop-specific distribution
+    # map, computed once per crop selection across every district/catchment,
+    # every year, and their averages - see leaflet_crop_spec below.
+    crop_spec_color_range <- reactiveVal(NULL)
+    # The crop the map/shapefile download currently reflect, frozen at the
+    # last "Load Visualization" click (matches the isolate() used in the map
+    # render itself, so the export always matches what's on screen).
+    crop_spec_selected_crop <- reactiveVal(NULL)
+
     observeEvent(input$update_crop_specific, {
       req(input$Area_range_spec, input$Crop_spec)
 
@@ -2213,6 +2236,15 @@ viz_server <- function(input, output, session, app_data, input_dir, crop_colors 
 
         incProgress(0.7, detail = "Finalizing")
         spec_rotation_data(result)
+        crop_spec_selected_crop(input$Crop_spec)
+
+        crop_spec_color_range(
+          compute_crop_percentage_range(
+            district_list = if (exists("district_CropRotViz_intersection")) district_CropRotViz_intersection else NULL,
+            ezg_list      = if (exists("EZG_CropRotViz_intersection") && is.list(EZG_CropRotViz_intersection)) EZG_CropRotViz_intersection else NULL,
+            selected_crop = input$Crop_spec
+          )
+        )
 
         # Extract available years from the data and update year slider
         if (!is.null(CropRotViz_intersection) && nrow(CropRotViz_intersection) > 0) {
@@ -2351,7 +2383,7 @@ viz_server <- function(input, output, session, app_data, input_dir, crop_colors 
     
     # Render the plot
     output$perc_plot <- renderPlot({
-      Sys.sleep(1.5)
+      Sys.sleep(0.1)
       create_perc_plot()
     }, height = 65, bg = "transparent")
     
@@ -2393,7 +2425,7 @@ viz_server <- function(input, output, session, app_data, input_dir, crop_colors 
     })
     
     output$perc_spec_plot <- renderPlot({
-      Sys.sleep(1.5)
+      Sys.sleep(0.1)
       create_spec_perc_plot()
     }, height = 65, bg = "transparent")
     
@@ -2438,7 +2470,7 @@ viz_server <- function(input, output, session, app_data, input_dir, crop_colors 
     })
     
     output$perc_district_plot <- renderPlot({
-      Sys.sleep(1.5)
+      Sys.sleep(0.1)
       create_district_perc_plot()
     }, height = 65, bg = "transparent")
     
@@ -2483,7 +2515,7 @@ viz_server <- function(input, output, session, app_data, input_dir, crop_colors 
     })
     
     output$perc_basin_plot <- renderPlot({
-      Sys.sleep(1.5)
+      Sys.sleep(0.1)
       create_basin_perc_plot()
     }, height = 65, bg = "transparent")
 
@@ -2526,7 +2558,7 @@ viz_server <- function(input, output, session, app_data, input_dir, crop_colors 
     })
 
     output$perc_aoi_plot <- renderPlot({
-      Sys.sleep(1.5)
+      Sys.sleep(0.1)
       create_aoi_perc_plot()
     }, height = 65, bg = "transparent")
 
@@ -2539,21 +2571,10 @@ viz_server <- function(input, output, session, app_data, input_dir, crop_colors 
 
       text_size <- input$sankey_textsize_sec
 
-      base_plot <- ggplot(
-        rotation_data()[[1]],
-        aes(
-          x = year, y = Area, stratum = key,
-          fill = key, alluvium = id, label = key
-        )
-      ) +
-        geom_stratum(alpha = .90, show.legend = TRUE, color = NA) +
-        sankey_plot_theme(dark = isTRUE(input$sankey_theme_sec), text_size = text_size) +
-        geom_text(stat = ggalluvial::StatStratum, size = text_size/15*4, check_overlap = TRUE) +
-        scale_fill_manual(name = "Crops", values = crop_colors()) +
-        ylab("Area [km²]") +
-        xlab("") +
-        scale_x_continuous(breaks = unique(rotation_data()[[1]]$year))+
-        geom_flow(show.legend = FALSE)
+      base_plot <- build_sankey_plot(
+        rotation_data()[[1]], crop_colors(),
+        text_size = text_size, dark = isTRUE(input$sankey_theme_sec)
+      )
       
       # Add conditional legend rows
       if (input$Area_range_sec[1] < 1) {
@@ -2567,7 +2588,7 @@ viz_server <- function(input, output, session, app_data, input_dir, crop_colors 
     
     # Render the plot
     output$sankey_plot <- renderPlot({
-      Sys.sleep(1.5)
+      Sys.sleep(0.1)
       create_sankey_plot()
     }, height = 800, bg = "transparent")
     
@@ -2590,32 +2611,24 @@ viz_server <- function(input, output, session, app_data, input_dir, crop_colors 
       text_size <- input$sankey_textsize_spec
 
       # make basic transition graph
-      specific <- ggplot(spec_rotation_data()[[1]], aes(x = year, y = Area,
-                                                        stratum = key, fill = key,
-                                                        alluvium = id, label = key)) +
-        geom_stratum(alpha = .90 , show.legend = T, color=NA) +
-        sankey_plot_theme(dark = isTRUE(input$sankey_theme_spec), text_size = text_size) +
-        geom_text(stat = ggalluvial::StatStratum, size = text_size/15*4, check_overlap=T) +
-        scale_fill_manual(name = "Crops", values = crop_colors()) +
-        ylab("Area [km²]")+  xlab("")+ 
-        scale_x_continuous(breaks = unique(spec_rotation_data()[[1]]$year))+
-        geom_flow(show.legend = F)
-      
+      specific <- build_sankey_plot(
+        spec_rotation_data()[[1]], crop_colors(),
+        text_size = text_size, dark = isTRUE(input$sankey_theme_spec)
+      )
+
       unique_key_count <- length(unique(spec_rotation_data()[[1]]$key))
-      
+
       # Apply guides based on the unique count
-      if (length(unique_key_count) > 20) {
+      if (unique_key_count > 20) {
         specific + guides(fill = guide_legend(nrow = 8))
       } else {
         specific + guides(fill = guide_legend(nrow = 2))
       }
-      specific
-      
     })
     
     # Render the specific sankey plot
     output$sankey_specific <- renderPlot({
-      Sys.sleep(1.5)
+      Sys.sleep(0.1)
       create_specific_sankey_plot()
     }, height = 800, bg = "transparent")
     
@@ -2637,32 +2650,24 @@ viz_server <- function(input, output, session, app_data, input_dir, crop_colors 
       text_size <- input$sankey_textsize_district
 
       # make basic transition graph
-      specific <- ggplot(district_rotation_data()[[1]], aes(x = year, y = Area,
-                                                            stratum = key, fill = key,
-                                                            alluvium = id, label = key)) +
-        geom_stratum(alpha = .90 , show.legend = T, color=NA) +
-        sankey_plot_theme(dark = isTRUE(input$sankey_theme_district), text_size = text_size) +
-        geom_text(stat = ggalluvial::StatStratum, size = text_size/15*4, check_overlap=T) +
-        scale_fill_manual(name = "Crops", values = crop_colors()) +
-        ylab("Area [km²]")+  xlab("")+ 
-        scale_x_continuous(breaks = unique(district_rotation_data()[[1]]$year))+
-        geom_flow(show.legend = F)
-      
+      specific <- build_sankey_plot(
+        district_rotation_data()[[1]], crop_colors(),
+        text_size = text_size, dark = isTRUE(input$sankey_theme_district)
+      )
+
       unique_key_count <- length(unique(district_rotation_data()[[1]]$key))
-      
+
       # Apply guides based on the unique count
-      if (length(unique_key_count) > 20) {
+      if (unique_key_count > 20) {
         specific + guides(fill = guide_legend(nrow = 8))
       } else {
         specific + guides(fill = guide_legend(nrow = 2))
       }
-      specific
-      
     })
     
     # Render the specific sankey plot
     output$sankey_district <- renderPlot({
-      Sys.sleep(1.5)
+      Sys.sleep(0.1)
       create_district_sankey_plot()
     }, height = 800, bg = "transparent")
     
@@ -2683,32 +2688,24 @@ viz_server <- function(input, output, session, app_data, input_dir, crop_colors 
       text_size <- input$sankey_textsize_basin
 
       # make basic transition graph
-      specific <- ggplot(basin_rotation_data()[[1]], aes(x = year, y = Area,
-                                                         stratum = key, fill = key,
-                                                         alluvium = id, label = key)) +
-        geom_stratum(alpha = .90 , show.legend = T, color=NA) +
-        sankey_plot_theme(dark = isTRUE(input$sankey_theme_basin), text_size = text_size) +
-        geom_text(stat = ggalluvial::StatStratum, size = text_size/15*4, check_overlap=T) +
-        scale_fill_manual(name = "Crops", values = crop_colors()) +
-        ylab("Area [km²]")+  xlab("")+ 
-        scale_x_continuous(breaks = unique(basin_rotation_data()[[1]]$year))+
-        geom_flow(show.legend = F)
-      
+      specific <- build_sankey_plot(
+        basin_rotation_data()[[1]], crop_colors(),
+        text_size = text_size, dark = isTRUE(input$sankey_theme_basin)
+      )
+
       unique_key_count <- length(unique(basin_rotation_data()[[1]]$key))
-      
+
       # Apply guides based on the unique count
-      if (length(unique_key_count) > 20) {
+      if (unique_key_count > 20) {
         specific + guides(fill = guide_legend(nrow = 8))
       } else {
         specific + guides(fill = guide_legend(nrow = 2))
       }
-      specific
-      
     })
     
     # Render the specific sankey plot
     output$sankey_basin <- renderPlot({
-      Sys.sleep(1.5)
+      Sys.sleep(0.1)
       create_basin_sankey_plot()
     }, height = 800, bg = "transparent")
 
@@ -2720,16 +2717,10 @@ viz_server <- function(input, output, session, app_data, input_dir, crop_colors 
 
       text_size <- input$sankey_textsize_aoi
 
-      specific <- ggplot(aoi_rotation_data()[[1]], aes(x = year, y = Area,
-                                                       stratum = key, fill = key,
-                                                       alluvium = id, label = key)) +
-        geom_stratum(alpha = .90, show.legend = TRUE, color = NA) +
-        sankey_plot_theme(dark = isTRUE(input$sankey_theme_aoi), text_size = text_size) +
-        geom_text(stat = ggalluvial::StatStratum, size = text_size/15*4, check_overlap = TRUE) +
-        scale_fill_manual(name = "Crops", values = crop_colors()) +
-        ylab("Area [km²]") + xlab("") +
-        scale_x_continuous(breaks = unique(aoi_rotation_data()[[1]]$year)) +
-        geom_flow(show.legend = FALSE)
+      specific <- build_sankey_plot(
+        aoi_rotation_data()[[1]], crop_colors(),
+        text_size = text_size, dark = isTRUE(input$sankey_theme_aoi)
+      )
 
       unique_key_count <- length(unique(aoi_rotation_data()[[1]]$key))
       if (unique_key_count > 20) {
@@ -2740,7 +2731,7 @@ viz_server <- function(input, output, session, app_data, input_dir, crop_colors 
     })
 
     output$sankey_aoi <- renderPlot({
-      Sys.sleep(1.5)
+      Sys.sleep(0.1)
       create_aoi_sankey_plot()
     }, height = 800, bg = "transparent")
 
@@ -2892,7 +2883,7 @@ viz_server <- function(input, output, session, app_data, input_dir, crop_colors 
     #--------------------------------------------------------------------------------------------
     # table
     output$table <- renderDT({
-      Sys.sleep(1.5)
+      Sys.sleep(0.1)
       # coloring
       crop_color_mapping_df <- as.data.frame(crop_colors())
       crop_color_mapping_df$crop <- names(crop_colors())
@@ -3023,7 +3014,7 @@ viz_server <- function(input, output, session, app_data, input_dir, crop_colors 
     # table specific
     output$table_spec <- renderDT({
       req(spec_summary_data())
-      Sys.sleep(1.5)
+      Sys.sleep(0.1)
       # coloring
       crop_color_mapping_df <- as.data.frame(crop_colors())
       crop_color_mapping_df$crop <- names(crop_colors())
@@ -3129,7 +3120,7 @@ viz_server <- function(input, output, session, app_data, input_dir, crop_colors 
 
       if (any(grepl("Aggregated_", names(rotation_data()[[2]])))) {
         output$sankey_plotly <- renderPlotly({
-          Sys.sleep(1.5)
+          Sys.sleep(0.1)
           
           # Calculate number of unique items (crops + groups)
           n_items <- length(sankey_data$node$label)
@@ -3256,7 +3247,7 @@ viz_server <- function(input, output, session, app_data, input_dir, crop_colors 
     #--------------------------------------------------------------------------------------------
     output$sankey_plotly_specific <- renderPlotly({
       req(spec_rotation_data())
-      Sys.sleep(1.5)
+      Sys.sleep(0.1)
 
       # Get the selected crop from spec_rotation_data to ensure it only updates after button press
       selected_crop <- isolate(input$Crop_spec)
@@ -3381,7 +3372,7 @@ viz_server <- function(input, output, session, app_data, input_dir, crop_colors 
 
     # Leaflet map for crop-specific area distribution
     output$leaflet_crop_spec <- renderLeaflet({
-      req(spec_rotation_data(), input$map_type_spec, input$year_mode_spec)
+      req(spec_rotation_data(), crop_spec_color_range(), input$map_type_spec, input$year_mode_spec)
 
       # Get the selected crop and year mode using isolate to prevent reactive updates
       selected_crop <- isolate(input$Crop_spec)
@@ -3494,19 +3485,25 @@ viz_server <- function(input, output, session, app_data, input_dir, crop_colors 
         }
       })
       
-      # Create color palette
-      if (max(spatial_data$crop_percentage, na.rm = TRUE) > 0) {
+      # Create color palette using a range fixed across every district/catchment
+      # and every year (not just the values shown in this particular render),
+      # so the same color always means the same area percentage and maps stay
+      # visually comparable when switching year, district/catchment, or mode.
+      color_range <- crop_spec_color_range()
+      if (color_range[2] > color_range[1]) {
+        legend_domain <- color_range
         pal <- colorNumeric(
           palette = c("#ffffcc", "#ffeda0", "#fed976", "#feb24c", "#fd8d3c",
                       "#fc4e2a", "#e31a1c", "#bd0026", "#800026"),
-          domain = c(0, max(spatial_data$crop_percentage, na.rm = TRUE)),
+          domain = legend_domain,
           na.color = "transparent"
         )
       } else {
-        # If all percentages are 0, use a gray palette
+        # If this crop never occurs anywhere, use a gray palette
+        legend_domain <- c(0, 1)
         pal <- colorNumeric(
           palette = c("#e0e0e0", "#e0e0e0"),
-          domain = c(0, 1),
+          domain = legend_domain,
           na.color = "transparent"
         )
       }
@@ -3559,7 +3556,14 @@ viz_server <- function(input, output, session, app_data, input_dir, crop_colors 
         addLegend(
           position = "bottomright",
           pal = pal,
-          values = ~crop_percentage,
+          # Pass the fixed domain (not ~crop_percentage) so the legend's
+          # displayed breaks/labels stay identical across year, district/
+          # catchment, and average/annual switches. leaflet::addLegend()
+          # derives its cuts from range(values), not from pal's own domain,
+          # so handing it the live per-render data would make the legend
+          # rescale every time even though fillColor already uses `pal`
+          # (and therefore legend_domain) consistently.
+          values = legend_domain,
           title = if (year_mode == "annual") {
             paste0(selected_crop, " (", selected_year, ")<br>Area (%)")
           } else {
@@ -3571,7 +3575,86 @@ viz_server <- function(input, output, session, app_data, input_dir, crop_colors 
       return(map)
     })
     #--------------------------------------------------------------------------------------------
-    
+
+    # Shapefile export for the crop-specific area distribution map. Unlike the
+    # map itself (which shows either one selected year or the average), the
+    # export always includes every year as its own pct_<year> column plus
+    # pct_avg, regardless of which display mode is currently selected - the
+    # geometry/region set (districts vs catchments) still follows map_type_spec.
+    output$crop_spec_download_shp <- downloadHandler(
+      filename = function() {
+        map_type_label <- if (identical(input$map_type_spec, "districts")) "districts" else "catchments"
+        crop_label <- crop_spec_selected_crop()
+        crop_label <- if (is.null(crop_label)) "crop" else gsub("[^A-Za-z0-9]+", "_", crop_label)
+        paste0("crop_distribution_", map_type_label, "_", crop_label, "_",
+               format(Sys.Date(), "%Y%m%d"), ".zip")
+      },
+      contentType = "application/zip",
+      content = function(file) {
+        req(crop_spec_selected_crop(), input$map_type_spec)
+        selected_crop <- crop_spec_selected_crop()
+
+        if (input$map_type_spec == "districts") {
+          req(exists("Districts"), exists("district_CropRotViz_intersection"))
+          spatial_data <- Districts
+          data_list <- district_CropRotViz_intersection
+          name_col <- "NAME_3"
+          spatial_label <- "Districts"
+        } else {
+          req(exists("EZGs"), exists("EZG_CropRotViz_intersection"), is.list(EZG_CropRotViz_intersection))
+          spatial_data <- EZGs
+          data_list <- EZG_CropRotViz_intersection
+          name_col <- "EZG"
+          spatial_label <- "Catchments"
+        }
+
+        if (st_crs(spatial_data) != 4326) {
+          spatial_data <- st_transform(spatial_data, 4326)
+        }
+
+        pct_table <- compute_crop_percentage_table(data_list, selected_crop, name_col = name_col)
+        export_data <- merge(spatial_data, pct_table, by = name_col, all.x = TRUE)
+
+        export_dir <- tempfile("crop_spec_shp_")
+        dir.create(export_dir)
+        on.exit(unlink(export_dir, recursive = TRUE), add = TRUE)
+
+        shp_path <- file.path(export_dir, "crop_distribution_map.shp")
+        sf::st_write(sf::st_make_valid(export_data), shp_path,
+                     driver = "ESRI Shapefile", quiet = TRUE, append = FALSE, delete_layer = TRUE)
+
+        pct_year_cols <- grep("^pct_[0-9]{4}$", names(pct_table), value = TRUE)
+        meta_lines <- c(
+          "CropRotationViz - Crop-Specific Area Distribution Map Export",
+          paste("Export date:", format(Sys.time(), "%Y-%m-%d %H:%M:%S")),
+          "",
+          paste("Crop:", selected_crop),
+          paste("Spatial extent type:", spatial_label),
+          "",
+          "Columns:",
+          paste0("  ", paste(sort(pct_year_cols), collapse = ", "),
+                 " - percentage of total area occupied by the selected crop in that year"),
+          "  pct_avg - average of the above across all available years",
+          "",
+          "All years and the average are included regardless of which single",
+          "year or display mode was selected in the app when this was exported."
+        )
+        writeLines(meta_lines, file.path(export_dir, "export_settings.txt"))
+
+        zip_files <- list.files(export_dir, full.names = FALSE)
+
+        if (requireNamespace("zip", quietly = TRUE)) {
+          zip::zip(file, files = zip_files, root = export_dir)
+        } else {
+          old_wd <- getwd()
+          setwd(export_dir)
+          on.exit(setwd(old_wd), add = TRUE, after = FALSE)
+          utils::zip(file, files = zip_files)
+        }
+      }
+    )
+    #--------------------------------------------------------------------------------------------
+
     output$district_ridges <- renderPlot({
       req(district_rotation_data())
       data <- district_rotation_data()[[2]]
