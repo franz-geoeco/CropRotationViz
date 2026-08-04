@@ -3507,7 +3507,16 @@ viz_server <- function(input, output, session, app_data, input_dir, crop_colors 
           na.color = "transparent"
         )
       }
-      
+
+      # colorNumeric() returns na.color (transparent) for any value outside
+      # its domain -- since legend_domain's upper bound is now the 95th
+      # percentile (not the true max), districts/catchments above the cap
+      # would otherwise render with no fill at all. Clamp the value fed to
+      # the palette so anything above the cap just saturates to the darkest
+      # color instead of disappearing; the popup still shows the true,
+      # unclamped percentage.
+      spatial_data$crop_percentage_color <- pmin(pmax(spatial_data$crop_percentage, legend_domain[1]), legend_domain[2])
+
       # Create popup text with year information
       year_info <- if (year_mode == "annual") {
         paste0("<div style='margin: 5px 0;'>",
@@ -3541,7 +3550,7 @@ viz_server <- function(input, output, session, app_data, input_dir, crop_colors 
       map <- leaflet(spatial_data, options = leafletOptions(zoomSnap = 0.5, zoomDelta = 0.5, wheelPxPerZoomLevel = 120)) %>%
         addTiles() %>%
         addPolygons(
-          fillColor = ~pal(crop_percentage),
+          fillColor = ~pal(crop_percentage_color),
           fillOpacity = 0.7,
           color = "white",
           weight = 1,

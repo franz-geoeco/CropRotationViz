@@ -303,6 +303,53 @@ processing_ui <- function(app_data, output_dir = NA, start_year = NA, vector_fil
         .settings-disabled button {
             pointer-events: none !important;
         }
+
+        /* Crop Assignment Table (DT) -- the 'cyborg' dark theme leaves DT's
+           chrome (search box, length picker, pagination, info text) in dark
+           Bootstrap text, which is unreadable. Force it white. */
+        .dataTables_wrapper, .dataTables_wrapper * {
+            color: #fff !important;
+        }
+        .dataTables_wrapper .dataTables_length select,
+        .dataTables_wrapper .dataTables_filter input {
+            background-color: #2c2c2c;
+            color: #fff;
+            border: 1px solid #555;
+        }
+        .dataTables_wrapper .dataTables_paginate .paginate_button {
+            color: #fff !important;
+            background: #2c2c2c;
+            border-color: #555;
+        }
+        .dataTables_wrapper .dataTables_paginate .paginate_button.current {
+            background: #444 !important;
+            border-color: #666;
+            color: #fff !important;
+        }
+        .dataTables_wrapper .dataTables_paginate .paginate_button.disabled {
+            color: #888 !important;
+        }
+        table.dataTable thead th, table.dataTable thead td {
+            color: #fff;
+            border-bottom-color: #555;
+        }
+        table.dataTable tfoot th, table.dataTable tfoot td {
+            color: #fff;
+        }
+        table.dataTable tbody tr.selected td {
+            background-color: #3a5a3a !important;
+        }
+        table.dataTable.hover tbody tr:hover, table.dataTable.display tbody tr:hover {
+            background-color: #333 !important;
+        }
+        /* Per-column filter boxes (filter = 'top') keep DT's default white
+           input background -- the white-text rule above makes them
+           unreadable, so force black text there specifically. */
+        table.dataTable thead input, table.dataTable thead select,
+        table.dataTable tfoot input, table.dataTable tfoot select {
+            color: #000 !important;
+            background-color: #fff !important;
+        }
       ")),
       # JavaScript to disable settings after Continue to Processing is clicked
       # and to handle Process Files button state during processing
@@ -835,15 +882,15 @@ processing_ui <- function(app_data, output_dir = NA, start_year = NA, vector_fil
                                   size = "extra-small"
                                 ),
                                 shinyBS::bsPopover(
-                                  "aggregation_editor_info", 
+                                  "aggregation_editor_info",
                                   "Crop Aggregation Info",
-                                  "Here you can inspect and change the default crop aggregation. You can create new classes, rename existing and drag and drop crops into the aggregation classes on the reight. Each single crop on the left list will be still processed but not aggregated.",
+                                  "Here you can inspect and change the default crop aggregation. Create new classes on the left, then search/filter the crop table on the right, tick the rows you want, and assign them all to the selected class in one click. Crops left as '(Unassigned)' are still processed individually but not aggregated; crops marked '(Ignored)' are excluded from processing entirely.",
                                   placement = "right",
                                   trigger = "hover",
                                   options = list(
                                     container = 'body',
                                     html = TRUE,
-                                    delay = list(show = 0, hide = 0)  
+                                    delay = list(show = 0, hide = 0)
                                   )
                                 )
                          )
@@ -855,25 +902,40 @@ processing_ui <- function(app_data, output_dir = NA, start_year = NA, vector_fil
                          fluidRow(
                            column(3,
                                   wellPanel(
-                                    h4("Available Crops / User Specific Single Crop Classes"),
-                                    uiOutput("available_crops_ui")
+                                    h4("Manage Classes"),
+                                    textInput("new_class_name", "New class name", placeholder = "e.g. Winter Cereals"),
+                                    actionButton("add_class", "Add New Class",
+                                                 class = "add-class-btn btn-success", style = "width: 100%; margin-bottom: 8px;"),
+                                    tags$hr(),
+                                    selectInput("target_class", "Selected class (for rename/remove/assign):",
+                                                choices = c("(Unassigned)" = "(Unassigned)")),
+                                    textInput("rename_class_input", NULL, placeholder = "New name for selected class"),
+                                    actionButton("rename_class_btn", "Rename Selected Class",
+                                                 style = "width: 100%; margin-bottom: 8px;"),
+                                    actionButton("remove_class_btn", "Remove Selected Class",
+                                                 class = "btn-warning", style = "width: 100%;")
                                   ),
                                   wellPanel(
-                                    h4("Ignored Crops (Excluded from Processing)"),
-                                    div(style = "color: #d9534f; font-weight: bold; margin-bottom: 10px;",
+                                    h4("Bulk Assign / Ignore"),
+                                    tags$p("Search or filter the table, tick the crops you want, then apply an action to all of them at once.",
+                                           style = "color: #cccccc; font-size: 12px;"),
+                                    actionButton("assign_selected_btn", "Assign Checked Rows to Selected Class",
+                                                 class = "btn-primary", style = "width: 100%; margin-bottom: 8px;"),
+                                    actionButton("ignore_selected_btn", "Mark Checked Rows as Ignored",
+                                                 class = "btn-danger", style = "width: 100%; margin-bottom: 8px;"),
+                                    div(style = "color: #d9534f; font-weight: bold; margin-top: 5px;",
                                         textOutput("ignored_count_display")
-                                    ),
-                                    uiOutput("ignore_crops_ui")
+                                    )
+                                  ),
+                                  wellPanel(
+                                    h4("Class Summary"),
+                                    tableOutput("class_summary_table")
                                   )
                            ),
                            column(9,
                                   wellPanel(
-                                    h4("Aggregation Classes"),
-                                    actionButton("add_class", "Add New Aggregation Class", 
-                                                 class = "add-class-btn"),
-                                    div(class = "aggregation-container",
-                                        uiOutput("aggregation_classes")
-                                    )
+                                    h4("Crop Assignment Table"),
+                                    DT::dataTableOutput("crop_assignment_table")
                                   )
                            )
                          )
@@ -2457,39 +2519,75 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
   #----------------------------------------------------------------------------------------------------------
   
   
-  # Initialize reactive values
-  class_state <- reactiveVal(NULL)
-  available_crops <- reactiveVal(character(0))
-  ignored_crops <- reactiveVal(character(0))
+  # ---- Crop Aggregation state ----------------------------------------------
+  # Single source of truth is `crop_state()`: a data.frame(crop, class_id)
+  # mapping every crop name to either a class id ("classN"), "(Unassigned)" or
+  # "(Ignored)". `class_defs()` holds only class metadata (id/name/color) -- no
+  # crop membership is stored there, it is always looked up from crop_state().
+  #
+  # class_state()/available_crops()/ignored_crops() below are read-only
+  # reactive() views derived from these two, exposed under the SAME names and
+  # shapes the rest of the app already expects (prepare_sankey_data(),
+  # prepare_aggregation_data(), processor()), so nothing downstream of the
+  # editor needed to change.
+  #
+  # The previous implementation used one `sortable::bucket_list` per class;
+  # any single drag forced a full re-render of every class box (see the old
+  # "available_crops" observer, which re-read every class's widget on every
+  # change). With many crops and many classes that caused visible
+  # back-and-forth/flicker. The table below is built once and all later edits
+  # are patched into it via DT::replaceData() through a proxy, so filtering,
+  # sorting and page position are never disturbed by an assignment.
+  UNASSIGNED_LABEL <- "(Unassigned)"
+  IGNORED_LABEL <- "(Ignored)"
+
+  crop_state <- reactiveVal(NULL)
+  class_defs <- reactiveVal(list())
+  class_names <- reactiveVal(list())
   class_counter <- reactiveVal(0)
-  
-  # Observer to update ignored_crops when user drags crops to the bin
-  observeEvent(input$ignored_crops, {
-    if(!is.null(input$ignored_crops)) {
-      ignored_crops(input$ignored_crops)
-    }
-  }, ignoreNULL = FALSE, ignoreInit = TRUE)
-  
+
   # Initialize all_unique_crops reactive value to store all crops from files
   all_unique_crops <- reactiveVal(NULL)
-  
-  # Create observer to handle initialization of class_state
+
+  class_state <- reactive({
+    defs <- class_defs()
+    df <- crop_state()
+    if (is.null(df) || length(defs) == 0) return(defs)
+    lapply(defs, function(cl) {
+      cl$crops <- df$crop[df$class_id == cl$id]
+      cl
+    })
+  })
+
+  available_crops <- reactive({
+    df <- crop_state()
+    if (is.null(df)) return(character(0))
+    df$crop[df$class_id == UNASSIGNED_LABEL]
+  })
+
+  ignored_crops <- reactive({
+    df <- crop_state()
+    if (is.null(df)) return(character(0))
+    df$crop[df$class_id == IGNORED_LABEL]
+  })
+
+  # Create observer to handle initialization of the crop aggregation table
   observe({
     req(input$btn_continue)
     req(length(processed_files()) > 1)
-    
+
     if(input$language == "English"){
       color_palette <- app_data$Input_App_data$crop_color_mapping$en
     }else{
       color_palette <- app_data$Input_App_data$crop_color_mapping$de
     }
-    
-    # Initialize class_state if NULL
-    if (is.null(class_state())) {
+
+    # Initialize crop_state if NULL
+    if (is.null(crop_state())) {
       # Get all unique crops first
       unique_crops <- get_all_crops(processed_files(), codierung_all, input$language, input$id_or_name)
       all_unique_crops(unique_crops)
-      
+
       if (input$id_or_name == "Code") {
         # Define base classes ONLY for Code mode
         if(input$language == "English"){
@@ -2569,96 +2667,51 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
         }
         
         # Filter out empty classes and those with no matching crops
-        filtered_classes <- lapply(base_classes, function(class_names) {
-          intersect(class_names, unique_crops)
+        filtered_classes <- lapply(base_classes, function(class_names_vec) {
+          intersect(class_names_vec, unique_crops)
         })
         filtered_classes <- filtered_classes[sapply(filtered_classes, length) > 0]
-        
-        # Create initial classes list
-        initial_classes <- lapply(seq_along(filtered_classes), function(i) {
+
+        # Sort by number of crops (ascending -- same order the previous editor used)
+        sizes <- sapply(filtered_classes, length)
+        filtered_classes <- filtered_classes[order(sizes, decreasing = FALSE)]
+
+        # Class metadata only -- crop membership always comes from crop_state()
+        new_defs <- lapply(seq_along(filtered_classes), function(i) {
           list(
             id = paste0("class", i),
             name = names(filtered_classes)[i],
-            crops = as.character(filtered_classes[[i]]),
             color = color_palette[i]
           )
         })
-        
-        # Sort by number of crops
-        sorted_indices <- order(sapply(initial_classes, function(x) length(x$crops)), decreasing = F)
-        class_state(initial_classes[sorted_indices])
-        class_counter(length(filtered_classes))
-        
-        # Initially set all crops not in any class as available
-        assigned_crops <- unique(unlist(lapply(initial_classes, function(x) x$crops)))
-        unassigned_crops <- setdiff(unique_crops, assigned_crops)
-        available_crops(unassigned_crops)
-        
-        # Initialize class names storage
-        initial_names <- sapply(base_classes, function(x) names(x))
-        class_names(setNames(as.list(initial_names), paste0("class", seq_along(initial_names))))
+
+        class_defs(new_defs)
+        class_counter(length(new_defs))
+        class_names(setNames(lapply(new_defs, function(x) x$name),
+                              vapply(new_defs, function(x) x$id, character(1))))
+
+        # Build the crop -> class assignment table (this IS the aggregation state)
+        crop_to_class <- setNames(rep(UNASSIGNED_LABEL, length(unique_crops)), unique_crops)
+        for (i in seq_along(new_defs)) {
+          crop_to_class[filtered_classes[[i]]] <- new_defs[[i]]$id
+        }
+        crop_state(data.frame(crop = unique_crops,
+                               class_id = unname(crop_to_class[unique_crops]),
+                               stringsAsFactors = FALSE))
       }else{
         # For Name-based aggregation, start with empty classes
-        # All crop names from uploaded files will be available in the left bucket
         # No pre-prepared aggregation classes - completely free aggregation
-        class_state(list())
+        class_defs(list())
         class_counter(0)
-        
-        # Make all crops from uploaded files available initially
-        available_crops(unique_crops)
-        
-        # Initialize empty class names storage
         class_names(list())
+
+        # Make all crops from uploaded files available (unassigned) initially
+        crop_state(data.frame(crop = unique_crops, class_id = UNASSIGNED_LABEL,
+                               stringsAsFactors = FALSE))
       }
     }
   })
-  
-  
-  # observer for class name changes
-  observe({
-    current_state <- class_state()
-    if (!is.null(current_state)) {
-      current_names <- class_names()
-      
-      # Update stored names when text inputs change
-      for (class in current_state) {
-        name_input <- input[[paste0(class$id, "_name")]]
-        if (!is.null(name_input)) {
-          current_names[[class$id]] <- name_input
-        }
-      }
-      class_names(current_names)
-    }
-  })
-  
-  # Update available_crops observer
-  observe({
-    req(class_state())
-    req(all_unique_crops())
-    
-    # Get currently assigned crops from all classes
-    assigned_crops <- character(0)
-    for(class in class_state()) {
-      class_crops <- input[[class$id]]
-      if(!is.null(class_crops)) {
-        assigned_crops <- c(assigned_crops, class_crops)
-      }
-    }
-    
-    # Get ignored crops
-    ignored <- ignored_crops()
-    
-    # Set available crops as all unique crops minus assigned crops minus ignored crops
-    all_available <- setdiff(all_unique_crops(), assigned_crops)
-    
-    # Further remove ignored crops
-    if(length(ignored) > 0) {
-      all_available <- setdiff(all_available, ignored)
-    }
-    
-    available_crops(all_available)
-  })
-  
+
   
   # Add this block before where color_palette is used
   color_palette <- reactive({
@@ -2668,163 +2721,210 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
       app_data$Input_App_data$crop_color_mapping$de
     }
   })
-  
-  # Add new aggregation class
-  observeEvent(input$add_class, {
-    req(class_state())
-    current_state <- class_state()
-    color_palette <- color_palette()
-    counter <- class_counter() + 1
-    class_counter(counter)
-    
-    new_id <- paste0("class", counter)
-    new_class <- list(
-      id = new_id,
-      name = paste("New Class", length(current_state) + 1),
-      crops = character(0),  # Start with empty crops vector
-      color = color_palette[counter %% length(color_palette) + 1]
-    )
-    
-    class_state(c(current_state, list(new_class)))
-  })
-  
-  # Generate UI for available crops
-  output$available_crops_ui <- renderUI({
-    bucket_list(
-      header = " ",
-      group_name = "crop_groups",
-      orientation = "vertical",
-      add_rank_list(
-        text = "Drag codes from here",
-        labels = available_crops(),
-        input_id = "available_crops"
-      )
-    )
+
+  # Keep the "Selected class" dropdown in sync with class_defs() (add/rename/remove/init)
+  observe({
+    defs <- class_defs()
+    ids <- vapply(defs, function(x) x$id, character(1))
+    labels <- vapply(defs, function(x) x$name, character(1))
+    choices <- if (length(ids) == 0) {
+      setNames(UNASSIGNED_LABEL, "(Unassigned)")
+    } else {
+      c(setNames(UNASSIGNED_LABEL, "(Unassigned)"), setNames(ids, labels))
+    }
+
+    # Preserve the current selection if it still exists, otherwise fall back
+    current_sel <- isolate(input$target_class)
+    selected <- if (!is.null(current_sel) && current_sel %in% unname(choices)) current_sel else UNASSIGNED_LABEL
+    updateSelectInput(session, "target_class", choices = choices, selected = selected)
   })
 
-  # Generate UI for ignored/excluded crops bin
-  output$ignore_crops_ui <- renderUI({
-    bucket_list(
-      header = NULL,
-      group_name = "crop_groups",
-      orientation = "vertical",
-      add_rank_list(
-        text = "Drag crops here to exclude",
-        labels = ignored_crops(),
-        input_id = "ignored_crops"
-      )
+  # Add new aggregation class
+  observeEvent(input$add_class, {
+    nm <- trimws(input$new_class_name)
+    req(nchar(nm) > 0)
+
+    current_defs <- class_defs()
+    if (nm %in% vapply(current_defs, function(x) x$name, character(1))) {
+      showNotification(paste0("A class named '", nm, "' already exists."), type = "warning")
+      return(invisible(NULL))
+    }
+
+    color_palette_vals <- color_palette()
+    counter <- class_counter() + 1
+    class_counter(counter)
+
+    new_id <- paste0("class", counter)
+    new_def <- list(
+      id = new_id,
+      name = nm,
+      color = color_palette_vals[counter %% length(color_palette_vals) + 1]
     )
+
+    class_defs(c(current_defs, list(new_def)))
+
+    current_names <- class_names()
+    current_names[[new_id]] <- nm
+    class_names(current_names)
+
+    updateTextInput(session, "new_class_name", value = "")
   })
-  
+
+  # Rename the currently selected class
+  observeEvent(input$rename_class_btn, {
+    current_defs <- class_defs()
+    req(input$target_class %in% vapply(current_defs, function(x) x$id, character(1)))
+
+    new_name <- trimws(input$rename_class_input)
+    req(nchar(new_name) > 0)
+
+    if (new_name %in% vapply(current_defs, function(x) x$name, character(1))) {
+      showNotification(paste0("A class named '", new_name, "' already exists."), type = "warning")
+      return(invisible(NULL))
+    }
+
+    for (i in seq_along(current_defs)) {
+      if (current_defs[[i]]$id == input$target_class) {
+        current_defs[[i]]$name <- new_name
+      }
+    }
+    class_defs(current_defs)
+
+    current_names <- class_names()
+    current_names[[input$target_class]] <- new_name
+    class_names(current_names)
+
+    updateTextInput(session, "rename_class_input", value = "")
+  })
+
+  # Remove the currently selected class -- its crops return to "(Unassigned)"
+  observeEvent(input$remove_class_btn, {
+    current_defs <- class_defs()
+    req(input$target_class %in% vapply(current_defs, function(x) x$id, character(1)))
+    removed_id <- input$target_class
+
+    class_defs(current_defs[vapply(current_defs, function(x) x$id != removed_id, logical(1))])
+
+    current_names <- class_names()
+    current_names[[removed_id]] <- NULL
+    class_names(current_names)
+
+    df <- crop_state()
+    df$class_id[df$class_id == removed_id] <- UNASSIGNED_LABEL
+    crop_state(df)
+
+    showNotification("Class removed. Its crops were returned to '(Unassigned)'.", type = "warning")
+  })
+
+  # Build the display version of the crop assignment table: turns internal
+  # class ids into their current display names, and adds an NC code column
+  # when working in Code mode.
+  build_crop_table <- function() {
+    df <- crop_state()
+    req(df)
+    names_map <- class_names()
+
+    class_label <- vapply(df$class_id, function(cid) {
+      if (cid %in% c(UNASSIGNED_LABEL, IGNORED_LABEL)) return(cid)
+      nm <- names_map[[cid]]
+      if (is.null(nm)) cid else nm
+    }, character(1))
+
+    out <- data.frame(Crop = df$crop, Class = class_label, stringsAsFactors = FALSE)
+
+    if (isTRUE(input$id_or_name == "Code")) {
+      codes <- if (input$language == "English") {
+        codierung_all$NC[match(df$crop, codierung_all$english_names)]
+      } else {
+        codierung_all$NC[match(df$crop, codierung_all$german_names)]
+      }
+      out <- data.frame(Code = codes, out, stringsAsFactors = FALSE)
+    }
+    out
+  }
+
+  # Crop assignment table -- built ONCE (gated by crop_table_ready, which
+  # flips TRUE exactly once). All later edits go through crop_table_proxy via
+  # DT::replaceData() instead of re-running this render callback, so search
+  # text, sort order and page position survive every assignment.
+  crop_table_ready <- reactiveVal(FALSE)
+
+  output$crop_assignment_table <- DT::renderDataTable({
+    req(crop_table_ready())
+    DT::datatable(
+      isolate(build_crop_table()),
+      selection = "multiple",
+      rownames = FALSE,
+      filter = "top",
+      options = list(pageLength = 100, lengthMenu = c(25, 50, 100, 250), scrollX = TRUE)
+    )
+  }, server = TRUE)
+
+  crop_table_proxy <- DT::dataTableProxy("crop_assignment_table")
+
+  observeEvent(crop_state(), {
+    req(crop_state())
+    if (!isolate(crop_table_ready())) {
+      crop_table_ready(TRUE)
+    } else {
+      DT::replaceData(crop_table_proxy, build_crop_table(), resetPaging = FALSE, rownames = FALSE)
+    }
+  }, ignoreInit = TRUE)
+
+  observeEvent(class_names(), {
+    req(isolate(crop_table_ready()))
+    DT::replaceData(crop_table_proxy, build_crop_table(), resetPaging = FALSE, rownames = FALSE)
+  }, ignoreInit = TRUE)
+
   # Display count of ignored crops
   output$ignored_count_display <- renderText({
     count <- length(ignored_crops())
     if(count > 0) {
       paste0("🗑️ ", count, " crop type(s) will be excluded from processing")
     } else {
-      "No crops excluded - drag crops here to exclude them"
+      "No crops excluded - tick rows in the table and click 'Mark Checked Rows as Ignored'"
     }
   })
 
-  # Generate UI for aggregation classes
-  output$aggregation_classes <- renderUI({
-    req(class_state())
-    current_state <- class_state()
-    current_names <- class_names()
-    
-    lapply(current_state, function(class) {
-      # Get the current name from stored names or default
-      current_name <- if (is.null(current_names[[class$id]])) class$name else current_names[[class$id]]
-      
-      div(
-        class = "crop-box",
-        style = sprintf("border-color: %s;border-width: 3px;", class$color),
-        div(
-          class = "name-input",
-          div(
-            textInput(paste0(class$id, "_name"), 
-                      NULL,
-                      value = current_name,
-                      placeholder = "Class Name"),
-            tags$style(sprintf(
-              "#%s {background-color: %s; border-color: %s;border-width: 3px;}",
-              paste0(class$id, "_name"), 
-              adjustcolor(class$color, alpha.f = 0.2),
-              class$color
-            ))
-          )
-        ),
-        bucket_list(
-          header = NULL,
-          group_name = "crop_groups",
-          orientation = "vertical",
-          add_rank_list(
-            text = "Drop codes",
-            labels = if(!is.null(input[[class$id]])) input[[class$id]] else class$crops,
-            input_id = class$id
-          )
-        ),
-        actionButton(paste0(class$id, "_remove"), 
-                     "×",
-                     class = "btn-danger remove-btn")
-      )
-    })
-  })
-  
-  # Handle class removal - create observers for each remove button dynamically
-  observe({
-    current_state <- class_state()
-    if (!is.null(current_state)) {
-      lapply(current_state, function(class) {
-        local({
-          class_id <- class$id
-          observeEvent(input[[paste0(class_id, "_remove")]], {
-            # Get the current state at the time of button click
-            state_snapshot <- class_state()
-            crops_to_return <- input[[class_id]]
-
-            # Return crops to available pool
-            if(!is.null(crops_to_return) && length(crops_to_return) > 0) {
-              available_crops(c(available_crops(), crops_to_return))
-            }
-
-            # Remove the class from state
-            updated_state <- state_snapshot[sapply(state_snapshot, function(x) x$id != class_id)]
-            class_state(updated_state)
-          }, ignoreInit = TRUE)
-        })
-      })
-    }
+  # Class summary: crop count per class, including Unassigned/Ignored
+  output$class_summary_table <- renderTable({
+    df <- crop_state()
+    req(df)
+    names_map <- class_names()
+    class_label <- vapply(df$class_id, function(cid) {
+      if (cid %in% c(UNASSIGNED_LABEL, IGNORED_LABEL)) return(cid)
+      nm <- names_map[[cid]]
+      if (is.null(nm)) cid else nm
+    }, character(1))
+    summary_df <- as.data.frame(table(Class = class_label), stringsAsFactors = FALSE)
+    names(summary_df) <- c("Class", "Crops")
+    summary_df[order(-summary_df$Crops), ]
   })
 
-  # Handle individual crop deletion from aggregation classes
-  observe({
-    current_state <- class_state()
-    if (!is.null(current_state)) {
-      lapply(current_state, function(class) {
-        local({
-          class_id <- class$id
-          delete_input_id <- paste0(class_id, "_delete_crop")
+  # Bulk-assign the checked rows to the currently selected class
+  observeEvent(input$assign_selected_btn, {
+    sel <- input$crop_assignment_table_rows_selected
+    req(length(sel) > 0)
+    req(nzchar(input$target_class))
 
-          observeEvent(input[[delete_input_id]], {
-            crop_to_delete <- input[[delete_input_id]]
+    df <- crop_state()
+    df$class_id[sel] <- input$target_class
+    crop_state(df)
 
-            if (!is.null(crop_to_delete) && crop_to_delete != "") {
-              # Get current crops in this class
-              current_crops <- input[[class_id]]
+    label <- if (input$target_class == UNASSIGNED_LABEL) UNASSIGNED_LABEL else class_names()[[input$target_class]]
+    showNotification(sprintf("Assigned %d crop(s) to '%s'", length(sel), label), type = "message")
+  })
 
-              if (!is.null(current_crops) && crop_to_delete %in% current_crops) {
-                # Remove the crop from the class
-                updated_crops <- current_crops[current_crops != crop_to_delete]
+  # Bulk-mark the checked rows as ignored (excluded from processing)
+  observeEvent(input$ignore_selected_btn, {
+    sel <- input$crop_assignment_table_rows_selected
+    req(length(sel) > 0)
 
-                # Return the deleted crop to available pool
-                available_crops(c(available_crops(), crop_to_delete))
-              }
-            }
-          }, ignoreInit = TRUE)
-        })
-      })
-    }
+    df <- crop_state()
+    df$class_id[sel] <- IGNORED_LABEL
+    crop_state(df)
+
+    showNotification(sprintf("Marked %d crop(s) as ignored", length(sel)), type = "warning")
   })
 
   # Prepare Sankey data
@@ -2838,13 +2938,12 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
     
     # Get mappings from current classes
     for(class in current_state) {
-      class_crops <- input[[class$id]]
+      class_crops <- class$crops
       if(!is.null(class_crops) && length(class_crops) > 0) {
         mapping <- rbind(mapping,
                          data.frame(
                            crop = class_crops,
-                           group = if(is.null(input[[paste0(class$id, "_name")]])) 
-                             class$name else input[[paste0(class$id, "_name")]],
+                           group = class$name,
                            color = class$color
                          ))
       }
@@ -2948,8 +3047,8 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
       # Get the class name from stored names or default
       class_name <- if (is.null(current_names[[class$id]])) class$name else current_names[[class$id]]
       
-      # Get the crops for this class from input or default
-      class_crops <- if (is.null(input[[class$id]])) class$crops else input[[class$id]]
+      # Get the crops for this class
+      class_crops <- class$crops
       
       if(length(class_crops) > 0) {
         if(input$id_or_name == "Code") {

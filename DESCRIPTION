@@ -1,6 +1,6 @@
 Package: CropRotationViz
 Title: Interactive Tool for Crop Rotation Sequence Analysis and Visualization
-Version: 1.1.0
+Version: 1.1.4
 Authors@R: 
     person("Franz", "Schulze", , "franz.schulze@geo.uni-halle.de", role = c("aut", "cre"))
 Description: An interactive Shiny application for analyzing and visualizing crop rotation 
@@ -29,6 +29,7 @@ Imports:
     htmltools,
     leaflet (>= 2.1.2),
     leaflet.minicharts,
+    lwgeom,
     methods,
     parallel,
     purrr,
@@ -57,5 +58,5 @@ Suggests:
 Encoding: UTF-8
 LazyData: true
 Roxygen: list(markdown = TRUE)
-RoxygenNote: 7.3.3
 Config/testthat/edition: 3
+Config/roxygen2/version: 8.0.0

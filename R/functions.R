@@ -2334,11 +2334,20 @@ compute_rotation_base_grouped <- function(All_rot_big, area_range, years) {
 #' Compute Global Crop Area Percentage Range
 #'
 #' @description Scans every district and every catchment, across every year
-#' plus their per-region average, to find the global minimum and maximum area
-#' percentage for a given crop. Used to fix a stable color scale for the
-#' crop-specific distribution map so that switching between years, districts,
-#' and catchments doesn't shift what a given color means, keeping visual
-#' comparisons across maps meaningful.
+#' plus their per-region average, to find a stable color-scale range for a
+#' given crop. Used to fix the crop-specific distribution map's color scale so
+#' that switching between years, districts, and catchments doesn't shift what
+#' a given color means, keeping visual comparisons across maps meaningful.
+#'
+#' The upper bound is capped at the 95th percentile rather than the true max,
+#' since a single district/year with an unusually high share otherwise
+#' stretches the whole scale and collapses the typical range into one end of
+#' the palette. Values above the cap simply render as the darkest color
+#' (`colorNumeric` clamps out-of-domain values) instead of being distinguished
+#' from each other -- an acceptable tradeoff for making the other ~95% of the
+#' map readable. If the 95th percentile collapses onto the minimum (e.g. a
+#' rare crop where most values are the same low number), the true max is used
+#' instead so the map doesn't go flat for everyone.
 #'
 #' @param district_list Named list of data frames/data.tables, one per
 #'        district, each with a `freq` column and one or more
@@ -2349,7 +2358,7 @@ compute_rotation_base_grouped <- function(All_rot_big, area_range, years) {
 #'        available.
 #' @param selected_crop Character string, the crop to compute percentages for
 #'
-#' @return Numeric vector of length 2: `c(min_percentage, max_percentage)`.
+#' @return Numeric vector of length 2: `c(min_percentage, p95_percentage)`.
 #'         Returns `c(0, 1)` if no data is available.
 #'
 #' @export
@@ -2386,7 +2395,17 @@ compute_crop_percentage_range <- function(district_list, ezg_list, selected_crop
     return(c(0, 1))
   }
 
-  range(all_percentages)
+  lower <- min(all_percentages)
+  upper <- stats::quantile(all_percentages, 0.95, na.rm = TRUE, names = FALSE)
+
+  # Degenerate case: the 95th percentile collapsed onto the minimum (most
+  # values are equal/low) -- fall back to the true max instead of returning
+  # a zero-width range that would gray out the whole map.
+  if (upper <= lower) {
+    upper <- max(all_percentages)
+  }
+
+  c(lower, upper)
 }
 
 #-------------------------------------------------------------------------------------------
