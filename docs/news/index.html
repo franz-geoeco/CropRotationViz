@@ -17,7 +17,7 @@
       </button>
       <span class="navbar-brand">
         <a class="navbar-link" href="../index.html">CropRotationViz</a>
-        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="">0.0.1</span>
+        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="">1.1.4</span>
       </span>
     </div>
 
@@ -48,6 +48,31 @@
     </div>
 
     <div class="section level2">
+<h2 class="page-header" data-toc-text="1.1.4" id="croprotationviz-114">CropRotationViz 1.1.4<a class="anchor" aria-label="anchor" href="#croprotationviz-114"></a></h2>
+<ul><li>Replaced the drag-and-drop crop aggregation editor (Processing app, “Crop Code Aggregation Editor”) with a searchable, filterable table and bulk-assign controls. The previous editor used one <code><a href="https://rstudio.github.io/sortable/reference/bucket_list.html" class="external-link">sortable::bucket_list</a></code> per aggregation class sharing a single drag group; moving one crop forced every class box to re-render, which caused visible back-and-forth/flicker once a dataset had many crop codes and many classes. The table now holds crop-to-class assignment as a single data frame, edits are patched into the existing table via <code><a href="https://rdrr.io/pkg/DT/man/replaceData.html" class="external-link">DT::replaceData()</a></code> instead of re-rendering it, and crops are reassigned by ticking rows and clicking “Assign Checked Rows to Selected Class” or “Mark Checked Rows as Ignored” rather than dragging one at a time. Classes can still be created, renamed, and removed; the default crop-code aggregation (Code mode) still pre-populates automatically.</li>
+<li>Set the crop assignment table to show 100 rows by default (was 15), and fixed its search box, per-column filter boxes, length picker, and pagination controls being unreadable against the app’s dark theme.</li>
+<li>Fixed the crop-specific area distribution map’s color scale (Crop-Specific Analysis tab) being stretched flat by a single outlier: <code>compute_crop_ percentage_range()</code> now caps the upper bound at the 95th percentile of area percentages across all districts/catchments/years instead of the true maximum, so one unusually high district-year no longer washes out the color differences across the rest of the map. Falls back to the true maximum if the 95th percentile collapses onto the minimum (e.g. a rare crop where almost all values are the same low number). Values above the 95th-percentile cap are now clamped to the domain’s edge before coloring, so the districts/catchments with the highest percentages render as the darkest color instead of turning transparent (<code><a href="https://rstudio.github.io/leaflet/reference/colorNumeric.html" class="external-link">leaflet::colorNumeric()</a></code> maps any value outside its domain to <code>na.color</code>, which was “transparent” here); the popup for each district/catchment still shows its true, unclamped percentage.</li>
+</ul></div>
+    <div class="section level2">
+<h2 class="page-header" data-toc-text="1.1.3" id="croprotationviz-113">CropRotationViz 1.1.3<a class="anchor" aria-label="anchor" href="#croprotationviz-113"></a></h2>
+</div>
+    <div class="section level2">
+<h2 class="page-header" data-toc-text="1.1.2" id="croprotationviz-112">CropRotationViz 1.1.2<a class="anchor" aria-label="anchor" href="#croprotationviz-112"></a></h2>
+<ul><li>Sped up the “Plot Sequence” and “Plot Crop Specific Sequence” tabs in the visualization app by rewriting <code><a href="../reference/transform_rotation_data.html">transform_rotation_data()</a></code> (used by both tabs) with <code>data.table</code> instead of <code>dplyr</code>/<code>tidyr</code>: the row-wise crop filters and the wide-to-long reshape were the main cost on large datasets. An initial version of this rewrite still converted the whole (potentially very large) <code>distribution_df</code> to a <code>data.table</code> up front, which cost about as much as it saved and left the tabs about as slow as before; the fix avoids that conversion entirely and filters directly on the source data frame’s columns. Measured ~2.4x faster at ~900k fields, with identical output verified against the original implementation.</li>
+<li>Fixed unstable color scaling on the crop-specific area distribution map (Crop-Specific Analysis tab): the color scale used to be recalculated from whatever district/catchment/year happened to be on screen, so the same color could mean different area percentages depending on what was currently displayed. The scale is now fixed once per crop selection, using the global min/max area percentage across every district and catchment, every year, and their per-region averages, so colors stay comparable across views.</li>
+<li>Added a “Download Map (Shapefile)” export for the crop-specific area distribution map (Crop-Specific Analysis tab). Regardless of whether a single year or the complete average is currently displayed, the export always includes every year as its own column (<code>pct_&lt;year&gt;</code>) plus the average (<code>pct_avg</code>); the geometry (districts vs catchments) still follows whichever map type is currently selected.</li>
+<li>Added a “Download Map (Shapefile)” export for the Dominant Rotation Map on the Rotation Ranking tab, including the soil potential (<code>BS_mean</code>) column when available, plus a companion settings file recording the analysis parameters (rotation length, year range, filters) used to generate the export.</li>
+<li>Documented previously undocumented app features in <code>README.md</code>: the field-level exploration application, crop transition heatmap, rotation ranking, rotation analysis (monoculture detection and clustering), the Shannon-Wiener diversity index, AOI comparison mode, CSV/Excel/PNG export options, and bilingual (English/German) crop names.</li>
+<li>Fixed a typo in <code>README.md</code> referencing a nonexistent <code>dummy_filed_generator</code> function; corrected to <code>dummy_field_creator</code>.</li>
+<li>Synced the version number across the standalone bundle files (<code>DESCRIPTION</code>, installer scripts, <code>CropRotationViz.bat</code>, <code>User_Guide.txt</code>, <code>Technical_Notes.txt</code>, and the installer wizard icon label).</li>
+</ul></div>
+    <div class="section level2">
+<h2 class="page-header" data-toc-text="1.1.1" id="croprotationviz-111">CropRotationViz 1.1.1<a class="anchor" aria-label="anchor" href="#croprotationviz-111"></a></h2>
+<ul><li>Fixed version mismatch between the package (<code>DESCRIPTION</code>) and the standalone Windows installer scripts, which were still pinned at 1.0.0.</li>
+<li>Corrected <code>check_versions.R</code> to point at the actual installer script location (<code>CropRotationViz_Standalones/installer/create_installer.iss</code>), so version consistency checks no longer silently skip the installer file.</li>
+<li>Synced <code>create_installer.iss</code> and <code>CropRotationViz_Simple.iss</code> to 1.1.1.</li>
+</ul></div>
+    <div class="section level2">
 <h2 class="page-header" data-toc-text="0.1.0" id="croprotationviz-010">CropRotationViz 0.1.0<a class="anchor" aria-label="anchor" href="#croprotationviz-010"></a></h2>
 <ul><li>Initial CRAN submission.</li>
 </ul></div>
@@ -65,7 +90,7 @@
 </div>
 
 <div class="pkgdown">
-  <p></p><p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.1.1.</p>
+  <p></p><p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.0.</p>
 </div>
 
       </footer></div>

@@ -20,7 +20,7 @@ cropping sequences."><!-- mathjax --><script src="https://cdnjs.cloudflare.com/a
       </button>
       <span class="navbar-brand">
         <a class="navbar-link" href="../index.html">CropRotationViz</a>
-        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="">0.0.1</span>
+        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="">1.1.4</span>
       </span>
     </div>
 
@@ -59,7 +59,7 @@ cropping sequences.</p>
     </div>
 
     <div id="ref-usage">
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">run_visualization_app</span><span class="op">(</span>input_dir <span class="op">=</span> <span class="cn">NA</span><span class="op">)</span></span></code></pre></div>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">run_visualization_app</span><span class="op">(</span>input_dir <span class="op">=</span> <span class="cn">NA</span>, crop_colors <span class="op">=</span> <span class="cn">NULL</span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div id="arguments">
@@ -69,6 +69,13 @@ cropping sequences.</p>
 <dl><dt id="arg-input-dir">input_dir<a class="anchor" aria-label="anchor" href="#arg-input-dir"></a></dt>
 <dd><p>Optional filepath to custom input data directory. If NA (default),
 you have to choose it manually in the app.</p></dd>
+
+
+<dt id="arg-crop-colors">crop_colors<a class="anchor" aria-label="anchor" href="#arg-crop-colors"></a></dt>
+<dd><p>Optional named character vector mapping crop names to colors (hex codes
+or R color names). Crops not present in this vector receive colors from the built-in
+palette; any remaining unmapped crops are assigned random colors. Use <code>NULL</code>
+(default) to rely entirely on the built-in palette.</p></dd>
 
 </dl></div>
     <div id="value">
@@ -87,6 +94,61 @@ you have to choose it manually in the app.</p></dd>
     <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="kw">if</span> <span class="op">(</span><span class="cn">FALSE</span><span class="op">)</span> <span class="op">{</span> <span class="co"># \dontrun{</span></span></span>
 <span class="r-in"><span><span class="fu">run_visualization_app</span><span class="op">(</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="fu">run_visualization_app</span><span class="op">(</span><span class="st">"path/to/custom/data"</span><span class="op">)</span></span></span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># Custom crop color palette</span></span></span>
+<span class="r-in"><span><span class="va">my_colors</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span></span></span>
+<span class="r-in"><span>  <span class="st">"winter wheat"</span>             <span class="op">=</span> <span class="st">"#F5D76E"</span>,</span></span>
+<span class="r-in"><span>  <span class="st">"maize"</span>                    <span class="op">=</span> <span class="st">"#FFD700"</span>,</span></span>
+<span class="r-in"><span>  <span class="st">"other areas"</span>              <span class="op">=</span> <span class="st">"#AAAAAA"</span>,</span></span>
+<span class="r-in"><span>  <span class="st">"winter barley"</span>            <span class="op">=</span> <span class="st">"#C8A96E"</span>,</span></span>
+<span class="r-in"><span>  <span class="st">"permanent grassland"</span>      <span class="op">=</span> <span class="st">"#5DAD37"</span>,</span></span>
+<span class="r-in"><span>  <span class="st">"sugar beet"</span>               <span class="op">=</span> <span class="st">"#E74C3C"</span>,</span></span>
+<span class="r-in"><span>  <span class="st">"Not named"</span>                <span class="op">=</span> <span class="st">"#FFFFFF"</span>,</span></span>
+<span class="r-in"><span>  <span class="st">"woody vegetation"</span>         <span class="op">=</span> <span class="st">"#2E7D32"</span>,</span></span>
+<span class="r-in"><span>  <span class="st">"arable fodder"</span>            <span class="op">=</span> <span class="st">"#A8D5A2"</span>,</span></span>
+<span class="r-in"><span>  <span class="st">"winter rapeseed"</span>          <span class="op">=</span> <span class="st">"#FFEB3B"</span>,</span></span>
+<span class="r-in"><span>  <span class="st">"plantations"</span>              <span class="op">=</span> <span class="st">"#808000"</span>,</span></span>
+<span class="r-in"><span>  <span class="st">"winter rye"</span>               <span class="op">=</span> <span class="st">"#A0785A"</span>,</span></span>
+<span class="r-in"><span>  <span class="st">"horticultural products"</span>   <span class="op">=</span> <span class="st">"#CE93D8"</span>,</span></span>
+<span class="r-in"><span>  <span class="st">"potato"</span>                   <span class="op">=</span> <span class="st">"#8B6914"</span>,</span></span>
+<span class="r-in"><span>  <span class="st">"sunflower"</span>                <span class="op">=</span> <span class="st">"#FFA500"</span>,</span></span>
+<span class="r-in"><span>  <span class="st">"spring oat"</span>               <span class="op">=</span> <span class="st">"#D4B896"</span>,</span></span>
+<span class="r-in"><span>  <span class="st">"spring barley"</span>            <span class="op">=</span> <span class="st">"#B8943F"</span>,</span></span>
+<span class="r-in"><span>  <span class="st">"hops"</span>                     <span class="op">=</span> <span class="st">"#556B2F"</span>,</span></span>
+<span class="r-in"><span>  <span class="st">"vineyard"</span>                 <span class="op">=</span> <span class="st">"#8B008B"</span>,</span></span>
+<span class="r-in"><span>  <span class="st">"pea"</span>                      <span class="op">=</span> <span class="st">"#90EE90"</span>,</span></span>
+<span class="r-in"><span>  <span class="st">"fallow"</span>                   <span class="op">=</span> <span class="st">"#F5DEB3"</span>,</span></span>
+<span class="r-in"><span>  <span class="st">"other agricultural areas"</span> <span class="op">=</span> <span class="st">"#888888"</span>,</span></span>
+<span class="r-in"><span>  <span class="st">"soybean"</span>                  <span class="op">=</span> <span class="st">"#9ACD32"</span>,</span></span>
+<span class="r-in"><span>  <span class="st">"field bean"</span>               <span class="op">=</span> <span class="st">"#6B8E23"</span>,</span></span>
+<span class="r-in"><span>  <span class="st">"lupine"</span>                   <span class="op">=</span> <span class="st">"#9370DB"</span></span></span>
+<span class="r-in"><span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="fu">run_visualization_app</span><span class="op">(</span>crop_colors <span class="op">=</span> <span class="va">my_colors</span><span class="op">)</span></span></span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># Alternative palette (20-crop set)</span></span></span>
+<span class="r-in"><span><span class="va">my_colors_alt</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span></span></span>
+<span class="r-in"><span>  <span class="st">"maize"</span>                                  <span class="op">=</span> <span class="st">"#FFD700"</span>,</span></span>
+<span class="r-in"><span>  <span class="st">"permanent grassland"</span>                    <span class="op">=</span> <span class="st">"#4CAF50"</span>,</span></span>
+<span class="r-in"><span>  <span class="st">"winter wheat"</span>                           <span class="op">=</span> <span class="st">"#F5C518"</span>,</span></span>
+<span class="r-in"><span>  <span class="st">"Not named"</span>                              <span class="op">=</span> <span class="st">"#FFFFFF"</span>,</span></span>
+<span class="r-in"><span>  <span class="st">"spring wheat"</span>                           <span class="op">=</span> <span class="st">"#FAE08A"</span>,</span></span>
+<span class="r-in"><span>  <span class="st">"other agricultural use"</span>                 <span class="op">=</span> <span class="st">"#9E9E9E"</span>,</span></span>
+<span class="r-in"><span>  <span class="st">"winter barley"</span>                          <span class="op">=</span> <span class="st">"#C49A3C"</span>,</span></span>
+<span class="r-in"><span>  <span class="st">"sugar beet"</span>                             <span class="op">=</span> <span class="st">"#E74C3C"</span>,</span></span>
+<span class="r-in"><span>  <span class="st">"arable grass"</span>                           <span class="op">=</span> <span class="st">"#8BC34A"</span>,</span></span>
+<span class="r-in"><span>  <span class="st">"rapeseed"</span>                               <span class="op">=</span> <span class="st">"#FFEE58"</span>,</span></span>
+<span class="r-in"><span>  <span class="st">"potato"</span>                                 <span class="op">=</span> <span class="st">"#795548"</span>,</span></span>
+<span class="r-in"><span>  <span class="st">"clover/alfalfa"</span>                         <span class="op">=</span> <span class="st">"#66BB6A"</span>,</span></span>
+<span class="r-in"><span>  <span class="st">"spring barley"</span>                          <span class="op">=</span> <span class="st">"#A1887F"</span>,</span></span>
+<span class="r-in"><span>  <span class="st">"other winter cereals"</span>                   <span class="op">=</span> <span class="st">"#78909C"</span>,</span></span>
+<span class="r-in"><span>  <span class="st">"spring oat"</span>                             <span class="op">=</span> <span class="st">"#BCAAA4"</span>,</span></span>
+<span class="r-in"><span>  <span class="st">"fruit trees and other woody vegetation"</span> <span class="op">=</span> <span class="st">"#2E7D32"</span>,</span></span>
+<span class="r-in"><span>  <span class="st">"winter rye"</span>                             <span class="op">=</span> <span class="st">"#6D4C41"</span>,</span></span>
+<span class="r-in"><span>  <span class="st">"vineyard"</span>                               <span class="op">=</span> <span class="st">"#7B1FA2"</span>,</span></span>
+<span class="r-in"><span>  <span class="st">"legumes"</span>                                <span class="op">=</span> <span class="st">"#9CCC65"</span>,</span></span>
+<span class="r-in"><span>  <span class="st">"hops"</span>                                   <span class="op">=</span> <span class="st">"#33691E"</span></span></span>
+<span class="r-in"><span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="fu">run_visualization_app</span><span class="op">(</span>crop_colors <span class="op">=</span> <span class="va">my_colors_alt</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="op">}</span> <span class="co"># }</span></span></span>
 </code></pre></div>
     </div>
@@ -102,7 +164,7 @@ you have to choose it manually in the app.</p></dd>
 </div>
 
 <div class="pkgdown">
-  <p></p><p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.1.1.</p>
+  <p></p><p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.0.</p>
 </div>
 
       </footer></div>

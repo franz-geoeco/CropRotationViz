@@ -19,7 +19,7 @@ different crop types, their classifications, reference codes, and visualization 
       </button>
       <span class="navbar-brand">
         <a class="navbar-link" href="../index.html">CropRotationViz</a>
-        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="">0.0.1</span>
+        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="">1.1.4</span>
       </span>
     </div>
 
@@ -97,6 +97,27 @@ different crop types, their classifications, reference codes, and visualization 
 
 <dt>EZG</dt>
 <dd><p>RIver Basins from Germany (Bundesanstalt für Gewässerkunde)</p></dd>
+
+<dt>crop_codes_management</dt>
+<dd><p>List of crop code mappings for the "rotation
+management" default aggregation – a second, coarser classification
+that groups the ~450 national crop codes (NC) by their function in
+crop rotation planning (sowing time, N-fixing capacity, row/hoe crop
+status, forage vs. permanent grassland, greening/fallow phase,
+permanent &amp; non-arable land use) rather than by botanical similarity,
+which is what <code>crop_codes</code> already provides. Every NC code in
+<code>codierung_all</code> is assigned to exactly one of 14 classes.</p></dd>
+
+<dt>management_display_names</dt>
+<dd><p><code>list(en = ..., de = ...)</code> of named
+character vectors mapping the short IDs used in
+<code>crop_codes_management</code> (e.g. <code>"winter_cereals"</code>) to
+human-readable English/German class labels.</p></dd>
+
+<dt>management_color_mapping</dt>
+<dd><p><code>list(en = ..., de = ...)</code> of named
+character vectors mapping the English/German rotation-management
+class labels to hex color codes, mirroring <code>crop_color_mapping</code>.</p></dd>
 
 
 </dl></div>
@@ -202,7 +223,7 @@ different crop types, their classifications, reference codes, and visualization 
 </div>
 
 <div class="pkgdown">
-  <p></p><p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.1.1.</p>
+  <p></p><p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.0.</p>
 </div>
 
       </footer></div>

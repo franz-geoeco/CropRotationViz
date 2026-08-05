@@ -19,7 +19,7 @@ crop rotation patterns."><!-- mathjax --><script src="https://cdnjs.cloudflare.c
       </button>
       <span class="navbar-brand">
         <a class="navbar-link" href="../index.html">CropRotationViz</a>
-        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="">0.0.1</span>
+        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="">1.1.4</span>
       </span>
     </div>
 
@@ -65,7 +65,8 @@ crop rotation patterns.</p>
 <span>  output_dir <span class="op">=</span> <span class="cn">NA</span>,</span>
 <span>  common_column <span class="op">=</span> <span class="cn">NA</span>,</span>
 <span>  preview <span class="op">=</span> <span class="cn">TRUE</span>,</span>
-<span>  vector_file <span class="op">=</span> <span class="cn">TRUE</span></span>
+<span>  vector_file <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  ncores <span class="op">=</span> <span class="fl">4</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -110,6 +111,10 @@ crop rotation patterns.</p>
 <dt id="arg-vector-file">vector_file<a class="anchor" aria-label="anchor" href="#arg-vector-file"></a></dt>
 <dd><p>logical. If True (default) you will get a vector file as an additional output with all intersected and aggregated field data.</p></dd>
 
+
+<dt id="arg-ncores">ncores<a class="anchor" aria-label="anchor" href="#arg-ncores"></a></dt>
+<dd><p>integer. How many cores should be used in parallel?</p></dd>
+
 </dl></div>
     <div id="value">
     <h2>Value</h2>
@@ -127,7 +132,7 @@ crop rotation patterns.</p>
 <li><p>Interactive map visualization with bounding box display</p></li>
 </ul></li>
 <li><p>Spatial Processing
-</p><ul><li><p>Support for multiple spatial file formats (.shp, .geojson, .fgb, .gpkg, .sqlite)</p></li>
+</p><ul><li><p>Support for multiple spatial file formats (.shp, .geojson, .fgb, .gpkg, .sqlite, .tiff, or .tif)</p></li>
 <li><p>Two intersection methods: complete (preserving all areas) and fast (optimized for performance)</p></li>
 <li><p>Optional crop class aggregation based on national coding system</p></li>
 <li><p>Area calculations and spatial transformations</p></li>
@@ -202,7 +207,7 @@ crop rotation patterns.</p>
 </div>
 
 <div class="pkgdown">
-  <p></p><p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.1.1.</p>
+  <p></p><p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.0.</p>
 </div>
 
       </footer></div>
