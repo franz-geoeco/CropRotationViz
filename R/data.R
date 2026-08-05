@@ -43,6 +43,24 @@
 #'   }
 #'   \item{loaded_env}{Environment object containing loaded runtime data}
 #'   \item{EZG}{RIver Basins from Germany (Bundesanstalt für Gewässerkunde)}
+#'   \item{crop_codes_management}{List of crop code mappings for the "rotation
+#'     management" default aggregation -- a second, coarser classification
+#'     that groups the ~450 national crop codes (NC) by their function in
+#'     crop rotation planning (sowing time, N-fixing capacity, row/hoe crop
+#'     status, forage vs. permanent grassland, greening/fallow phase,
+#'     permanent & non-arable land use) rather than by botanical similarity,
+#'     which is what \code{crop_codes} already provides. Every NC code in
+#'     \code{codierung_all} is assigned to exactly one of 14 classes.
+#'   }
+#'   \item{management_display_names}{\code{list(en = ..., de = ...)} of named
+#'     character vectors mapping the short IDs used in
+#'     \code{crop_codes_management} (e.g. \code{"winter_cereals"}) to
+#'     human-readable English/German class labels.
+#'   }
+#'   \item{management_color_mapping}{\code{list(en = ..., de = ...)} of named
+#'     character vectors mapping the English/German rotation-management
+#'     class labels to hex color codes, mirroring \code{crop_color_mapping}.
+#'   }
 #' }
 #'
 #' @section Crop Categories and Classification:

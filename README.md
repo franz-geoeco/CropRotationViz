@@ -55,6 +55,7 @@ The package consists of four main components:
     -   [Example](#example)
 -   [Contributing](#contributing)
 -   [License](#license)
+-   [Methodology Reference](#methodology-reference)
 -   [Citation](#citation)
 -   [Contact](#contact)
 -   [Acknowledgments](#acknowledgments)
@@ -79,7 +80,8 @@ The package consists of four main components:
     -   **Temporal analysis charts** - Track crop area changes over time
     -   **Crop transition probability heatmap** - Visualize the likelihood of one crop following another
     -   **Rotation ranking** - Rank and filter the most common rotation sequences by year range, area, crop, and spatial extent
-    -   **Rotation analysis** - Detect monocultures and cluster fields by similar rotation patterns
+    -   **Rotation analysis** - Detect monocultures, cluster fields by similar rotation patterns, and view the distribution of crop transitions per field
+    -   **Crop rotation network analysis** - Interactive network diagram of crop-to-crop transitions (nodes = crops, edges = transitions weighted by area), with density, precedents-per-crop, and simulated return-time indicators, following the method of [Nowak, Michaud & Marliac (2022)](https://doi.org/10.1016/j.agsy.2022.103402)
     -   **Field-level exploration** - Click individual fields on a map to inspect their specific rotation sequence
     -   Custom color schemes for different crop types
     -   Adjustable text size and dark/light themes for Sankey plots
@@ -228,6 +230,8 @@ If you do not have field data at hand or just want to test the functionality of 
     -   **Interactive Data Tables**: Filter, sort, and explore crop sequence data
     -   **Temporal Analysis**: Track changes in crop areas over time
     -   **Crop-Specific Analysis**: Focus on specific crops and their rotation patterns
+    -   **Rotation Ranking**: Ranking table, area chart, and top-20 distribution of the most common rotation sequences
+    -   **Rotation Analysis**: Monoculture detection, rotation-pattern clustering, per-field transition distribution, and a crop rotation network diagram (see [Methodology Reference](#methodology-reference))
     -   **Custom Color Schemes**: Customize colors for different crop types
     -   **Summary Statistics**: Review area calculations and sequence patterns
 
@@ -379,6 +383,14 @@ To contribute:
 ## License {#license}
 
 This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Methodology Reference {#methodology-reference}
+
+The **Network Analysis** view (Visualization app → Rotation Analysis tab) implements the crop-rotation network indicators described in:
+
+> Nowak, B., Michaud, A., Marliac, G. (2022). Assessment of the diversity of crop rotations based on network analysis indicators. *Agricultural Systems*, 199, 103402. https://doi.org/10.1016/j.agsy.2022.103402
+
+Nodes represent crops and edges represent observed crop-to-crop transitions on the same field, weighted by area; the app reports network density, mean precedents per crop (in-degree), and simulated crop return times based on this approach. This reference is also linked directly from the info button on that tab in the app.
 
 ## Citation {#citation}
 

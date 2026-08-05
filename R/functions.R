@@ -2729,6 +2729,281 @@ create_transition_heatmap <- function(trans_df, crop_colors = NULL) {
 
 #-------------------------------------------------------------------------------------------
 
+#' Compute Crop Rotation Network Indicators
+#'
+#' @description Compute network-analysis indicators for a crop rotation transition
+#' table, following Nowak et al. (2022, Agricultural Systems 199:103402): network
+#' density and the mean number of precedents (in-degree) per crop, plus a per-crop
+#' breakdown of precedents/successors/involved area.
+#'
+#' @param edge_df Data frame from \code{compute_transition_matrix()} with columns
+#'   source, target, area_km2, probability.
+#'
+#' @return A list with elements \code{n_nodes}, \code{n_edges}, \code{density},
+#'   \code{mean_precedents}, and \code{precedents_table} (data frame with columns
+#'   crop, n_precedents, n_successors, total_area_km2, ordered by total area
+#'   descending).
+#'
+#' @details Density is \code{m / (n * (n - 1))} where \code{m} is the number of
+#'   distinct crop-to-*different*-crop edges present and \code{n} is the number of
+#'   crops (nodes); same-crop-to-same-crop transitions (monoculture continuation)
+#'   are excluded from \code{m} and \code{n_precedents}/\code{n_successors}, matching
+#'   the directed-network density formula, but are still counted in
+#'   \code{total_area_km2}.
+#'
+#' @export
+compute_network_indicators <- function(edge_df) {
+  if (is.null(edge_df) || nrow(edge_df) == 0) {
+    return(list(n_nodes = 0L, n_edges = 0L, density = NA_real_,
+                mean_precedents = NA_real_, precedents_table = data.frame()))
+  }
+
+  nodes <- sort(unique(c(edge_df$source, edge_df$target)))
+  n <- length(nodes)
+
+  cross <- edge_df[edge_df$source != edge_df$target & edge_df$area_km2 > 0, ]
+  m <- nrow(cross)
+
+  density <- if (n > 1) m / (n * (n - 1)) else NA_real_
+
+  precedents_table <- do.call(rbind, lapply(nodes, function(crop) {
+    data.frame(
+      crop = crop,
+      n_precedents = length(unique(cross$source[cross$target == crop])),
+      n_successors = length(unique(cross$target[cross$source == crop])),
+      total_area_km2 = sum(edge_df$area_km2[edge_df$source == crop | edge_df$target == crop], na.rm = TRUE),
+      stringsAsFactors = FALSE
+    )
+  }))
+  precedents_table <- precedents_table[order(-precedents_table$total_area_km2), ]
+  rownames(precedents_table) <- NULL
+
+  list(
+    n_nodes = n,
+    n_edges = m,
+    density = density,
+    mean_precedents = mean(precedents_table$n_precedents, na.rm = TRUE),
+    precedents_table = precedents_table
+  )
+}
+
+#-------------------------------------------------------------------------------------------
+
+#' Simulate Crop Return Time from a Transition Matrix
+#'
+#' @description Simulate crop rotation sequences from an area-weighted transition
+#' matrix to estimate the return time of a given crop, following the approach of
+#' Nowak et al. (2022, Agricultural Systems 199:103402): starting from the crop of
+#' interest, each subsequent year is drawn at random using the transition
+#' probabilities of the previous year's crop, and the gaps between successive
+#' occurrences of the crop of interest are recorded across many simulated years and
+#' repetitions.
+#'
+#' @param edge_df Data frame from \code{compute_transition_matrix()} with columns
+#'   source, target, probability (self-transitions, i.e. monoculture continuation,
+#'   must be included for the simulation to be realistic).
+#' @param crop Character string: the crop to estimate the return time for.
+#' @param n_sim Integer, number of independent simulated rotations. Default 100.
+#' @param n_years Integer, number of years per simulated rotation. Default 100.
+#' @param seed Optional integer random seed for reproducibility. Default NULL.
+#'
+#' @return A numeric vector of observed return times (in years) pooled across all
+#'   simulations; empty if the crop never appears in \code{edge_df} or never
+#'   recurs in any simulation.
+#'
+#' @export
+simulate_crop_return_time <- function(edge_df, crop, n_sim = 100, n_years = 100, seed = NULL) {
+  if (!is.null(seed)) set.seed(seed)
+
+  if (is.null(edge_df) || nrow(edge_df) == 0 ||
+      !(crop %in% unique(c(edge_df$source, edge_df$target)))) {
+    return(numeric(0))
+  }
+
+  sources <- split(edge_df, edge_df$source)
+
+  return_times <- vector("list", n_sim)
+  for (sim in seq_len(n_sim)) {
+    seq_crops <- character(n_years)
+    seq_crops[1] <- crop
+    for (yr in 2:n_years) {
+      src <- seq_crops[yr - 1]
+      opts <- sources[[src]]
+      if (is.null(opts) || nrow(opts) == 0 || sum(opts$probability, na.rm = TRUE) <= 0) {
+        # No outgoing transitions observed for this crop -- treat as persisting
+        seq_crops[yr] <- src
+      } else {
+        seq_crops[yr] <- sample(opts$target, size = 1, prob = opts$probability)
+      }
+    }
+    occ <- which(seq_crops == crop)
+    return_times[[sim]] <- if (length(occ) >= 2) diff(occ) else integer(0)
+  }
+
+  unlist(return_times)
+}
+
+#-------------------------------------------------------------------------------------------
+
+#' Plot a Crop Rotation Network Diagram
+#'
+#' @description Render an interactive node-link diagram of crop rotation
+#' transitions (in the spirit of the network diagrams in Nowak et al., 2022,
+#' Agricultural Systems 199:103402), using a dependency-free two-ring layout:
+#' the most important crops (by total involved area) are placed on an inner
+#' ring, the rest on an outer ring. Edge width and node size scale with area;
+#' monoculture continuation (a crop following itself) is drawn as a small
+#' dotted loop at the node instead of an edge.
+#'
+#' @param edge_df Data frame from \code{compute_transition_matrix()} with columns
+#'   source, target, area_km2, probability.
+#' @param crop_colors Named character vector mapping crop names to hex colors.
+#'   Default NULL (all nodes/edges use a single fallback color).
+#' @param min_share Numeric in [0, 1]: edges below this share of total transitioned
+#'   area are hidden (nodes are always kept). Default 0.0005 (0.05%).
+#' @param show_selfloops Logical: draw monoculture-continuation loops. Default TRUE.
+#' @param r_min Numeric: distance from the center for the single most important
+#'   node (largest total involved area). Default 0.6.
+#' @param r_max Numeric: distance from the center for the least important node.
+#'   Default 3.0.
+#'
+#' @return A plotly object.
+#'
+#' @details Nodes are placed on a phyllotaxis ("sunflower seed") spiral: radius
+#'   grows smoothly with importance rank (\code{sqrt} spacing, so ring density
+#'   stays roughly even) and angle advances by the golden angle
+#'   (\eqn{\pi(3-\sqrt5)}, \eqn{\approx}137.5°) at each step, so there is no
+#'   hard cutoff between "important" and "unimportant" crops -- the most
+#'   involved crop sits at \code{r_min}, the least involved at \code{r_max},
+#'   with every other crop graduated continuously in between.
+#'
+#' @import plotly
+#' @export
+plot_rotation_network <- function(edge_df, crop_colors = NULL, min_share = 0.0005,
+                                   show_selfloops = TRUE, r_min = 0.6, r_max = 3.0) {
+
+  if (is.null(edge_df) || nrow(edge_df) == 0) {
+    return(
+      plotly::plot_ly() %>%
+        plotly::layout(
+          title = list(text = "No transition data available", font = list(color = "white")),
+          paper_bgcolor = "#1f1b1b", plot_bgcolor = "#2d2d2d",
+          font = list(color = "white")
+        )
+    )
+  }
+
+  total_area <- sum(edge_df$area_km2, na.rm = TRUE)
+  edge_df$share <- if (total_area > 0) edge_df$area_km2 / total_area else 0
+
+  nodes <- sort(unique(c(edge_df$source, edge_df$target)))
+  n <- length(nodes)
+
+  node_weight <- vapply(nodes, function(crop) {
+    sum(edge_df$area_km2[edge_df$source == crop | edge_df$target == crop], na.rm = TRUE)
+  }, numeric(1))
+
+  ord <- order(node_weight, decreasing = TRUE)
+  nodes <- nodes[ord]
+  node_weight <- node_weight[ord]
+
+  # Continuous phyllotaxis (sunflower-spiral) layout by importance rank --
+  # radius grows smoothly instead of jumping between a fixed inner/outer ring.
+  golden_angle <- pi * (3 - sqrt(5))
+  ranks <- seq_len(n)
+  radius <- if (n > 1) r_min + (r_max - r_min) * sqrt((ranks - 1) / (n - 1)) else r_min
+  angle <- (ranks - 1) * golden_angle
+
+  coords <- data.frame(
+    crop = nodes,
+    r = radius,
+    angle = angle,
+    weight = node_weight,
+    stringsAsFactors = FALSE
+  )
+  coords$x <- coords$r * cos(coords$angle)
+  coords$y <- coords$r * sin(coords$angle)
+  rownames(coords) <- coords$crop
+
+  get_color <- function(crop) {
+    if (!is.null(crop_colors) && crop %in% names(crop_colors)) unname(crop_colors[[crop]]) else "#7f9cf5"
+  }
+
+  cross_edges <- edge_df[edge_df$source != edge_df$target & edge_df$share >= min_share, ]
+  self_edges  <- edge_df[edge_df$source == edge_df$target & edge_df$share >= min_share, ]
+
+  fig <- plotly::plot_ly()
+
+  if (nrow(cross_edges) > 0) {
+    max_share <- max(cross_edges$share, na.rm = TRUE)
+    for (i in seq_len(nrow(cross_edges))) {
+      s <- cross_edges$source[i]; t <- cross_edges$target[i]
+      if (!(s %in% rownames(coords)) || !(t %in% rownames(coords))) next
+      w <- 1 + 9 * (cross_edges$share[i] / max_share)
+      fig <- fig %>% plotly::add_trace(
+        x = c(coords[s, "x"], coords[t, "x"]),
+        y = c(coords[s, "y"], coords[t, "y"]),
+        type = "scatter", mode = "lines",
+        line = list(width = w, color = get_color(s)),
+        opacity = 0.45,
+        hoverinfo = "text",
+        text = sprintf("%s → %s<br>%.2f%% of area<br>%.2f km²",
+                        s, t, cross_edges$share[i] * 100, cross_edges$area_km2[i]),
+        showlegend = FALSE
+      )
+    }
+  }
+
+  if (isTRUE(show_selfloops) && nrow(self_edges) > 0) {
+    max_self <- max(self_edges$share, na.rm = TRUE)
+    theta <- seq(0, 2 * pi, length.out = 30)
+    for (i in seq_len(nrow(self_edges))) {
+      crop <- self_edges$source[i]
+      if (!(crop %in% rownames(coords))) next
+      loop_r <- 0.15 + 0.35 * (self_edges$share[i] / max_self)
+      cx <- coords[crop, "x"] * (1 + loop_r / coords[crop, "r"])
+      cy <- coords[crop, "y"] * (1 + loop_r / coords[crop, "r"])
+      fig <- fig %>% plotly::add_trace(
+        x = cx + loop_r * cos(theta), y = cy + loop_r * sin(theta),
+        type = "scatter", mode = "lines",
+        line = list(width = 2, color = get_color(crop), dash = "dot"),
+        opacity = 0.8,
+        hoverinfo = "text",
+        text = sprintf("%s stays %s<br>%.2f%% of area<br>%.2f km²",
+                        crop, crop, self_edges$share[i] * 100, self_edges$area_km2[i]),
+        showlegend = FALSE
+      )
+    }
+  }
+
+  node_size <- 15 + 45 * sqrt(coords$weight / max(coords$weight, 1))
+
+  fig <- fig %>% plotly::add_trace(
+    data = coords,
+    x = ~x, y = ~y,
+    type = "scatter", mode = "markers+text",
+    marker = list(size = node_size, color = sapply(coords$crop, get_color),
+                  line = list(color = "white", width = 1)),
+    text = ~crop, textposition = "top center",
+    textfont = list(color = "white", size = 11),
+    hoverinfo = "text",
+    hovertext = sprintf("%s<br>%.2f km² total", coords$crop, coords$weight),
+    showlegend = FALSE
+  )
+
+  fig %>% plotly::layout(
+    title = list(text = "Crop Rotation Network", font = list(size = 14, color = "white")),
+    xaxis = list(title = "", zeroline = FALSE, showgrid = FALSE, showticklabels = FALSE,
+                 scaleanchor = "y", scaleratio = 1),
+    yaxis = list(title = "", zeroline = FALSE, showgrid = FALSE, showticklabels = FALSE),
+    paper_bgcolor = "#1f1b1b", plot_bgcolor = "#2d2d2d",
+    font = list(color = "white"),
+    margin = list(l = 20, r = 20, t = 40, b = 20)
+  )
+}
+
+#-------------------------------------------------------------------------------------------
+
 #' Create Dummy Agricultural Fields
 #'
 #' @description Generate a set of dummy agricultural fields over multiple years in a region of your choice.

@@ -861,6 +861,41 @@ processing_ui <- function(app_data, output_dir = NA, start_year = NA, vector_fil
     # Step 5: Crop Code Aggregation Editor (appears after continue)
     conditionalPanel(
       condition = "input.btn_continue && input.aggregation == 'Yes'",
+      # Default aggregation level selector (only meaningful in Code mode --
+      # Name mode always starts from an empty, fully custom aggregation)
+      conditionalPanel(
+        condition = "input.id_or_name == 'Code'",
+        fluidRow(
+          column(5,
+                 radioButtons("aggregation_level",
+                              "Default Aggregation Level",
+                              c("Crop Class (detailed)" = "class",
+                                "Rotation Management (rigorous)" = "management"),
+                              inline = TRUE)
+          ),
+          column(1, style = "padding: 0; margin-top: 25px;",
+                 shinyBS::bsButton(
+                   "agg_level_info",
+                   label = "",
+                   icon = icon("info"),
+                   style = "default",
+                   size = "extra-small"
+                 ),
+                 shinyBS::bsPopover(
+                   "agg_level_info",
+                   "Default Aggregation Level",
+                   "Crop Class groups visually/botanically similar crops into ~30 detailed classes (e.g. potatoes, cucurbits, clover/lucerne), leaving major crops like wheat or maize as their own individual class. Rotation Management is a second, more rigorous default that classifies every crop code into one of 14 classes based on its function in crop rotation planning (winter vs. spring cereals, N-fixing grain legumes, root/hoe crops, oilseeds, forage legumes & grass-clover leys, permanent grassland, fallow/set-aside/greening, permanent & woody crops, etc.). Switching this option rebuilds the default below -- you can still fine-tune it with the editor afterwards.",
+                   placement = "right",
+                   trigger = "hover",
+                   options = list(
+                     container = 'body',
+                     html = TRUE,
+                     delay = list(show = 0, hide = 0)
+                   )
+                 )
+          )
+        )
+      ),
       fluidRow(
         column(12,
                wellPanel(
@@ -1212,6 +1247,12 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
   countriesSP   <- app_data$Input_App_data$countriesSP
   display_names <- app_data$Input_App_data$display_names
   EZG           <- app_data$Input_App_data$EZG
+  # Second, more rigorous default aggregation: rotation-management level
+  # (groups crops by their function in crop rotation planning instead of
+  # botanical similarity)
+  crop_codes_management     <- app_data$Input_App_data$crop_codes_management
+  management_display_names  <- app_data$Input_App_data$management_display_names
+  management_color_mapping  <- app_data$Input_App_data$management_color_mapping
   BS <- NULL
   if(!is.null(app_data$Input_App_data$BS)) {
     tryCatch({
@@ -2549,6 +2590,16 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
   # Initialize all_unique_crops reactive value to store all crops from files
   all_unique_crops <- reactiveVal(NULL)
 
+  # Switching the default aggregation level (Crop Class <-> Rotation
+  # Management) rebuilds the default classes from scratch: reset the
+  # editor state so the initializer observer below re-runs.
+  observeEvent(input$aggregation_level, {
+    crop_state(NULL)
+    class_defs(list())
+    class_names(list())
+    class_counter(0)
+  }, ignoreInit = TRUE)
+
   class_state <- reactive({
     defs <- class_defs()
     df <- crop_state()
@@ -2576,10 +2627,21 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
     req(input$btn_continue)
     req(length(processed_files()) > 1)
 
+    use_management_agg <- isTRUE(input$aggregation_level == "management") &&
+      !is.null(crop_codes_management)
+
     if(input$language == "English"){
-      color_palette <- app_data$Input_App_data$crop_color_mapping$en
+      color_palette <- if (use_management_agg) {
+        management_color_mapping$en
+      } else {
+        app_data$Input_App_data$crop_color_mapping$en
+      }
     }else{
-      color_palette <- app_data$Input_App_data$crop_color_mapping$de
+      color_palette <- if (use_management_agg) {
+        management_color_mapping$de
+      } else {
+        app_data$Input_App_data$crop_color_mapping$de
+      }
     }
 
     # Initialize crop_state if NULL
@@ -2590,7 +2652,17 @@ processing_server <- function(input, output, session, app_data, output_dir = NA,
 
       if (input$id_or_name == "Code") {
         # Define base classes ONLY for Code mode
-        if(input$language == "English"){
+        if (use_management_agg) {
+          # Second default aggregation: rotation-management level. Every NC
+          # code is classified by its function in crop rotation planning
+          # (see crop_codes_management / management_display_names in the
+          # data package) rather than by botanical similarity.
+          lang_key <- if (input$language == "English") "en" else "de"
+          base_classes <- stats::setNames(
+            lapply(crop_codes_management, function(codes) get_names(codes, codierung_all)),
+            unname(management_display_names[[lang_key]][names(crop_codes_management)])
+          )
+        } else if(input$language == "English"){
           base_classes <- list(
             "potatoes" = get_names(c(601, 602, 604, 605, 606), codierung_all),
             "kitchen herbs" = get_names(c(650:687), codierung_all),

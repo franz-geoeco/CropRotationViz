@@ -1518,6 +1518,134 @@ viz_ui <- function(input_dir = NA){
                                       shinycssloaders::withSpinner(
                                         DT::dataTableOutput("transition_categories_table")
                                       )
+                                    ),
+
+                                    tabPanel(
+                                      "Network Analysis",
+                                      icon = icon("share-alt"),
+                                      br(),
+                                      fluidRow(
+                                        column(11, h4("Crop Rotation Network")),
+                                        column(1,
+                                               bsButton("network-info",
+                                                        label = "", icon = icon("info"),
+                                                        style = "default", size = "extra-small"),
+                                               bsPopover(
+                                                 id = "network-info",
+                                                 title = "Crop Rotation Network",
+                                                 content = paste(
+                                                   "<b>Method:</b> Network analysis of crop-to-crop transitions, following the approach of Nowak et al. (2022).<br><br>",
+                                                   "<b>Nodes</b> are crops; <b>edges</b> are transitions from one crop to the next on the same field, weighted by area. Crops are arranged on a spiral by importance (total involved area) -- the most important crop sits closest to the center, tapering smoothly outward, with no hard boundary between \"important\" and \"minor\" crops. Dotted loops show monoculture continuation (a crop following itself).<br><br>",
+                                                   "<b>Density:</b> share of all possible crop-to-*different*-crop transitions actually observed.<br>",
+                                                   "<b>Precedents per crop:</b> mean number of distinct crops that can precede each crop (in-degree).<br>",
+                                                   "<b>Return time:</b> simulated number of years before a chosen crop reappears on the same field, drawn from the observed transition probabilities (100 simulated 100-year rotations).<br><br>",
+                                                   "<b>Reference:</b> Nowak, B., Michaud, A., Marliac, G. (2022). Assessment of the diversity of crop rotations based on network analysis indicators. <i>Agricultural Systems</i>, 199, 103402. <a href='https://doi.org/10.1016/j.agsy.2022.103402' target='_blank'>doi.org/10.1016/j.agsy.2022.103402</a>"
+                                                 ),
+                                                 placement = "left",
+                                                 trigger = "hover",
+                                                 options = list(container = 'body', html = TRUE)
+                                               )
+                                        )
+                                      ),
+                                      p(class = "text-muted",
+                                        "Uses the same spatial scope and crop filters as the sidebar on the left. Click \"Run Analysis\" again after changing them."),
+                                      br(),
+                                      fluidRow(
+                                        column(3,
+                                               sliderInput("network_min_share",
+                                                           "Minimum edge share to display (%):",
+                                                           min = 0, max = 5, value = 0.5, step = 0.1)
+                                        ),
+                                        column(3, style = "margin-top: 25px;",
+                                               checkboxInput("network_show_selfloops",
+                                                             "Show monoculture loops", value = TRUE)
+                                        ),
+                                        column(3,
+                                               uiOutput("network_focus_crop_ui")
+                                        ),
+                                        column(3, style = "margin-top: 25px;",
+                                               actionButton("run_return_time_sim", "Simulate Return Time",
+                                                            class = "btn-info", icon = icon("dice"))
+                                        )
+                                      ),
+                                      br(),
+                                      fluidRow(
+                                        column(3,
+                                               div(class = "metric-box",
+                                                   div(class = "metric-value", textOutput("network_density_metric")),
+                                                   div(class = "metric-label", "Network Density")
+                                               )
+                                        ),
+                                        column(3,
+                                               div(class = "metric-box",
+                                                   div(class = "metric-value", textOutput("network_precedents_metric")),
+                                                   div(class = "metric-label", "Mean Precedents / Crop")
+                                               )
+                                        ),
+                                        column(3,
+                                               div(class = "metric-box",
+                                                   div(class = "metric-value", textOutput("network_nodes_metric")),
+                                                   div(class = "metric-label", "Crops (Nodes)")
+                                               )
+                                        ),
+                                        column(3,
+                                               div(class = "metric-box",
+                                                   div(class = "metric-value", textOutput("network_edges_metric")),
+                                                   div(class = "metric-label", "Transition Types (Edges)")
+                                               )
+                                        )
+                                      ),
+                                      br(),
+                                      fluidRow(
+                                        column(8,
+                                               shinycssloaders::withSpinner(
+                                                 plotlyOutput("rotation_network_plot", height = "600px")
+                                               )
+                                        ),
+                                        column(4,
+                                               fluidRow(
+                                                 column(9, h5("Return Time")),
+                                                 column(3,
+                                                        bsButton("return-time-info",
+                                                                 label = "", icon = icon("info"),
+                                                                 style = "default", size = "extra-small"),
+                                                        bsPopover(
+                                                          id = "return-time-info",
+                                                          title = "Return Time Simulation",
+                                                          content = paste(
+                                                            "<b>Method:</b> Simulated Markov-chain rotation (100 runs of 100 years each): starting from the selected crop, each subsequent year's crop is drawn at random from the observed area-weighted transition probabilities. The gaps between successive appearances of the crop are pooled across all runs; the median is shown as \"Median Years to Return\".<br><br>",
+                                                            "This is simulated, not directly observed -- your uploaded data typically spans only a handful of years, not enough to measure a real multi-year return time. Simulating from the observed transition probabilities is the same workaround used in the reference study below.<br><br>",
+                                                            "There, the simulated return time of soft winter wheat was found to be strongly negatively correlated with phytosanitary product use: shorter return times (wheat returning sooner) came with higher pesticide use.<br><br>",
+                                                            "<b>Reference:</b> Nowak, B., Michaud, A., Marliac, G. (2022). Assessment of the diversity of crop rotations based on network analysis indicators. <i>Agricultural Systems</i>, 199, 103402. <a href='https://doi.org/10.1016/j.agsy.2022.103402' target='_blank'>doi.org/10.1016/j.agsy.2022.103402</a>"
+                                                          ),
+                                                          placement = "left",
+                                                          trigger = "hover",
+                                                          options = list(container = 'body', html = TRUE)
+                                                        )
+                                                 )
+                                               ),
+                                               div(class = "metric-box",
+                                                   div(class = "metric-value", textOutput("return_time_median")),
+                                                   div(class = "metric-label", "Median Years to Return")
+                                               ),
+                                               br(),
+                                               shinycssloaders::withSpinner(
+                                                 plotlyOutput("return_time_histogram", height = "300px")
+                                               )
+                                        )
+                                      ),
+                                      br(),
+                                      h4("Precedents per Crop"),
+                                      shinycssloaders::withSpinner(
+                                        DT::dataTableOutput("network_precedents_table")
+                                      ),
+                                      br(),
+                                      downloadButton(
+                                        "download_network_edges",
+                                        "Download Network Edge Data",
+                                        style = "margin-right: 10px; margin-top: 10px; color: #fff; background-color: rgb(0,86,157); border-color: rgb(0,86,157)",
+                                        class = "btn-success"
+                                      )
                                     )
                                   )
                            )
@@ -4911,6 +5039,9 @@ viz_server <- function(input, output, session, app_data, input_dir, crop_colors 
     monoculture_data <- reactiveVal(NULL)
     cluster_data <- reactiveVal(NULL)
     transition_data <- reactiveVal(NULL)
+    network_edge_data <- reactiveVal(NULL)
+    network_indicators_data <- reactiveVal(NULL)
+    return_time_data <- reactiveVal(NULL)
 
     # UI for district selection in analysis tab
     output$analysis_district_ui <- renderUI({
@@ -5306,6 +5437,28 @@ viz_server <- function(input, output, session, app_data, input_dir, crop_colors 
               sd = round(sd(df$transitions, na.rm = TRUE), 2)
             )
           ))
+
+          incProgress(0.9, detail = "Building rotation network...")
+
+          # ==== NETWORK ANALYSIS ====
+          # `df` already carries the Aggregated_/Name_ year columns + freq (area),
+          # filtered by spatial scope and crop include/exclude above -- exactly
+          # what compute_transition_matrix() expects.
+          edges <- compute_transition_matrix(df)
+          network_edge_data(edges)
+
+          indicators <- compute_network_indicators(edges)
+          network_indicators_data(indicators)
+
+          # Default return-time simulation for the crop with the most involved
+          # area, so the panel shows something before the user picks a crop.
+          if (nrow(indicators$precedents_table) > 0) {
+            default_crop <- indicators$precedents_table$crop[1]
+            rt <- simulate_crop_return_time(edges, default_crop, n_sim = 100, n_years = 100, seed = 1)
+            return_time_data(list(crop = default_crop, return_times = rt))
+          } else {
+            return_time_data(NULL)
+          }
 
           incProgress(1.0, detail = "Complete!")
 
@@ -5784,6 +5937,155 @@ viz_server <- function(input, output, session, app_data, input_dir, crop_colors 
       ) %>%
         DT::formatRound(columns = c("Field %", "Total Area (km²)", "Area %"), digits = 2)
     })
+
+    # ==== NETWORK ANALYSIS OUTPUTS ====
+
+    output$network_focus_crop_ui <- renderUI({
+      req(network_indicators_data())
+      tbl <- network_indicators_data()$precedents_table
+      req(nrow(tbl) > 0)
+
+      selectInput(
+        "network_focus_crop",
+        "Crop for return-time simulation:",
+        choices = tbl$crop,
+        selected = tbl$crop[1]
+      )
+    })
+
+    output$network_density_metric <- renderText({
+      req(network_indicators_data())
+      d <- network_indicators_data()$density
+      if (is.na(d)) "N/A" else paste0(round(d * 100, 1), "%")
+    })
+
+    output$network_precedents_metric <- renderText({
+      req(network_indicators_data())
+      p <- network_indicators_data()$mean_precedents
+      if (is.na(p)) "N/A" else round(p, 2)
+    })
+
+    output$network_nodes_metric <- renderText({
+      req(network_indicators_data())
+      network_indicators_data()$n_nodes
+    })
+
+    output$network_edges_metric <- renderText({
+      req(network_indicators_data())
+      network_indicators_data()$n_edges
+    })
+
+    output$rotation_network_plot <- renderPlotly({
+      req(network_edge_data())
+      min_share <- if (is.null(input$network_min_share)) 0.5 else input$network_min_share
+      show_loops <- if (is.null(input$network_show_selfloops)) TRUE else input$network_show_selfloops
+
+      plot_rotation_network(
+        network_edge_data(),
+        crop_colors = crop_colors(),
+        min_share = min_share / 100,
+        show_selfloops = show_loops
+      )
+    })
+
+    output$network_precedents_table <- DT::renderDataTable({
+      req(network_indicators_data())
+      tbl <- network_indicators_data()$precedents_table
+
+      if (nrow(tbl) == 0) {
+        return(DT::datatable(
+          data.frame(Message = "No network data available"),
+          options = list(dom = 't'),
+          rownames = FALSE
+        ))
+      }
+
+      table_data <- tbl %>%
+        select(
+          Crop = crop,
+          `Precedents (in)` = n_precedents,
+          `Successors (out)` = n_successors,
+          `Total Area (km²)` = total_area_km2
+        )
+
+      DT::datatable(
+        table_data,
+        options = list(
+          pageLength = 10,
+          order = list(list(3, 'desc')),
+          initComplete = JS(
+            "function(settings, json) {",
+            "$(this.api().table().header()).css({'color': '#fff'});",
+            "}"
+          )
+        ),
+        rownames = FALSE
+      ) %>%
+        DT::formatRound(columns = "Total Area (km²)", digits = 2)
+    })
+
+    # Simulate return time for the currently selected focus crop
+    observeEvent(input$run_return_time_sim, {
+      req(network_edge_data(), input$network_focus_crop)
+
+      tryCatch({
+        rt <- simulate_crop_return_time(
+          network_edge_data(), input$network_focus_crop,
+          n_sim = 100, n_years = 100, seed = NULL
+        )
+        return_time_data(list(crop = input$network_focus_crop, return_times = rt))
+      }, error = function(e) {
+        showNotification(
+          paste("Error simulating return time:", e$message),
+          type = "error", duration = 5
+        )
+      })
+    })
+
+    output$return_time_median <- renderText({
+      req(return_time_data())
+      rt <- return_time_data()$return_times
+      if (length(rt) == 0) "N/A" else paste(round(median(rt), 1), "yrs")
+    })
+
+    output$return_time_histogram <- renderPlotly({
+      req(return_time_data())
+      rt <- return_time_data()$return_times
+      crop <- return_time_data()$crop
+
+      if (length(rt) == 0) {
+        return(
+          plot_ly() %>%
+            layout(
+              title = list(text = paste0("No return observed for ", crop, " within the simulated horizon"),
+                           font = list(size = 12, color = "white")),
+              paper_bgcolor = "#1f1b1b", plot_bgcolor = "#2d2d2d",
+              font = list(color = "white")
+            )
+        )
+      }
+
+      plot_ly(x = rt, type = "histogram",
+              marker = list(color = "rgb(116, 150, 30)")) %>%
+        layout(
+          title = list(text = paste("Return time:", crop), font = list(size = 13, color = "white")),
+          xaxis = list(title = "Years to return", color = "white", gridcolor = "#444"),
+          yaxis = list(title = "Simulated occurrences", color = "white", gridcolor = "#444"),
+          paper_bgcolor = "#1f1b1b", plot_bgcolor = "#2d2d2d",
+          font = list(color = "white"),
+          bargap = 0.1
+        )
+    })
+
+    output$download_network_edges <- downloadHandler(
+      filename = function() {
+        paste0("rotation_network_edges_", format(Sys.Date(), "%Y%m%d"), ".csv")
+      },
+      content = function(file) {
+        req(network_edge_data())
+        write.csv(network_edge_data(), file, row.names = FALSE)
+      }
+    )
 
     # ==== DOWNLOAD HANDLERS ====
     output$download_monoculture_data <- downloadHandler(
