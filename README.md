@@ -1,6 +1,6 @@
-::: {align="right"}
+
 <img src="inst/www/GeoECO_MLU_LANG_2.png" alt="Descriptive Alt Text" width="100%"/>
-:::
+
 
 # CropRotationViz 🌾 :corn: 🫜 🌻
 
@@ -10,7 +10,7 @@
 
 <!-- badges: end -->
 
-## Overview {#overview}
+## Overview
 
 CropRotationViz is a comprehensive R package that provides interactive Shiny applications for analyzing and visualizing crop rotation patterns from multi-year agricultural field data. The package integrates spatial data processing, statistical analysis, and dynamic visualization tools to help researchers and practitioners understand temporal patterns in agricultural land use.
 
@@ -27,9 +27,7 @@ The package consists of four main components:
 -   A fast visualization application for quick insights and area comparison
 -   A field-level exploration application for inspecting the rotation sequence of individual fields
 
-::: {align="center"}
 <img src="images/example.png" alt="Descriptive Alt Text" width="100%"/>
-:::
 
 ## Table of Contents
 
@@ -60,7 +58,7 @@ The package consists of four main components:
 -   [Contact](#contact)
 -   [Acknowledgments](#acknowledgments)
 
-## Features {#features}
+## Features 
 
 -   **Field Data Processing Tool**
     -   Support for multiple spatial file formats (SHP, GeoJSON, FlatGeobuf, GeoPackage, SQLite)
@@ -99,7 +97,7 @@ The package consists of four main components:
 
 [![CropRotationViz Tutorial](https://img.youtube.com/vi/Sfk5lLFhBio/0.jpg)](https://www.youtube.com/watch?v=Sfk5lLFhBio)
 
-## Installation {#installation}
+## Installation
 
 CropRotationViz can be installed in two ways depending on your needs and system setup:
 
@@ -128,8 +126,7 @@ remotes::install_github("franz-geoeco/CropRotationViz")
 
 **Advantages**: - Full integration with R environment - Access to all package functions - Ability to modify and extend functionality - Works on all operating systems (Windows, macOS, Linux)
 
-## Usage {#usage}
-
+## Usage
 ### Basic Usage {#basic-usage}
 
 ``` r
@@ -149,7 +146,7 @@ run_fast_visualization_app()
 run_field_level_app()
 ```
 
-### Step-by-Step Guide {#step-by-step-guide}
+### Step-by-Step Guide
 
 #### Generate Dummy Data
 
@@ -217,7 +214,7 @@ If you do not have field data at hand or just want to test the functionality of 
     -   Choose output directory (if you didn't provide it in the start function) and format
     -   Click "Process Files" to start analysis
 
-#### Visualization {#visualization}
+#### Visualization
 
 1.  **Launch the Visualization Application**
     -   Run `CropRotationViz::run_visualization_app()`
@@ -235,7 +232,7 @@ If you do not have field data at hand or just want to test the functionality of 
     -   **Custom Color Schemes**: Customize colors for different crop types
     -   **Summary Statistics**: Review area calculations and sequence patterns
 
-#### Fast Visualization (Side-by-Side Comparison) {#fast-visualization-side-by-side-comparison}
+#### Fast Visualization (Side-by-Side Comparison) 
 
 1.  **Launch the Fast Visualization Application**
     -   Run `CropRotationViz::run_fast_vizualisation_app()`
@@ -250,7 +247,7 @@ If you do not have field data at hand or just want to test the functionality of 
     -   **Dynamic Selection**: Click on regions to load and compare visualizations
     -   **Spatial Statistics**: Review area-based crop distribution data
 
-#### Field-Level Exploration {#field-level-exploration}
+#### Field-Level Exploration 
 
 1.  **Launch the Field-Level Exploration Application**
     -   Run `CropRotationViz::run_field_level_app()`
@@ -262,8 +259,7 @@ If you do not have field data at hand or just want to test the functionality of 
     -   **Interactive District Map**: Click on individual fields to select them
     -   **Field Rotation Sequence**: Inspect the crop rotation history of the selected field across all years
 
-## Data Requirements {#data-requirements}
-
+## Data Requirements
 -   Spatial files containing field boundaries
 -   Crop type information (NC codes or crop names)
 -   Minimum of 2 years of data
@@ -272,7 +268,7 @@ If you do not have field data at hand or just want to test the functionality of 
 -   **Supported raster formats**: TIFF (.tif, .tiff)
 -   **Optional**: Crop translation file (CSV/TSV) for raster data
 
-### Input Data Structure {#input-data-structure}
+### Input Data Structure
 
 #### Vector Data
 
@@ -319,7 +315,7 @@ CropRotationViz::dummy_field_creator(
 )
 ```
 
-## Dependencies {#dependencies}
+## Dependencies
 
 CropRotationViz requires several R packages for spatial data processing and visualization. Key dependencies include:
 
@@ -349,14 +345,14 @@ The core functionality of the processing module centers around field intersectio
 
 Complete Intersection (Default): Includes all fields that appear in at least one year, with NA values populated for years where a field is absent Fast Intersection: Only includes fields that are consistently present across all years
 
-### How It Works {#how-it-works}
+### How It Works
 
 -   **Complete Intersection Mode**
     -   Identifies all unique fields across all available years Maintains fields even if they only appear in a subset of years Automatically fills missing data with NA values Preserves data completeness at the cost of additional processing time
 -   **Fast Intersection Mode**
     -   Only retains fields that appear consistently across all years Reduces processing overhead Results in a smaller, more consistent dataset Activated by setting `intersection_type = "Fast"`
 
-### Example {#example}
+### Example
 
 Consider a dataset spanning two years with varying fields:
 
@@ -368,7 +364,7 @@ Consider a dataset spanning two years with varying fields:
 <img src="images/Intersection.png" width="100%"/>
 :::
 
-## Contributing {#contributing}
+## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request. For major changes, please open an issue first to discuss what you would like to change.
 
@@ -384,7 +380,7 @@ To contribute:
 
 This project is licensed under the MIT License - see the LICENSE file for details.
 
-## Methodology Reference {#methodology-reference}
+## Methodology Reference
 
 The **Network Analysis** view (Visualization app → Rotation Analysis tab) implements the crop-rotation network indicators described in:
 
@@ -392,7 +388,7 @@ The **Network Analysis** view (Visualization app → Rotation Analysis tab) impl
 
 Nodes represent crops and edges represent observed crop-to-crop transitions on the same field, weighted by area; the app reports network density, mean precedents per crop (in-degree), and simulated crop return times based on this approach. This reference is also linked directly from the info button on that tab in the app.
 
-## Citation {#citation}
+## Citation
 
 If you use CropRotationViz in your research, please cite it:
 
@@ -407,13 +403,13 @@ If you use CropRotationViz in your research, please cite it:
 }
 ```
 
-## Contact {#contact}
+## Contact
 
 Franz Schulze - franz.schulze\@geo.uni-halle.de
 
 Project Link: <https://github.com/franz-geoeco/CropRotationViz>
 
-## Acknowledgments {#acknowledgments}
+## Acknowledgments
 
 -   Martin Luther University Halle-Wittenberg
 -   Contributors and users who have provided valuable feedback
